@@ -27,6 +27,7 @@ pub mod hue;
 pub mod label;
 pub mod libretro;
 pub mod rom;
+pub mod zip;
 
 use wasm_bindgen::prelude::*;
 
@@ -134,5 +135,26 @@ impl JsLabel {
 
     pub fn png(&self) -> Vec<u8> {
         self.0.png()
+    }
+}
+
+/// Labels for a browser that can't write to the card, to unzip at its root.
+#[wasm_bindgen(js_name = Zip)]
+#[derive(Default)]
+pub struct JsZip(zip::Zip);
+
+#[wasm_bindgen(js_class = Zip)]
+impl JsZip {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn add(&mut self, name: &str, data: &[u8]) {
+        self.0.add(name, data);
+    }
+
+    pub fn finish(self) -> Vec<u8> {
+        self.0.finish()
     }
 }
