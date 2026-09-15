@@ -225,6 +225,10 @@ function banner(text, retry) {
 async function open(source) {
   session = { source, carts: source.carts.map(newCart) };
   $('banner').hidden = true;
+  // A card opened mid-scan replaces identify()'s loop before it reaches progress(total, total, ''),
+  // so the old bar has to be cleared here rather than left for a call that may never come.
+  $('progress').hidden = true;
+  $('progress-text').textContent = '';
   $('summary').textContent = '';
   $('grid').replaceChildren(...session.carts.map(buildCard));
   session.carts.forEach(paint);
