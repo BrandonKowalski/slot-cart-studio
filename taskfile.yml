@@ -1,0 +1,45 @@
+version: '3'
+
+vars:
+  SLOT: ../slot
+  # What the studio's faces are made of: the four files compiled in place, slot's art.rs that
+  # src/art.rs copies, the assets they include, and where `Cart` comes from.
+  FACE_PATHS: >-
+    crates/slot-ui/src/cart.rs crates/slot-ui/src/shell.rs crates/slot-ui/src/silhouette.rs
+    crates/slot-ui/src/text.rs crates/slot-ui/src/art.rs crates/slot-ui/assets/cart.svg
+    crates/slot-ui/assets/cart_detail.svg crates/slot-ui/assets/label.ttf
+    crates/slot-store/src/scan.rs
+
+tasks:
+  default:
+    silent: true
+    cmds:
+      - task --list
+
+  test:
+    desc: Native tests, the faces against slot's included
+    cmds:
+      - cargo test
+
+  check:
+    desc: Formatting, clippy for both targets, and the tests
+    cmds:
+      - cargo fmt --check
+      - cargo clippy --all-targets -- -D warnings
+      - cargo clippy --lib --target wasm32-unknown-unknown -- -D warnings
+      - cargo test
+
+  slot:pin-check:
+    desc: Say whether ../slot's cart face still matches the commit in slot.ref
+    cmds:
+      - |
+        set -eu
+        pin="$(cat slot.ref)"
+        # Against the working tree, not HEAD: a local build compiles whatever ../slot has on disk.
+        if git -C {{.SLOT}} diff --quiet "$pin" -- {{.FACE_PATHS}}; then
+          echo "../slot's cart face matches slot.ref ($pin)"
+        else
+          echo "../slot's cart face has changed since slot.ref ($pin):"
+          git -C {{.SLOT}} diff --stat "$pin" -- {{.FACE_PATHS}}
+          exit 1
+        fi
