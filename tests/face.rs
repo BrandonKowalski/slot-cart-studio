@@ -121,6 +121,27 @@ fn raw_rgba_draws_the_same_face_as_its_png() {
 }
 
 #[test]
+fn a_composed_label_matches_slot_reading_its_png() {
+    let logo = png_rgba(120, 60, |x, y| {
+        if (x / 10 + y / 10) % 2 == 0 {
+            [250, 210, 20, 255]
+        } else {
+            [0, 0, 0, 0]
+        }
+    });
+    let label = slot_cart_studio::label::Label::from_png(&logo, 210).expect("logo decodes");
+    let png = label.png();
+    for code in [EMERALD, PLAIN] {
+        let d = card(code, &png);
+        let (want, _, stem) = slot_face(d.path());
+        assert!(
+            want == label.face(code, &stem),
+            "composed face differs with code {code}"
+        );
+    }
+}
+
+#[test]
 fn the_game_code_is_read_the_way_slot_reads_it() {
     for code in [EMERALD, PLAIN, "AB", ""] {
         let d = card(code, b"");

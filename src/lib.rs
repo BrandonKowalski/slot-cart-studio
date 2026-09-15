@@ -24,6 +24,7 @@ mod art;
 pub mod dat;
 pub mod face;
 pub mod hue;
+pub mod label;
 pub mod libretro;
 pub mod rom;
 
@@ -104,4 +105,34 @@ pub fn box_hue(png: &[u8]) -> Option<u16> {
 #[wasm_bindgen]
 pub fn fallback_hue(stem: &str) -> u16 {
     hue::fallback_hue(stem)
+}
+
+/// A label for one cart: a logo that recomposes as its hue moves.
+#[wasm_bindgen(js_name = Label)]
+pub struct JsLabel(label::Label);
+
+#[wasm_bindgen(js_class = Label)]
+impl JsLabel {
+    #[wasm_bindgen(constructor)]
+    pub fn new(logo_png: &[u8], hue: u16) -> Result<JsLabel, JsError> {
+        label::Label::from_png(logo_png, hue)
+            .map(JsLabel)
+            .ok_or_else(|| JsError::new("not a PNG this studio can read"))
+    }
+
+    pub fn hue(&self) -> u16 {
+        self.0.hue()
+    }
+
+    pub fn set_hue(&mut self, hue: u16) {
+        self.0.set_hue(hue);
+    }
+
+    pub fn face(&self, code: &str, stem: &str) -> Vec<u8> {
+        self.0.face(code, stem)
+    }
+
+    pub fn png(&self) -> Vec<u8> {
+        self.0.png()
+    }
 }
