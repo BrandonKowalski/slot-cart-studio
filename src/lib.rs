@@ -23,6 +23,7 @@ mod text;
 mod art;
 pub mod dat;
 pub mod face;
+pub mod hue;
 pub mod libretro;
 pub mod rom;
 
@@ -93,4 +94,14 @@ pub fn thumbnail_name(game: &str) -> String {
 #[wasm_bindgen]
 pub fn stub_target(body: &[u8]) -> Option<String> {
     libretro::stub_target(body)
+}
+
+#[wasm_bindgen]
+pub fn box_hue(png: &[u8]) -> Option<u16> {
+    hue::box_hue(png)
+}
+
+#[wasm_bindgen]
+pub fn fallback_hue(stem: &str) -> u16 {
+    hue::fallback_hue(stem)
 }
