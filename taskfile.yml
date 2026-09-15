@@ -43,3 +43,20 @@ tasks:
           git -C {{.SLOT}} diff --stat "$pin" -- {{.FACE_PATHS}}
           exit 1
         fi
+
+  build:
+    desc: Build the WASM package into web/pkg
+    cmds:
+      - wasm-pack build --release --target web --no-typescript --out-dir web/pkg
+
+  serve:
+    desc: Serve web/ at http://127.0.0.1:8765
+    deps: [build]
+    cmds:
+      - python3 -m http.server 8765 --bind 127.0.0.1 --directory web
+
+  verify:
+    desc: Open ../slot/sdcard in headless Chrome, screenshot the studio and download its zip into out/
+    deps: [build]
+    cmds:
+      - python3 tools/verify.py
