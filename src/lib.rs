@@ -21,7 +21,10 @@ mod silhouette;
 mod text;
 
 mod art;
+pub mod dat;
 pub mod face;
+pub mod libretro;
+pub mod rom;
 
 use wasm_bindgen::prelude::*;
 
@@ -35,4 +38,59 @@ pub fn cart_size() -> Vec<u32> {
 #[wasm_bindgen]
 pub fn existing_face(png: &[u8], code: &str, stem: &str) -> Vec<u8> {
     face::from_png(png, code, stem)
+}
+
+/// A ROM's CRC32, fed in the chunks the page reads it in.
+#[wasm_bindgen(js_name = Crc32)]
+#[derive(Default)]
+pub struct JsCrc32(rom::Crc32);
+
+#[wasm_bindgen(js_class = Crc32)]
+impl JsCrc32 {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn update(&mut self, chunk: &[u8]) {
+        self.0.update(chunk);
+    }
+
+    pub fn finish(self) -> u32 {
+        self.0.finish()
+    }
+}
+
+#[wasm_bindgen(js_name = Dat)]
+pub struct JsDat(dat::Dat);
+
+#[wasm_bindgen(js_class = Dat)]
+impl JsDat {
+    pub fn parse(text: &str) -> JsDat {
+        JsDat(dat::Dat::parse(text))
+    }
+
+    pub fn game_for(&self, crc: u32) -> Option<String> {
+        self.0.game_for(crc).map(str::to_string)
+    }
+
+    /// How many dumps the database names, for the page to mention.
+    pub fn games(&self) -> usize {
+        self.0.len()
+    }
+}
+
+#[wasm_bindgen]
+pub fn header_code(head: &[u8]) -> String {
+    rom::header_code(head)
+}
+
+#[wasm_bindgen]
+pub fn thumbnail_name(game: &str) -> String {
+    libretro::thumbnail_name(game)
+}
+
+#[wasm_bindgen]
+pub fn stub_target(body: &[u8]) -> Option<String> {
+    libretro::stub_target(body)
 }

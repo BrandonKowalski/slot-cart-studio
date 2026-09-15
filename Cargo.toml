@@ -9,6 +9,7 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+crc32fast = "1"
 fontdue = "0.9"
 png = "0.17"
 resvg = { version = "0.48", default-features = false }

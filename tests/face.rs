@@ -20,7 +20,7 @@ fn card(code: &str, label: &[u8]) -> TempDir {
         std::fs::create_dir(d.path().join(sub)).expect("content dir");
     }
     let mut rom = vec![0u8; 0x100];
-    rom[0xac..0xb0].copy_from_slice(code.as_bytes());
+    rom[0xac..0xac + code.len()].copy_from_slice(code.as_bytes());
     std::fs::write(d.path().join(format!("Games/{STEM}.gba")), rom).expect("rom");
     std::fs::write(d.path().join(format!("Labels/{STEM}.png")), label).expect("label");
     d
@@ -116,6 +116,20 @@ fn raw_rgba_draws_the_same_face_as_its_png() {
         assert!(
             want == face::from_rgba(&raw, w, h, code, &stem),
             "raw RGBA face differs with code {code}"
+        );
+    }
+}
+
+#[test]
+fn the_game_code_is_read_the_way_slot_reads_it() {
+    for code in [EMERALD, PLAIN, "AB", ""] {
+        let d = card(code, b"");
+        let (_, slot_code, _) = slot_face(d.path());
+        let rom = std::fs::read(d.path().join(format!("Games/{STEM}.gba"))).expect("rom");
+        assert_eq!(
+            slot_cart_studio::rom::header_code(&rom[..0xb0]),
+            slot_code,
+            "{code:?}"
         );
     }
 }
