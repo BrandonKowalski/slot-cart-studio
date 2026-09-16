@@ -1,0 +1,65 @@
+name: pages
+
+# The page is static, but its WASM is built from this crate and from four of slot's own source
+# files, which is why slot is checked out beside it at the commit slot.ref names.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time, and never cancelling one on its way out. A cancelled deploy-pages leaves
+# the site on whatever half of the artifact made it.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: studio
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: slot-cart-studio
+
+      - id: pin
+        run: echo "ref=$(cat slot-cart-studio/slot.ref)" >> "$GITHUB_OUTPUT"
+
+      # Beside the studio, as the two sit on a desk, so ../slot means the same thing here.
+      - uses: actions/checkout@v7
+        with:
+          repository: BrandonKowalski/slot
+          ref: ${{ steps.pin.outputs.ref }}
+          path: slot
+
+      # The channel rust-toolchain.toml pins, with the target it names.
+      - name: Rust with the wasm32 target
+        run: rustup toolchain install 1.96 --profile minimal --target wasm32-unknown-unknown
+
+      - name: wasm-pack 0.15.0
+        run: |
+          set -eu
+          curl -fsSL https://github.com/wasm-bindgen/wasm-pack/releases/download/v0.15.0/wasm-pack-v0.15.0-x86_64-unknown-linux-musl.tar.gz \
+            | tar -xz -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/wasm-pack-v0.15.0-x86_64-unknown-linux-musl" >> "$GITHUB_PATH"
+
+      - name: Build
+        working-directory: slot-cart-studio
+        run: wasm-pack build --release --target web --no-typescript --out-dir web/pkg
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: slot-cart-studio/web
+
+      - id: deploy
+        uses: actions/deploy-pages@v4
