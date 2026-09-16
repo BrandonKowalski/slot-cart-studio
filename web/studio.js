@@ -264,7 +264,7 @@ function paint(c) {
   hueRow.hidden = state !== 'ready';
   hue.value = hex(deep);
   reject.hidden = !c.game || !['ready', 'needs-logo'].includes(state);
-  reject.textContent = c.rejected ? 'Restore the match' : 'Wrong game';
+  reject.textContent = c.rejected ? 'Restore the Match' : 'Wrong Game';
   game.textContent = describe(c, state);
   status.textContent = statusText(c);
   updateWriteBar();
@@ -620,7 +620,7 @@ async function start() {
   $('mode').hidden = direct;
   if (!direct) {
     $('mode').textContent =
-      'This browser can’t write to the card, so the labels come as a zip to unzip at its top. Chrome and Edge write them in place.';
+      'This browser can’t write back to the SD card. You will have to copy the contents of a zip file to the Labels folder.';
   }
 
   $('pick').addEventListener('click', async () => {
