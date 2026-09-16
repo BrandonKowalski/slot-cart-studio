@@ -133,19 +133,19 @@ def open_card(page, card, paths):
 def stage_labelled(card, games):
     """slot's carts, the probe cart, and the labels in KEPT and for the probe. Returns the paths
     the page is handed, spelled as they were written."""
-    (card / 'Games').mkdir(parents=True)
-    (card / 'Labels').mkdir()
     # A symlink per ROM rather than one for the folder, so the probe lands here and not in slot.
     for g in games:
+        (card / 'Games' / g).parent.mkdir(parents=True, exist_ok=True)
         (card / 'Games' / g).symlink_to(SLOT_GAMES / g)
-    probe = f'{PROBE}.gba'
-    (card / 'Games' / probe).symlink_to(SLOT_GAMES / f'{PROBE_OF}.gba')
+    probe = f'GBA/{PROBE}.gba'
+    (card / 'Games' / probe).symlink_to(SLOT_GAMES / f'GBA/{PROBE_OF}.gba')
     # The labels the first pass just wrote, not the live card's: a fixture that reads slot's sdcard
     # breaks whenever that card changes, and it did.
     written = OUT / 'card' / 'Labels'
-    labels = {f'{stem}.png': written / f'{stem}.png' for stem in KEPT}
-    labels[unicodedata.normalize('NFD', f'{PROBE}.png')] = written / f'{PROBE_OF}.png'
+    labels = {f'GBA/{stem}.png': written / f'GBA/{stem}.png' for stem in KEPT}
+    labels[unicodedata.normalize('NFD', f'GBA/{PROBE}.png')] = written / f'GBA/{PROBE_OF}.png'
     for name, source in labels.items():
+        (card / 'Labels' / name).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(source, card / 'Labels' / name)
     return [f'Games/{g}' for g in games] + [f'Games/{probe}'] + [f'Labels/{name}' for name in labels]
 
@@ -158,7 +158,15 @@ def main():
     (stage / 'studio').symlink_to(STUDIO / 'web')
     (stage / 'card').mkdir()
     (stage / 'card' / 'Games').symlink_to(SLOT_GAMES)
-    games = sorted(p.name for p in SLOT_GAMES.iterdir() if p.is_file() and not p.name.startswith('.'))
+    # Relative to Games/, platform folder and all: slot files a cart under the folder its
+    # platform names, and the folder is what decides the platform.
+    games = sorted(
+        f'{d.name}/{p.name}'
+        for d in SLOT_GAMES.iterdir()
+        if d.is_dir() and not d.name.startswith('.')
+        for p in d.iterdir()
+        if p.is_file() and not p.name.startswith('.')
+    )
 
     server = http.server.ThreadingHTTPServer(('127.0.0.1', HTTP_PORT), functools.partial(Quiet, directory=str(stage)))
     threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -179,7 +187,7 @@ def main():
         page.send('Page.navigate', url=f'http://127.0.0.1:{HTTP_PORT}/studio/')
         wait(lambda: page.eval("document.body && document.body.dataset.ready === 'true'"), 60, 'the studio to start')
 
-        open_card(page, 'card', ['Games/' + g for g in games])
+        first = open_card(page, 'card', ['Games/' + g for g in games])
 
         page.shot(1280, OUT / 'studio-1280.png')
         page.shot(400, OUT / 'studio-400.png')
@@ -219,7 +227,12 @@ def main():
 
         print('second pass: a card that already has labels for', ', '.join([*KEPT, PROBE]))
         kept = {nfc(stem) for stem in [*KEPT, PROBE]}
-        expected = {nfc(Path(g).stem): 'ready' for g in games} | {stem: 'has-label' for stem in kept}
+        # Which folder each cart's label belongs in, for the zip's entry names.
+        where = {nfc(Path(g).stem): Path(g).parent.name for g in games}
+        where[nfc(PROBE)] = 'GBA'
+        # What the plain card actually settled on, rather than an assumption that every cart finds
+        # a logo: the Game Boy carts here are homebrew and libretro has nothing for them.
+        expected = {nfc(s['stem']): s['state'] for s in first} | {stem: 'has-label' for stem in kept}
         states = open_card(page, 'labelled', stage_labelled(stage / 'labelled', games))
         page.shot(1280, OUT / 'studio-labelled-1280.png')
         got = {nfc(s['stem']): s['state'] for s in states}
@@ -239,10 +252,14 @@ def main():
         time.sleep(1)
         with zipfile.ZipFile(kept_downloads / 'labels.zip') as z:
             entries = {nfc(name) for name in z.namelist()}
-        overwritten = sorted(entries & {f'Labels/{stem}.png' for stem in kept})
+        overwritten = sorted(entries & {f'Labels/{where[stem]}/{stem}.png' for stem in kept})
         if overwritten:
             sys.exit(f'labels.zip would overwrite labels the card already has: {overwritten}')
-        ready = {f'Labels/{stem}.png' for stem, state in expected.items() if state == 'ready'}
+        ready = {
+            f'Labels/{where[stem]}/{stem}.png'
+            for stem, state in expected.items()
+            if state == 'ready'
+        }
         if entries != ready:
             sys.exit(f'labels.zip holds {sorted(entries)}, not the ready carts {sorted(ready)}')
         print(f'asserted: {len(kept)} carts are has-label: {", ".join(sorted(kept))}')

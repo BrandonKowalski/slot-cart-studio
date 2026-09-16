@@ -1,11 +1,22 @@
-// libretro's GBA database and thumbnails, both from raw.githubusercontent.com, which answers
-// cross-origin requests. thumbnails.libretro.com does not.
+// libretro's databases and thumbnails, both from raw.githubusercontent.com, which answers
+// cross-origin requests. thumbnails.libretro.com serves the same images and sends no
+// access-control-allow-origin header at all, so a page can fetch it and still not read a byte.
 
-const DAT = 'https://raw.githubusercontent.com/libretro/libretro-database/master/metadat/no-intro/Nintendo%20-%20Game%20Boy%20Advance.dat';
-const THUMBS = 'https://raw.githubusercontent.com/libretro-thumbnails/Nintendo_-_Game_Boy_Advance/master/';
+const DAT = 'https://raw.githubusercontent.com/libretro/libretro-database/master/metadat/no-intro/';
+const THUMBS = 'https://raw.githubusercontent.com/libretro-thumbnails/';
 
-export async function fetchDat() {
-  const r = await fetch(DAT);
+// One database and one thumbnail repository per platform, under libretro's own name for the
+// system: spaces in the database file, underscores in the repository. The platform is the card
+// folder a rom sits in, so a .gbc filed under GB is looked up in the Game Boy database — slot
+// decides a platform by where a file is, and the studio does not second-guess it by extension.
+const NAMES = {
+  GBA: 'Nintendo - Game Boy Advance',
+  GB: 'Nintendo - Game Boy',
+  GBC: 'Nintendo - Game Boy Color',
+};
+
+export async function fetchDat(platform) {
+  const r = await fetch(`${DAT}${encodeURIComponent(NAMES[platform])}.dat`);
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.text();
 }
@@ -35,9 +46,10 @@ export function limiter(slots) {
 
 // A thumbnail's bytes, or null when libretro has none. A git symlink comes back as a one-line
 // body naming its target in the same folder; `stubTarget`, from the Rust side, tells the two apart.
-export async function fetchThumb(folder, name, stubTarget) {
+export async function fetchThumb(platform, folder, name, stubTarget) {
+  const repo = NAMES[platform].replaceAll(' ', '_');
   const get = async (file) => {
-    const r = await fetch(`${THUMBS}${folder}/${encodeURIComponent(file)}`);
+    const r = await fetch(`${THUMBS}${repo}/master/${folder}/${encodeURIComponent(file)}`);
     if (r.status === 404) return null;
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     return new Uint8Array(await r.arrayBuffer());
