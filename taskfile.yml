@@ -56,6 +56,11 @@ tasks:
     cmds:
       - python3 -m http.server 8765 --bind 127.0.0.1 --directory web
 
+  art:
+    desc: 'Serve a harvested set at :8766, for http://127.0.0.1:8765/?art=http://127.0.0.1:8766/'
+    cmds:
+      - python3 tools/serve-art.py {{.ART | default "~/Desktop/CartStudioArt"}} 8766
+
   verify:
     desc: Open ../slot/sdcard in headless Chrome, screenshot the studio and download its zip into out/
     deps: [build]

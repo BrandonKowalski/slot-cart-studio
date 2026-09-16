@@ -266,8 +266,10 @@ function paint(c) {
   drop.hidden = state !== 'needs-logo';
   hueRow.hidden = state !== 'ready';
   hue.value = hex(deep);
-  reject.hidden = !c.game || !['ready', 'needs-logo'].includes(state);
-  reject.textContent = c.rejected ? 'Restore the Match' : 'Wrong Game';
+  // A cart with no match needs the finder more than a wrongly matched one, not less: searching by
+  // name is how a cart libretro keeps under a name its filename does not use gets found at all.
+  reject.hidden = !['ready', 'needs-logo'].includes(state);
+  reject.textContent = c.rejected ? 'Restore the Match' : c.game ? 'Wrong Game' : 'Find Game';
   game.textContent = describe(c, state);
   status.textContent = statusText(c);
   updateWriteBar();
