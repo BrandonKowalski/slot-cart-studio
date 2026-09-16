@@ -14,13 +14,15 @@ const MID_ROW: f32 = 320.0;
 /// Bounds ignore the faint fringe some rips carry around a logo.
 const ALPHA_EDGE: u8 = 16;
 
-/// Deep top left, pale bottom right, one hue: the lightness and saturation the hand-made labels
-/// on slot's card sit at.
+/// Deep top left, pale bottom right, one hue. Darker and narrower than the hand-made labels on
+/// slot's card, which run to 82% lightness: drawn on carts, that pale corner washed out the light
+/// parts of a logo — Ruby's white subtitle, Fusion's silver — and gold hues went to cream. A
+/// ground that stays deep across the whole label leaves the logo the brightest thing on it.
 pub fn stops(hue: u16) -> ([u8; 3], [u8; 3]) {
     let h = hue as f32;
     (
-        hue::hsl_to_rgb(h, 0.75, 0.34),
-        hue::hsl_to_rgb(h, 0.80, 0.82),
+        hue::hsl_to_rgb(h, 0.65, 0.24),
+        hue::hsl_to_rgb(h, 0.60, 0.46),
     )
 }
 
@@ -220,8 +222,8 @@ mod tests {
         assert_eq!(
             stops(0),
             (
-                hue::hsl_to_rgb(0.0, 0.75, 0.34),
-                hue::hsl_to_rgb(0.0, 0.80, 0.82)
+                hue::hsl_to_rgb(0.0, 0.65, 0.24),
+                hue::hsl_to_rgb(0.0, 0.60, 0.46)
             )
         );
     }
