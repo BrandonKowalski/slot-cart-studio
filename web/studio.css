@@ -49,6 +49,9 @@ a{color:var(--ink)}
 .btn:disabled{opacity:.45;cursor:default;transform:none}
 .btn.ghost{background:transparent;color:var(--ink);border-color:var(--rule)}
 .btn.ghost:hover{border-color:var(--edge)}
+/* The file inputs are out of sight but stay in the tab order, so their .btn label shows focus. */
+.visually-hidden{position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+label.btn:focus-within{outline:2px solid var(--ink);outline-offset:3px}
 
 .banner{margin:24px 0 0;padding:14px 16px;border:1px solid var(--edge);border-radius:8px;background:var(--recess)}
 .banner .btn{padding:6px 12px;font-size:14px;margin-left:8px}
