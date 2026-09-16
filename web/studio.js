@@ -11,7 +11,6 @@ import init, {
   clean_label,
   existing_face,
   fallback_hue,
-  ground_hue,
   header_code,
   label_tags,
   logo_luma,
@@ -58,7 +57,6 @@ function newCart({ stem, file }) {
     rejected: false,
     snapshot: null,
     boxHue: null,
-    logoHue: null,
     // How bright the logo is decides which way the ground goes, so it is read once with the logo
     // and kept. 255 until there is a logo: nothing is drawn before then anyway.
     logoLuma: 255,
@@ -81,12 +79,9 @@ function stateOf(c) {
   return activeLogo(c) ? 'ready' : 'needs-logo';
 }
 
-// The box art belongs to the matched game, so its hue only stands while the match does. A ground
-// that lands on the logo's own hue turns away from it: a navy logo on navy reads as neither.
+// The box art belongs to the matched game, so its hue only stands while the match does.
 const baseHueOf = (c) =>
-  c.game && !c.rejected && c.boxHue !== null
-    ? ground_hue(c.boxHue, c.logoHue ?? undefined)
-    : fallback_hue(c.stem);
+  c.game && !c.rejected && c.boxHue !== null ? c.boxHue : fallback_hue(c.stem);
 
 // A label is described by its deep corner, whether computed or picked, and the corner a hue
 // produces depends on the logo going over it: dark logos get a pale ground, bright ones a deep
@@ -317,7 +312,6 @@ async function chooseGame(c, name) {
   c.snapshot = null;
   c.droppedBytes = null;
   c.logoBytes = null;
-  c.logoHue = null;
   c.looking = true;
   paint(c);
   try {
@@ -362,8 +356,7 @@ async function takeLogo(c, file) {
     return;
   }
   c.droppedBytes = bytes;
-  // A dropped logo decides the clash and the ground's direction the same way a fetched one does.
-  c.logoHue = box_hue(bytes) ?? null;
+  // A dropped logo decides which way its ground goes the same way a fetched one does.
   c.logoLuma = logo_luma(bytes);
   if (!c.userHue) c.deep = null;
   schedulePaint(c);
@@ -508,10 +501,6 @@ async function dress(s, c) {
   if (s !== session || fatal) return;
   c.boxHue = box ? (box_hue(box) ?? null) : null;
   c.logoBytes = logo && readable(logo) ? logo : null;
-  // The logo's own hue decides whether the box art's ground would sit on top of it, so it is
-  // read before the hue is chosen. box_hue reads any PNG; on a logo it ignores the clear
-  // background the same way it ignores a cover's dull edges.
-  c.logoHue = c.logoBytes ? (box_hue(c.logoBytes) ?? null) : null;
   // How bright the logo is decides which way its ground goes, so it is measured with the logo.
   c.logoLuma = c.logoBytes ? logo_luma(c.logoBytes) : 255;
   if (!c.userHue) c.deep = null;

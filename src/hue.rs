@@ -99,34 +99,13 @@ pub fn logo_luma(png: &[u8]) -> f32 {
     }
 }
 
-/// How far apart two hues sit on the wheel, 0 to 180.
-fn apart(a: u16, b: u16) -> u16 {
-    let d = (a as i32 - b as i32).rem_euclid(360) as u16;
-    d.min(360 - d)
-}
-
-/// A ground within `CLASH` of the logo's own hue leaves the logo to separate on brightness alone,
-/// and a dark logo on a dark ground of the same hue barely reads: Zelda II's navy wordmark sat on
-/// the blue-violet its box art asked for. Such a ground turns `SHOVE` degrees away from the logo,
-/// whichever way opens the gap. A logo with no saturated hue of its own changes nothing.
-const CLASH: u16 = 40;
-const SHOVE: u16 = 60;
-
-pub fn ground_hue(box_hue: u16, logo_hue: Option<u16>) -> u16 {
-    let Some(logo) = logo_hue else {
-        return box_hue;
-    };
-    if apart(box_hue, logo) >= CLASH {
-        return box_hue;
-    }
-    let up = (box_hue + SHOVE) % 360;
-    let down = (box_hue + 360 - SHOVE) % 360;
-    if apart(up, logo) >= apart(down, logo) {
-        up
-    } else {
-        down
-    }
-}
+// A ground used to turn away from a logo of its own hue. The rule is gone, but not because it was
+// unnecessary: brightness alone does not settle a clash. `label::stops` puts the ground on the
+// opposite side of the logo's brightness, some fifty points of luma apart either way, and the gold
+// Pokemon wordmark still reads poorly on the gold its own cover asks for. What the rule could not
+// do was land somewhere worth having — a fixed sixty degree turn took Zelda II's blue-violet cover
+// into magenta, and tuning the angle only moves which cart it spoils. So the ground follows the
+// box art, and a cart whose logo shares that hue is a click on its own colour button.
 
 /// The box art's dominant saturated hue, or `None` when it has none to give: a greyscale cover,
 /// or bytes that are not a PNG. The edges are cropped and dull or dark pixels ignored, so a
@@ -281,35 +260,6 @@ mod tests {
         let (h, s, l) = rgb_to_hsl([128, 128, 128]);
         assert_eq!((h, s), (0.0, 0.0));
         assert!((l - 0.502).abs() < 0.01);
-    }
-
-    #[test]
-    fn a_ground_far_from_the_logo_is_left_alone() {
-        assert_eq!(ground_hue(5, Some(200)), 5);
-        assert_eq!(ground_hue(120, Some(300)), 120);
-        // 40 degrees apart is far enough, by the rule's own edge.
-        assert_eq!(ground_hue(100, Some(140)), 100);
-    }
-
-    #[test]
-    fn a_ground_on_top_of_the_logo_turns_away_from_it() {
-        // Zelda II: a navy logo on the blue-violet its box art asked for.
-        assert_eq!(ground_hue(250, Some(245)), 310);
-        assert!(apart(ground_hue(250, Some(245)), 245) >= CLASH);
-        // Turning the other way would land on the logo, so it goes up instead.
-        assert_eq!(ground_hue(100, Some(70)), 160);
-        assert_eq!(ground_hue(100, Some(130)), 40);
-    }
-
-    #[test]
-    fn a_logo_with_no_hue_of_its_own_leaves_the_ground_where_it_was() {
-        assert_eq!(ground_hue(250, None), 250);
-    }
-
-    #[test]
-    fn the_turn_wraps_around_the_wheel() {
-        assert_eq!(ground_hue(350, Some(340)), 50);
-        assert_eq!(ground_hue(10, Some(20)), 310);
     }
 
     #[test]

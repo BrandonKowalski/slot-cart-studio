@@ -33,12 +33,25 @@ pub fn stops(hue: u16, logo_luma: f32) -> ([u8; 3], [u8; 3]) {
             hue::hsl_to_rgb(h, 0.50, 0.84),
         )
     } else {
+        let h = if (OLIVE_LO..=OLIVE_HI).contains(&hue) {
+            AMBER
+        } else {
+            h
+        };
         (
             hue::hsl_to_rgb(h, 0.65, 0.24),
             hue::hsl_to_rgb(h, 0.60, 0.46),
         )
     }
 }
+
+/// Yellow has no deep form. Taken down to the deep corner's lightness it reads as olive, which is
+/// what Bomberman's ground was: the same hue at the pale corner is the cream under the Legend of
+/// Zelda's wordmark, and that one reads well. So a yellow ground going deep turns toward amber
+/// instead, where Advance Wars 2 already sits and looks like warm brass rather than mud.
+const OLIVE_LO: u16 = 45;
+const OLIVE_HI: u16 = 75;
+const AMBER: f32 = 38.0;
 
 /// The pale corner for a deep corner chosen by hand: same hue, lifted toward the light and eased
 /// off in saturation by the same distance the computed pairs travel, so a picked colour sweeps
@@ -238,6 +251,30 @@ mod tests {
 
     fn near(a: [u8; 3], b: [u8; 3], by: i32) -> bool {
         (0..3).all(|c| (a[c] as i32 - b[c] as i32).abs() <= by)
+    }
+
+    /// The olive band, at both its edges and on the branch it must not touch. Bomberman's ground
+    /// was hue 55 taken deep, and the Legend of Zelda's cream is that same hue taken pale: the
+    /// rotation is for the first and would ruin the second.
+    #[test]
+    fn a_yellow_ground_going_deep_turns_to_amber() {
+        let bright = BRIGHT + 1.0;
+        assert_eq!(stops(55, bright), stops(AMBER as u16, bright));
+        assert_eq!(stops(OLIVE_LO, bright), stops(AMBER as u16, bright));
+        assert_eq!(stops(OLIVE_HI, bright), stops(AMBER as u16, bright));
+
+        // A hue either side of the band keeps its own, Advance Wars 2's amber cover included.
+        for hue in [OLIVE_LO - 1, OLIVE_HI + 1, 35, 105, 235] {
+            assert_eq!(
+                stops(hue, bright).0,
+                hue::hsl_to_rgb(hue as f32, 0.65, 0.24),
+                "hue {hue} was turned"
+            );
+        }
+
+        // A dark logo takes the pale branch, which the rotation never reaches.
+        let dark = BRIGHT - 1.0;
+        assert_eq!(stops(55, dark).0, hue::hsl_to_rgb(55.0, 0.55, 0.62));
     }
 
     #[test]
