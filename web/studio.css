@@ -84,7 +84,9 @@ label.btn:focus-within{outline:2px solid var(--ink);outline-offset:3px}
 /* The colour you pick is the label's deep corner, so the control shows it as a well, with the
    chip beside it previewing the sweep that corner produces. */
 .hue-row{display:flex;align-items:center;gap:8px}
-.hue-row .well{display:flex;flex:none;cursor:pointer}
+/* Caption, well and chip are all inside the one label, so a click anywhere along the row opens
+   the picker and the caption is the input's accessible name rather than a second copy of it. */
+.hue-row .well{display:flex;align-items:center;gap:8px;flex:none;cursor:pointer}
 .hue-row input[type="color"]{
   width:30px;
   height:24px;
