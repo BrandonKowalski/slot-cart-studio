@@ -48,9 +48,20 @@ export async function fromDirectory(root) {
       } catch (e) {
         if (e.name !== 'NotFoundError') throw e;
       }
-      const out = await (await dir.getFileHandle(name, { create: true })).createWritable();
-      await out.write(bytes);
-      await out.close();
+      // The file exists from here on, empty until the write closes. A write that fails (a full
+      // card, permission withdrawn, the card pulled) must take it away again: an empty file left
+      // behind reads as a label the card already has, so the studio would never make this one.
+      const file = await dir.getFileHandle(name, { create: true });
+      let out = null;
+      try {
+        out = await file.createWritable();
+        await out.write(bytes);
+        await out.close();
+      } catch (e) {
+        await out?.abort().catch(() => {});
+        await dir.removeEntry(name).catch(() => {});
+        throw e;
+      }
       return 'written';
     },
   };
