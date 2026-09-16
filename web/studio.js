@@ -375,11 +375,11 @@ async function takeLogo(c, file) {
   schedulePaint(c);
 }
 
-function progress(done, total, stem) {
+function progress(done, total, stem, verb = 'Reading') {
   $('progress').hidden = done >= total;
   $('bar').max = total;
   $('bar').value = done;
-  $('progress-text').textContent = stem ? `Reading ${done + 1} of ${total}: ${stem}` : '';
+  $('progress-text').textContent = stem ? `${verb} ${done + 1} of ${total}: ${stem}` : '';
 }
 
 function banner(text, retry) {
@@ -580,12 +580,21 @@ async function writeLabels() {
       // Each entry is taken out of WASM memory as soon as it is added, so the card's labels pile
       // up here, where memory is given back, and not in the module.
       const parts = [];
-      for (const c of carts) {
+      const total = carts.length;
+      for (const [i, c] of carts.entries()) {
+        progress(i, total, c.stem, 'Packing');
         zip.add(
           `Labels/${c.stem}.png`,
           withLabel(activeLogo(c), c.deep ?? baseDeep(c), (label) => label.png()),
         );
         parts.push(zip.take());
+        // Packing a few hundred carts is seconds of synchronous work with nothing on screen, so
+        // give the tab a turn every few carts to paint the bar above and take input.
+        if (i % 4 === 3) {
+          await new Promise((r) => setTimeout(r, 0));
+          // A trap elsewhere, or a card replacing this one, can happen while this awaits.
+          if (fatal || s !== session) return;
+        }
       }
       parts.push(zip.finish());
       download(new Blob(parts, { type: 'application/zip' }), 'labels.zip');
@@ -599,6 +608,11 @@ async function writeLabels() {
   } finally {
     writing = false;
     updateWriteBar();
+    // The zip path's loop can return early, before its own final progress() call, leaving the
+    // bar stuck on a stale count — the same failure mode open() already guards against for a
+    // reopened card. Only clear it if this is still the session it was showing progress for; a
+    // card opened since owns the bar now, and trapped() already hid it if this run went fatal.
+    if (s === session) $('progress').hidden = true;
   }
 }
 
