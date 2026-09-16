@@ -22,6 +22,7 @@ import tempfile
 import threading
 import time
 import unicodedata
+import urllib.parse
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -72,12 +73,22 @@ class Cdp:
     def __init__(self, ws_url):
         self.ws = websocket.create_connection(ws_url, timeout=300)
         self.last = 0
+        # An exception thrown inside a paint leaves the page half drawn and says nothing. The
+        # events arrive between the replies to our own calls, so they are collected there.
+        self.problems = []
 
     def send(self, method, **params):
         self.last += 1
         self.ws.send(json.dumps({'id': self.last, 'method': method, 'params': params}))
         while True:
             msg = json.loads(self.ws.recv())
+            if msg.get('method') == 'Runtime.exceptionThrown':
+                d = msg['params']['exceptionDetails']
+                text = d.get('exception', {}).get('description') or d.get('text', '')
+                self.problems.append(text.splitlines()[0] if text else 'unknown exception')
+            elif msg.get('method') == 'Runtime.consoleAPICalled' and msg['params']['type'] == 'error':
+                args = ' '.join(str(a.get('value', a.get('description', ''))) for a in msg['params']['args'])
+                self.problems.append(f'console.error: {args}'[:200])
             if msg.get('id') == self.last:
                 if 'error' in msg:
                     raise RuntimeError(f'{method}: {msg["error"]}')
@@ -183,12 +194,23 @@ def main():
 
         new = urllib.request.Request(f'http://127.0.0.1:{CDP_PORT}/json/new?about:blank', method='PUT')
         page = Cdp(json.load(urllib.request.urlopen(new))['webSocketDebuggerUrl'])
+        page.send('Runtime.enable')
         page.width(1280)
-        page.send('Page.navigate', url=f'http://127.0.0.1:{HTTP_PORT}/studio/')
+        # STUDIO_ART points the page at a harvested set, the way the address does by hand. Unset,
+        # the run is the one that came before there was a set: every logo from libretro.
+        art = os.environ.get('STUDIO_ART', '')
+        page_url = f'http://127.0.0.1:{HTTP_PORT}/studio/'
+        if art:
+            page_url += '?art=' + urllib.parse.quote(art, safe='')
+            print('art set:', art)
+        page.send('Page.navigate', url=page_url)
         wait(lambda: page.eval("document.body && document.body.dataset.ready === 'true'"), 60, 'the studio to start')
 
         first = open_card(page, 'card', ['Games/' + g for g in games])
 
+        # Settled again before the shots: open_card's wait ends when every cart has resolved once,
+        # and a shot taken while anything is still being dressed photographs a spinner.
+        wait(lambda: page.eval('window.__studio.idle()'), 120, 'the carts to settle before the shot')
         page.shot(1280, OUT / 'studio-1280.png')
         page.shot(400, OUT / 'studio-400.png')
         overflow = page.eval('document.documentElement.scrollWidth')
@@ -202,6 +224,24 @@ def main():
         print('tabs:', tabs)
         if len(tabs) > 1:
             page.eval("document.querySelectorAll('#tabs button')[%d].click()" % (len(tabs) - 1))
+            wait(lambda: page.eval('window.__studio.idle()'), 120, 'the shelf to settle')
+            print('at the shot: idle', page.eval('window.__studio.idle()'),
+                  '| button', repr(page.eval("document.getElementById('write').textContent")),
+                  '| banner', repr(page.eval("document.getElementById('banner').hidden")))
+            # Per card: what paint wrote to the dom against what the page thinks the cart is. They
+            # disagree only if paint stopped part way through, which has one early return in it.
+            rows = page.eval(
+                "[...document.querySelectorAll('.cart')].map(c => ["
+                "  c.querySelector('.stem').textContent, c.dataset.state,"
+                "  c.querySelector('.game').textContent,"
+                "  c.querySelector('canvas').hidden ? 'no canvas' : 'canvas'].join(' | '))"
+            )
+            says = {s['stem']: s['state'] for s in page.eval('window.__studio.states()')}
+            for r in rows:
+                print('   dom:', r)
+            print('   states:', json.dumps(says))
+            for problem in dict.fromkeys(page.problems):
+                print('   PAGE ERROR:', problem)
             shown = page.eval(
                 "[...document.querySelectorAll('#grid > *')].filter(c => !c.hidden)"
                 ".map(c => c.querySelector('.stem').textContent)"
@@ -210,6 +250,22 @@ def main():
             page.shot(1280, OUT / 'studio-tab-1280.png')
             if not shown:
                 sys.exit(f'switching to {tabs[-1]} left no carts on screen')
+
+        # The other kind of label, switched the way a person would: every cart fetched again and
+        # cut from a photograph of the cart instead of composed from a logo.
+        kinds = page.eval("[...document.querySelectorAll('#kinds button')].map(b => b.textContent)")
+        if kinds:
+            print('kinds:', kinds)
+            page.eval("document.querySelector('#kinds button[data-kind=\"scan\"]').click()")
+            wait(lambda: page.eval('window.__studio.idle()'), 300, 'every cart to be relabelled')
+            ready = page.eval("window.__studio.states().filter(s => s.state === 'ready').length")
+            print(f'scans: {ready} carts ready')
+            page.shot(1280, OUT / 'studio-scans-1280.png')
+            for problem in dict.fromkeys(page.problems):
+                print('   PAGE ERROR:', problem)
+            # Back to composed labels, so what the rest of the run writes is what it expects.
+            page.eval("document.querySelector('#kinds button[data-kind=\"logo\"]').click()")
+            wait(lambda: page.eval('window.__studio.idle()'), 300, 'the composed labels back')
 
         page.width(1280)
         # Headless Chrome ignores the browser-level Browser.setDownloadBehavior for this target;
