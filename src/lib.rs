@@ -154,6 +154,10 @@ impl JsZip {
         self.0.add(name, data);
     }
 
+    pub fn take(&mut self) -> Vec<u8> {
+        self.0.take()
+    }
+
     pub fn finish(self) -> Vec<u8> {
         self.0.finish()
     }

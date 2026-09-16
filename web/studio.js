@@ -21,6 +21,7 @@ const $ = (id) => document.getElementById(id);
 const limit = limiter(4);
 // The game code sits at 0xAC; nothing past the header is needed to read it.
 const HEAD = 0xb0;
+const FATAL = 'The studio ran out of memory or hit an internal error. Reload the page to start again.';
 
 let faceW = 0;
 let faceH = 0;
@@ -28,6 +29,9 @@ let dat = null;
 let session = null;
 let busy = 0;
 let writing = false;
+// Set by the first WASM trap. What the module holds is undefined after one (a RefCell can stay
+// borrowed, and then every face panics), so nothing calls into it again.
+let fatal = false;
 
 const track = (promise) => {
   busy++;
@@ -43,8 +47,9 @@ function newCart({ stem, file }) {
     code: '',
     crc: null,
     game: null,
-    logo: null,
-    dropped: null,
+    // Logos stay PNG bytes, which are small. The label made from one is not kept: see withLabel.
+    logoBytes: null,
+    droppedBytes: null,
     rejected: false,
     snapshot: null,
     boxHue: null,
@@ -58,13 +63,13 @@ function newCart({ stem, file }) {
   };
 }
 
-const activeLabel = (c) => c.dropped ?? (c.rejected ? null : c.logo);
+const activeLogo = (c) => c.droppedBytes ?? (c.rejected ? null : c.logoBytes);
 
 function stateOf(c) {
   if (c.error) return 'error';
   if (c.existing) return 'has-label';
   if (c.looking) return 'looking';
-  return activeLabel(c) ? 'ready' : 'needs-logo';
+  return activeLogo(c) ? 'ready' : 'needs-logo';
 }
 
 // The box art belongs to the matched game, so its hue only stands while the match does.
@@ -73,6 +78,48 @@ const baseHue = (c) =>
 
 const readyCarts = () =>
   session ? session.carts.filter((c) => stateOf(c) === 'ready' && c.result !== 'skipped') : [];
+
+// A Label holds its 1280x640 composition in WASM memory, which never shrinks and stops at 4 GiB.
+// One kept per cart runs a big card out of it, so a Label lives only for the call that needs it.
+function withLabel(bytes, hue, use) {
+  const label = new Label(bytes, hue);
+  try {
+    return use(label);
+  } finally {
+    label.free();
+  }
+}
+
+// Whether slot's decoder takes a logo, asked the only way the module can be asked: by making one.
+function readable(bytes) {
+  try {
+    withLabel(bytes, 0, () => {});
+    return true;
+  } catch (e) {
+    if (e instanceof WebAssembly.RuntimeError) throw e;
+    return false;
+  }
+}
+
+// A WebAssembly.RuntimeError is a trap: memory ran out, or Rust panicked. The plain Error a Label
+// throws for bytes that aren't a PNG is not one. Returns whether `e` was a trap.
+function trapped(e) {
+  if (!(e instanceof WebAssembly.RuntimeError)) return false;
+  if (!fatal) {
+    fatal = true;
+    console.error(e);
+    $('progress').hidden = true;
+    banner(FATAL);
+    updateWriteBar();
+  }
+  return true;
+}
+
+// A thumbnail that won't fetch is only a missing image. A trap on the way is not.
+const noImage = (e) => {
+  if (e instanceof WebAssembly.RuntimeError) throw e;
+  return null;
+};
 
 function describe(c, state) {
   switch (state) {
@@ -85,7 +132,7 @@ function describe(c, state) {
     default:
       if (c.rejected) return `Not ${c.game}`;
       if (!c.game) return dat ? 'Not in the No-Intro database' : 'The game database has not loaded';
-      return c.logo || c.dropped ? c.game : `${c.game}: libretro has no logo for it`;
+      return c.logoBytes || c.droppedBytes ? c.game : `${c.game}: libretro has no logo for it`;
   }
 }
 
@@ -145,15 +192,19 @@ function schedulePaint(c) {
 }
 
 function paint(c) {
+  if (fatal) return;
   const state = stateOf(c);
   const { root, canvas, game, status, hue, hueRow, reject, drop } = c.el;
   root.dataset.state = state;
   let face = null;
   if (state === 'has-label') face = c.existing;
   if (state === 'ready') {
-    const label = activeLabel(c);
-    if (label.hue() !== c.hue) label.set_hue(c.hue);
-    face = label.face(c.code, c.stem);
+    try {
+      face = withLabel(activeLogo(c), c.hue, (label) => label.face(c.code, c.stem));
+    } catch (e) {
+      if (trapped(e)) return;
+      throw e;
+    }
   }
   canvas.hidden = !face;
   if (face) {
@@ -173,9 +224,9 @@ function paint(c) {
 // A CRC can be right about the bytes and wrong about what the user meant: a ROM renamed to
 // another game's name. Rejecting drops the match, its logo and its box art hue.
 function reject(c) {
-  c.snapshot = { hue: c.hue, userHue: c.userHue, dropped: c.dropped };
+  c.snapshot = { hue: c.hue, userHue: c.userHue, droppedBytes: c.droppedBytes };
   c.rejected = true;
-  c.dropped = null;
+  c.droppedBytes = null;
   c.userHue = false;
   c.hue = baseHue(c);
   schedulePaint(c);
@@ -188,14 +239,20 @@ function restore(c) {
 
 async function takeLogo(c, file) {
   if (!file) return;
-  let label;
+  let bytes = null;
   try {
-    label = new Label(new Uint8Array(await file.arrayBuffer()), c.userHue ? c.hue : baseHue(c));
-  } catch {
+    bytes = new Uint8Array(await file.arrayBuffer());
+    if (fatal) return;
+    if (!readable(bytes)) bytes = null;
+  } catch (e) {
+    if (trapped(e)) return;
+    bytes = null;
+  }
+  if (!bytes) {
     c.el.status.textContent = `${file.name} is not a PNG this studio can read`;
     return;
   }
-  c.dropped = label;
+  c.droppedBytes = bytes;
   if (!c.userHue) c.hue = baseHue(c);
   schedulePaint(c);
 }
@@ -223,6 +280,10 @@ function banner(text, retry) {
 }
 
 async function open(source) {
+  if (fatal) {
+    banner(FATAL);
+    return;
+  }
   session = { source, carts: source.carts.map(newCart) };
   $('banner').hidden = true;
   // A card opened mid-scan replaces identify()'s loop before it reaches progress(total, total, ''),
@@ -253,7 +314,7 @@ async function crcOf(file) {
 async function identify(s) {
   const total = s.carts.length;
   for (const [i, c] of s.carts.entries()) {
-    if (s !== session) return;
+    if (s !== session || fatal) return;
     progress(i, total, c.stem);
     try {
       const file = await c.file();
@@ -266,6 +327,7 @@ async function identify(s) {
         c.crc = await crcOf(file);
       }
     } catch (e) {
+      if (trapped(e)) return;
       c.error = `Could not read this ROM: ${e.message}`;
     }
     paint(c);
@@ -279,7 +341,7 @@ async function match(s) {
     try {
       dat = Dat.parse(await fetchDat());
     } catch (e) {
-      if (s !== session) return;
+      if (trapped(e) || s !== session || fatal) return;
       banner(
         `The game database didn’t load (${e.message}), so carts can’t be matched yet. Logos can still be dropped in by hand.`,
         () => track(match(s)),
@@ -293,7 +355,7 @@ async function match(s) {
       return;
     }
   }
-  if (s !== session) return;
+  if (s !== session || fatal) return;
   $('banner').hidden = true;
   const pending = s.carts.filter((c) => c.crc !== null && !c.game && !c.existing && !c.error);
   await Promise.all(pending.map((c) => art(s, c)));
@@ -302,23 +364,22 @@ async function match(s) {
 async function art(s, c) {
   c.looking = true;
   paint(c);
-  c.game = dat.game_for(c.crc) ?? null;
-  if (c.game) {
-    const name = thumbnail_name(c.game);
-    const [logo, box] = await Promise.all([
-      limit(() => fetchThumb('Named_Logos', name, stub_target)).catch(() => null),
-      limit(() => fetchThumb('Named_Boxarts', name, stub_target)).catch(() => null),
-    ]);
-    if (s !== session) return;
-    c.boxHue = box ? (box_hue(box) ?? null) : null;
-    if (!c.userHue) c.hue = baseHue(c);
-    if (logo) {
-      try {
-        c.logo = new Label(logo, c.hue);
-      } catch {
-        c.logo = null;
-      }
+  try {
+    c.game = dat.game_for(c.crc) ?? null;
+    if (c.game) {
+      const name = thumbnail_name(c.game);
+      const [logo, box] = await Promise.all([
+        limit(() => fetchThumb('Named_Logos', name, stub_target)).catch(noImage),
+        limit(() => fetchThumb('Named_Boxarts', name, stub_target)).catch(noImage),
+      ]);
+      if (s !== session || fatal) return;
+      c.boxHue = box ? (box_hue(box) ?? null) : null;
+      if (!c.userHue) c.hue = baseHue(c);
+      c.logoBytes = logo && readable(logo) ? logo : null;
     }
+  } catch (e) {
+    if (trapped(e)) return;
+    throw e;
   }
   c.looking = false;
   paint(c);
@@ -328,7 +389,7 @@ function updateWriteBar() {
   if (!session) return;
   const n = readyCarts().length;
   const noun = n === 1 ? 'label' : 'labels';
-  $('write').disabled = n === 0 || writing;
+  $('write').disabled = n === 0 || writing || fatal;
   $('write').textContent = session.source.direct
     ? `Write ${n} ${noun} to the card`
     : `Download ${n} ${noun} as a zip`;
@@ -345,32 +406,48 @@ function download(blob, name) {
 async function writeLabels() {
   const s = session;
   const carts = readyCarts();
-  if (!carts.length || writing) return;
+  if (!carts.length || writing || fatal) return;
   writing = true;
   updateWriteBar();
   try {
     if (s.source.direct) {
       const count = { written: 0, skipped: 0, failed: 0 };
       for (const c of carts) {
-        const label = activeLabel(c);
+        if (fatal) return;
+        let face = null;
         try {
-          c.result = await s.source.write(c.stem, label.png());
+          const [png, drawn] = withLabel(activeLogo(c), c.hue, (label) => [
+            label.png(),
+            label.face(c.code, c.stem),
+          ]);
+          face = drawn;
+          c.result = await s.source.write(c.stem, png);
         } catch (e) {
+          if (trapped(e)) return;
           console.error(c.stem, e);
           c.result = 'failed';
         }
-        if (c.result === 'written') c.existing = label.face(c.code, c.stem);
+        if (c.result === 'written') c.existing = face;
         count[c.result]++;
         paint(c);
       }
       $('summary').textContent = `${count.written} written, ${count.skipped} skipped, ${count.failed} failed.`;
     } else {
       const zip = new Zip();
-      for (const c of carts) zip.add(`Labels/${c.stem}.png`, activeLabel(c).png());
-      download(new Blob([zip.finish()], { type: 'application/zip' }), 'labels.zip');
+      // Each entry is taken out of WASM memory as soon as it is added, so the card's labels pile
+      // up here, where memory is given back, and not in the module.
+      const parts = [];
+      for (const c of carts) {
+        zip.add(`Labels/${c.stem}.png`, withLabel(activeLogo(c), c.hue, (label) => label.png()));
+        parts.push(zip.take());
+      }
+      parts.push(zip.finish());
+      download(new Blob(parts, { type: 'application/zip' }), 'labels.zip');
       const noun = carts.length === 1 ? 'label' : 'labels';
       $('summary').textContent = `${carts.length} ${noun} in labels.zip. Unzip it at the top of your card.`;
     }
+  } catch (e) {
+    if (!trapped(e)) throw e;
   } finally {
     writing = false;
     updateWriteBar();
