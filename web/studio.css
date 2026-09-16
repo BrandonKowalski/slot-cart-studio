@@ -84,22 +84,27 @@ label.btn:focus-within{outline:2px solid var(--ink);outline-offset:3px}
 /* The colour you pick is the label's deep corner, so the control shows it as a well, with the
    chip beside it previewing the sweep that corner produces. */
 .hue-row{display:flex;align-items:center;gap:8px}
-/* Caption, well and chip are all inside the one label, so a click anywhere along the row opens
-   the picker and the caption is the input's accessible name rather than a second copy of it. */
-.hue-row .well{display:flex;align-items:center;gap:8px;flex:none;cursor:pointer}
+/* Safari draws its own swatch for a colour input, which put the same colour on screen twice
+   next to the chip. The input now lies invisible across the chip instead: the chip is what you
+   see, the input is what you click, and the picker still opens anchored to the box the pointer
+   was in — which a hidden input the size of a pixel would not do. */
+.hue-row .well{position:relative;display:inline-flex;flex:none;border-radius:6px}
 .hue-row input[type="color"]{
-  width:30px;
-  height:24px;
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  margin:0;
   padding:0;
-  border:1px solid var(--rule);
-  border-radius:6px;
+  border:0;
   background:transparent;
+  opacity:0;
   cursor:pointer;
+  -webkit-appearance:none;
+  appearance:none;
 }
-.hue-row input[type="color"]::-webkit-color-swatch-wrapper{padding:2px}
-.hue-row input[type="color"]::-webkit-color-swatch{border:0;border-radius:4px}
-.hue-row input[type="color"]::-moz-color-swatch{border:0;border-radius:4px}
-.hue-row input:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+/* The ring belongs on the chip you can see, not on the transparent input over it. */
+.hue-row .well:focus-within{outline:2px solid var(--ink);outline-offset:3px}
 .hue-label{font-size:13px;color:var(--muted)}
 .stops{width:40px;height:24px;border-radius:6px;border:1px solid var(--rule);background:linear-gradient(135deg,var(--deep,var(--recess)),var(--pale,var(--muted)))}
 .cart-actions{display:flex;justify-content:center}
