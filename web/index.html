@@ -37,6 +37,23 @@
 
   <section class="grid" id="grid" aria-label="Carts"></section>
 
+  <dialog id="finder" class="finder">
+    <form method="dialog" class="finder-head">
+      <h2 id="finder-cart"></h2>
+      <button class="btn ghost" value="close" type="submit">Close</button>
+    </form>
+    <label class="finder-search">
+      <span class="visually-hidden">Search the game database</span>
+      <input id="finder-query" type="search" placeholder="Search by game name" autocomplete="off">
+    </label>
+    <ul id="finder-results" class="finder-results"></ul>
+    <p id="finder-note" class="finder-note"></p>
+    <div class="drop" id="finder-drop">
+      <p>Or drop a logo PNG here to label it by hand</p>
+      <label class="btn ghost">Choose a file<input id="finder-file" class="visually-hidden" type="file" accept="image/png,.png"></label>
+    </div>
+  </dialog>
+
   <footer class="credits">
     <p>Game names from <a href="https://github.com/libretro/libretro-database">libretro-database</a>, logos and box art from <a href="https://github.com/libretro-thumbnails/Nintendo_-_Game_Boy_Advance">libretro-thumbnails</a>.<br />Made for <a href="https://slot.kowalski.io">slot</a>, a GBA frontend for the Anbernic RG SP.</p>
   </footer>
@@ -55,7 +72,9 @@
     <p class="tags"></p>
     <p class="game"></p>
     <div class="hue-row" hidden>
-      <label>Hue <input class="hue" type="range" min="0" max="359" step="1"></label>
+      <label class="well"><span class="visually-hidden">Label colour</span><input class="hue" type="color"></label>
+      <span class="stops" aria-hidden="true"></span>
+      <span class="hue-label">Label colour</span>
     </div>
     <div class="cart-actions">
       <button class="btn ghost reject" type="button" hidden></button>

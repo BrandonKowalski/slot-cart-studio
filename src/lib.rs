@@ -77,6 +77,11 @@ impl JsDat {
         self.0.game_for(crc).map(str::to_string)
     }
 
+    /// Games whose name contains `query`, for the finder a cart opens when its match is wrong.
+    pub fn search(&self, query: &str, limit: usize) -> Vec<String> {
+        self.0.search(query, limit)
+    }
+
     /// How many dumps the database names, for the page to mention.
     pub fn games(&self) -> usize {
         self.0.len()
@@ -103,9 +108,24 @@ pub fn box_hue(png: &[u8]) -> Option<u16> {
     hue::box_hue(png)
 }
 
+/// Mean luminance of a logo's opaque pixels, which is what decides whether its ground goes dark
+/// under it or pale over it. 255 for bytes that will not decode: such a logo never gets drawn.
+#[wasm_bindgen]
+pub fn logo_luma(png: &[u8]) -> f32 {
+    hue::logo_luma(png)
+}
+
 #[wasm_bindgen]
 pub fn fallback_hue(stem: &str) -> u16 {
     hue::fallback_hue(stem)
+}
+
+/// The hue a label's ground should take, given the box art's hue and the logo's own. A ground
+/// too close to the logo's hue turns away from it, so a dark logo never sits on a dark ground of
+/// the same colour.
+#[wasm_bindgen]
+pub fn ground_hue(box_hue: u16, logo_hue: Option<u16>) -> u16 {
+    hue::ground_hue(box_hue, logo_hue)
 }
 
 /// The title slot puts on a cart with no label art: the stem without its bracketed tags or its
@@ -121,25 +141,49 @@ pub fn label_tags(stem: &str) -> Vec<String> {
     cart::label_tags(stem)
 }
 
-/// A label for one cart: a logo that recomposes as its hue moves.
+/// The ground's two corners for a hue and the brightness of the logo going on it: `[deep r, g, b,
+/// pale r, g, b]`. The page seeds its colour well from the deep one and draws the chip from both,
+/// rather than restating the house numbers in CSS where they could drift.
+#[wasm_bindgen]
+pub fn stop_colours(hue: u16, logo_luma: f32) -> Vec<u8> {
+    let (deep, pale) = label::stops(hue, logo_luma);
+    vec![deep[0], deep[1], deep[2], pale[0], pale[1], pale[2]]
+}
+
+/// The pale corner a chosen deep one produces, so the page can preview a picked colour's sweep
+/// without restating how that corner is derived.
+#[wasm_bindgen]
+pub fn pale_colour(deep: &[u8]) -> Vec<u8> {
+    if deep.len() < 3 {
+        return Vec::new();
+    }
+    label::pale_for([deep[0], deep[1], deep[2]]).to_vec()
+}
+
+/// A label for one cart: a logo over a ground described by its deep corner.
 #[wasm_bindgen(js_name = Label)]
 pub struct JsLabel(label::Label);
 
 #[wasm_bindgen(js_class = Label)]
 impl JsLabel {
     #[wasm_bindgen(constructor)]
-    pub fn new(logo_png: &[u8], hue: u16) -> Result<JsLabel, JsError> {
-        label::Label::from_png(logo_png, hue)
+    pub fn new(logo_png: &[u8], deep: &[u8]) -> Result<JsLabel, JsError> {
+        if deep.len() < 3 {
+            return Err(JsError::new("a ground colour needs three channels"));
+        }
+        label::Label::from_png(logo_png, [deep[0], deep[1], deep[2]])
             .map(JsLabel)
             .ok_or_else(|| JsError::new("not a PNG this studio can read"))
     }
 
-    pub fn hue(&self) -> u16 {
-        self.0.hue()
+    pub fn deep(&self) -> Vec<u8> {
+        self.0.deep()
     }
 
-    pub fn set_hue(&mut self, hue: u16) {
-        self.0.set_hue(hue);
+    pub fn set_deep(&mut self, deep: &[u8]) {
+        if deep.len() >= 3 {
+            self.0.set_deep(deep);
+        }
     }
 
     pub fn face(&self, code: &str, stem: &str) -> Vec<u8> {

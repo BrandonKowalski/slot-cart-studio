@@ -31,6 +31,32 @@ pub fn fallback_hue(stem: &str) -> u16 {
     (h % 360) as u16
 }
 
+/// sRGB to HSL, the way out of a colour picked by hand: the studio's stops are stated in HSL, so
+/// a chosen deep corner has to be read back into those terms to derive its pale one.
+pub fn rgb_to_hsl(rgb: [u8; 3]) -> (f32, f32, f32) {
+    let (r, g, b) = (
+        rgb[0] as f32 / 255.0,
+        rgb[1] as f32 / 255.0,
+        rgb[2] as f32 / 255.0,
+    );
+    let max = r.max(g).max(b);
+    let min = r.min(g).min(b);
+    let d = max - min;
+    let l = (max + min) / 2.0;
+    if d == 0.0 {
+        return (0.0, 0.0, l);
+    }
+    let s = d / (1.0 - (2.0 * l - 1.0).abs());
+    let h = if max == r {
+        60.0 * ((g - b) / d).rem_euclid(6.0)
+    } else if max == g {
+        60.0 * ((b - r) / d + 2.0)
+    } else {
+        60.0 * ((r - g) / d + 4.0)
+    };
+    (h, s.clamp(0.0, 1.0), l)
+}
+
 fn rgb_to_hsv(r: u8, g: u8, b: u8) -> (f32, f32, f32) {
     let (r, g, b) = (r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
     let max = r.max(g).max(b);
@@ -46,6 +72,60 @@ fn rgb_to_hsv(r: u8, g: u8, b: u8) -> (f32, f32, f32) {
     };
     let s = if max == 0.0 { 0.0 } else { d / max };
     (hue, s, max)
+}
+
+/// Mean luminance of a logo's opaque pixels: how bright the thing going on the ground actually is,
+/// which is what decides whether the ground goes dark under it or pale over it. The near-opaque
+/// cut keeps a logo's antialiased rim, which is half ground already, out of the average. 255 for
+/// bytes that will not decode, since such a logo is never drawn.
+pub fn logo_luma(png: &[u8]) -> f32 {
+    let Some((px, w, h)) = art::decode(png) else {
+        return 255.0;
+    };
+    let (mut sum, mut n) = (0.0, 0usize);
+    for i in 0..(w * h) as usize {
+        if px[i * 4 + 3] < 200 {
+            continue;
+        }
+        sum += 0.2126 * px[i * 4] as f32
+            + 0.7152 * px[i * 4 + 1] as f32
+            + 0.0722 * px[i * 4 + 2] as f32;
+        n += 1;
+    }
+    if n == 0 {
+        255.0
+    } else {
+        sum / n as f32
+    }
+}
+
+/// How far apart two hues sit on the wheel, 0 to 180.
+fn apart(a: u16, b: u16) -> u16 {
+    let d = (a as i32 - b as i32).rem_euclid(360) as u16;
+    d.min(360 - d)
+}
+
+/// A ground within `CLASH` of the logo's own hue leaves the logo to separate on brightness alone,
+/// and a dark logo on a dark ground of the same hue barely reads: Zelda II's navy wordmark sat on
+/// the blue-violet its box art asked for. Such a ground turns `SHOVE` degrees away from the logo,
+/// whichever way opens the gap. A logo with no saturated hue of its own changes nothing.
+const CLASH: u16 = 40;
+const SHOVE: u16 = 60;
+
+pub fn ground_hue(box_hue: u16, logo_hue: Option<u16>) -> u16 {
+    let Some(logo) = logo_hue else {
+        return box_hue;
+    };
+    if apart(box_hue, logo) >= CLASH {
+        return box_hue;
+    }
+    let up = (box_hue + SHOVE) % 360;
+    let down = (box_hue + 360 - SHOVE) % 360;
+    if apart(up, logo) >= apart(down, logo) {
+        up
+    } else {
+        down
+    }
 }
 
 /// The box art's dominant saturated hue, or `None` when it has none to give: a greyscale cover,
@@ -81,6 +161,22 @@ pub fn box_hue(png: &[u8]) -> Option<u16> {
 #[allow(clippy::manual_range_contains)]
 mod tests {
     use super::*;
+
+    /// A logo is mostly clear background, so its tests need the alpha channel `png_rgb` drops.
+    fn png_rgba(w: u32, h: u32, px: impl Fn(u32, u32) -> [u8; 4]) -> Vec<u8> {
+        let data: Vec<u8> = (0..h)
+            .flat_map(|y| (0..w).map(move |x| (x, y)))
+            .flat_map(|(x, y)| px(x, y))
+            .collect();
+        let mut out = Vec::new();
+        {
+            let mut enc = png::Encoder::new(&mut out, w, h);
+            enc.set_color(png::ColorType::Rgba);
+            enc.set_depth(png::BitDepth::Eight);
+            enc.write_header().unwrap().write_image_data(&data).unwrap();
+        }
+        out
+    }
 
     fn png_rgb(w: u32, h: u32, px: impl Fn(u32, u32) -> [u8; 3]) -> Vec<u8> {
         let data: Vec<u8> = (0..h)
@@ -139,6 +235,81 @@ mod tests {
         assert_eq!(hsl_to_rgb(120.0, 1.0, 0.5), [0, 255, 0]);
         assert_eq!(hsl_to_rgb(240.0, 1.0, 0.5), [0, 0, 255]);
         assert_eq!(hsl_to_rgb(300.0, 0.0, 1.0), [255, 255, 255]);
+    }
+
+    #[test]
+    fn a_logos_brightness_is_its_opaque_pixels() {
+        // White over a clear background: the clear half must not drag the average down.
+        let white = png_rgba(20, 20, |x, _| {
+            if x < 10 {
+                [255, 255, 255, 255]
+            } else {
+                [0, 0, 0, 0]
+            }
+        });
+        assert!(
+            (logo_luma(&white) - 255.0).abs() < 0.5,
+            "{}",
+            logo_luma(&white)
+        );
+
+        let black = png_rgba(20, 20, |_, _| [0, 0, 0, 255]);
+        assert!(logo_luma(&black) < 0.5, "{}", logo_luma(&black));
+
+        // Bytes that do not decode, and a logo with nothing opaque in it, are never drawn.
+        assert_eq!(logo_luma(b"not a png"), 255.0);
+        assert_eq!(logo_luma(&png_rgba(8, 8, |_, _| [9, 9, 9, 0])), 255.0);
+    }
+
+    #[test]
+    fn hsl_survives_the_trip_back_out_of_rgb() {
+        for (h, s, l) in [
+            (0.0, 0.65, 0.24),
+            (120.0, 0.60, 0.46),
+            (250.0, 0.55, 0.62),
+            (330.0, 0.50, 0.84),
+        ] {
+            let (h2, s2, l2) = rgb_to_hsl(hsl_to_rgb(h, s, l));
+            assert!((h2 - h).abs() <= 1.0, "hue {h} came back {h2}");
+            assert!((s2 - s).abs() <= 0.02, "saturation {s} came back {s2}");
+            assert!((l2 - l).abs() <= 0.01, "lightness {l} came back {l2}");
+        }
+    }
+
+    #[test]
+    fn a_grey_has_no_hue_and_no_saturation() {
+        let (h, s, l) = rgb_to_hsl([128, 128, 128]);
+        assert_eq!((h, s), (0.0, 0.0));
+        assert!((l - 0.502).abs() < 0.01);
+    }
+
+    #[test]
+    fn a_ground_far_from_the_logo_is_left_alone() {
+        assert_eq!(ground_hue(5, Some(200)), 5);
+        assert_eq!(ground_hue(120, Some(300)), 120);
+        // 40 degrees apart is far enough, by the rule's own edge.
+        assert_eq!(ground_hue(100, Some(140)), 100);
+    }
+
+    #[test]
+    fn a_ground_on_top_of_the_logo_turns_away_from_it() {
+        // Zelda II: a navy logo on the blue-violet its box art asked for.
+        assert_eq!(ground_hue(250, Some(245)), 310);
+        assert!(apart(ground_hue(250, Some(245)), 245) >= CLASH);
+        // Turning the other way would land on the logo, so it goes up instead.
+        assert_eq!(ground_hue(100, Some(70)), 160);
+        assert_eq!(ground_hue(100, Some(130)), 40);
+    }
+
+    #[test]
+    fn a_logo_with_no_hue_of_its_own_leaves_the_ground_where_it_was() {
+        assert_eq!(ground_hue(250, None), 250);
+    }
+
+    #[test]
+    fn the_turn_wraps_around_the_wheel() {
+        assert_eq!(ground_hue(350, Some(340)), 50);
+        assert_eq!(ground_hue(10, Some(20)), 310);
     }
 
     #[test]
