@@ -332,6 +332,8 @@ async function identify(s) {
     }
     paint(c);
   }
+  // A card opened during the last read has its own bar up by now.
+  if (s !== session) return;
   progress(total, total, '');
   await match(s);
 }
@@ -368,10 +370,13 @@ async function art(s, c) {
     c.game = dat.game_for(c.crc) ?? null;
     if (c.game) {
       const name = thumbnail_name(c.game);
-      const [logo, box] = await Promise.all([
-        limit(() => fetchThumb('Named_Logos', name, stub_target)).catch(noImage),
-        limit(() => fetchThumb('Named_Boxarts', name, stub_target)).catch(noImage),
-      ]);
+      // The queue is shared, so a card replaced while its jobs wait gives up their turns without
+      // a request instead of making the new card wait behind its downloads.
+      const thumb = (folder) =>
+        limit(async () =>
+          s === session && !fatal ? fetchThumb(folder, name, stub_target) : null,
+        ).catch(noImage);
+      const [logo, box] = await Promise.all([thumb('Named_Logos'), thumb('Named_Boxarts')]);
       if (s !== session || fatal) return;
       c.boxHue = box ? (box_hue(box) ?? null) : null;
       if (!c.userHue) c.hue = baseHue(c);
@@ -431,7 +436,10 @@ async function writeLabels() {
         count[c.result]++;
         paint(c);
       }
-      $('summary').textContent = `${count.written} written, ${count.skipped} skipped, ${count.failed} failed.`;
+      // A card opened while this one was writing has its own summary, which this must not replace.
+      if (s === session) {
+        $('summary').textContent = `${count.written} written, ${count.skipped} skipped, ${count.failed} failed.`;
+      }
     } else {
       const zip = new Zip();
       // Each entry is taken out of WASM memory as soon as it is added, so the card's labels pile
@@ -443,8 +451,10 @@ async function writeLabels() {
       }
       parts.push(zip.finish());
       download(new Blob(parts, { type: 'application/zip' }), 'labels.zip');
-      const noun = carts.length === 1 ? 'label' : 'labels';
-      $('summary').textContent = `${carts.length} ${noun} in labels.zip. Unzip it at the top of your card.`;
+      if (s === session) {
+        const noun = carts.length === 1 ? 'label' : 'labels';
+        $('summary').textContent = `${carts.length} ${noun} in labels.zip. Unzip it at the top of your card.`;
+      }
     }
   } catch (e) {
     if (!trapped(e)) throw e;
