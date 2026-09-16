@@ -67,7 +67,9 @@ label.btn:focus-within{outline:2px solid var(--ink);outline-offset:3px}
 .cart{background:var(--housing);border:1px solid var(--rule);border-radius:12px;padding:12px 12px 14px;display:flex;flex-direction:column;gap:6px;min-width:0}
 .cart[data-state="has-label"]{opacity:.72}
 .face{display:grid;place-items:center;background:var(--recess);border-radius:8px;padding:8px 0}
-.face canvas{width:240px;height:135px;image-rendering:pixelated}
+/* Every cart is 240 wide, whatever it is: a Game Boy Game Pak is the same width as a GBA cart and
+   taller, so the height follows the canvas rather than being pinned to the GBA one. */
+.face canvas{width:240px;height:auto;image-rendering:pixelated}
 .drop{width:240px;height:135px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;border:2px dashed var(--edge);border-radius:8px;color:var(--muted);font-size:14px;text-align:center;padding:8px}
 .drop p{margin:0}
 .drop.over{border-color:var(--ink);color:var(--ink)}
@@ -132,8 +134,10 @@ label.btn:focus-within{outline:2px solid var(--ink);outline-offset:3px}
 .write-bar{position:sticky;top:0;z-index:1;display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-top:24px;padding:14px 0;background:var(--page);border-bottom:1px solid var(--rule)}
 /* One per platform the card holds, shown only when it holds more than one. The pressed tab is
    filled the way the primary button is, so which shelf you are on reads at a glance. */
-.tabs{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
-.tabs .btn{padding:8px 16px;font-size:15px}
-.tabs .btn[aria-pressed="true"]{background:var(--ink);color:var(--opening);border-color:var(--ink)}
+/* The kind row picks what every label is made of; the tabs pick which shelf you are looking at.
+   Both are the same control, so they read the same. */
+.tabs,.kinds{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
+.tabs .btn,.kinds .btn{padding:8px 16px;font-size:15px}
+.tabs .btn[aria-pressed="true"],.kinds .btn[aria-pressed="true"]{background:var(--ink);color:var(--opening);border-color:var(--ink)}
 
 .credits{margin-top:48px;color:var(--muted);font-size:14px;text-align:center}
