@@ -14,6 +14,7 @@ import base64
 import functools
 import http.server
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -31,7 +32,9 @@ STUDIO = Path(__file__).resolve().parent.parent
 SLOT_GAMES = STUDIO.parent / 'slot' / 'sdcard' / 'Games'
 OUT = STUDIO / 'out'
 CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-HTTP_PORT, CDP_PORT = 8765, 9223
+# Overridable so a run can avoid whichever port the user's own browser session is on.
+HTTP_PORT = int(os.environ.get('STUDIO_HTTP_PORT', 8765))
+CDP_PORT = int(os.environ.get('STUDIO_CDP_PORT', 9223))
 # The second pass's labels: two of slot's hand-made ones, and Emerald's under an extra cart whose
 # ROM is named composed and whose label decomposed, so only a normalised comparison pairs them.
 KEPT = ['Advance Wars', 'Metroid Fusion']
@@ -190,6 +193,17 @@ def main():
         # only the page-level form of the command takes effect.
         page.send('Page.setDownloadBehavior', behavior='allow', downloadPath=str(downloads))
         page.eval("document.getElementById('write').click()")
+        # click() returns at the loop's first yield, and this round trip lands a few carts later
+        # still: on ten carts it reads "8 of 10". What keeps that honest is the packing left to
+        # do, about 44 ms a cart against a round trip of a few, so the bar is up and counting
+        # well before this looks. A fixture small enough to finish packing first would flake.
+        packing = page.eval(
+            "!document.getElementById('progress').hidden && "
+            "document.getElementById('progress-text').textContent"
+        )
+        if not packing or 'Packing' not in packing:
+            sys.exit(f'the progress bar was not showing a packing count: {packing!r}')
+        print(f'asserted: progress bar reads {packing!r} mid-write')
         wait(lambda: (downloads / 'labels.zip').exists(), 60, 'labels.zip to download')
         time.sleep(1)
         shutil.copy(downloads / 'labels.zip', OUT / 'labels.zip')
