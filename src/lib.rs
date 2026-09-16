@@ -31,10 +31,19 @@ pub mod zip;
 
 use wasm_bindgen::prelude::*;
 
-/// The cart face's size, `[w, h]`, so the page sizes its canvases from slot.
+/// The cart face's size for a platform, `[w, h]`, so the page sizes its canvases from slot. A
+/// Game Boy Game Pak is the same width as a GBA cart and nearly twice as tall, so one size cannot
+/// serve both: a canvas cut for the wrong one refuses the pixels outright.
 #[wasm_bindgen]
-pub fn cart_size() -> Vec<u32> {
-    vec![cart::CART_W, cart::CART_H]
+pub fn cart_size(platform: &str) -> Vec<u32> {
+    let (w, h) = cart::cart_box(face::platform_of(platform));
+    vec![w, h]
+}
+
+/// A cart shown as the photograph of it, rather than as slot's shell with a label pasted on.
+#[wasm_bindgen]
+pub fn scan_face(scan_png: &[u8], platform: &str) -> Vec<u8> {
+    face::scan_whole(scan_png, face::platform_of(platform))
 }
 
 /// A label the card already has, on its cart. `platform` is the card folder the rom sits in,
@@ -160,13 +169,25 @@ pub struct JsLabel(label::Label);
 #[wasm_bindgen(js_class = Label)]
 impl JsLabel {
     #[wasm_bindgen(constructor)]
-    pub fn new(logo_png: &[u8], deep: &[u8]) -> Result<JsLabel, JsError> {
+    pub fn new(logo_png: &[u8], deep: &[u8], platform: &str) -> Result<JsLabel, JsError> {
         if deep.len() < 3 {
             return Err(JsError::new("a ground colour needs three channels"));
         }
-        label::Label::from_png(logo_png, [deep[0], deep[1], deep[2]])
+        label::Label::from_png(
+            logo_png,
+            [deep[0], deep[1], deep[2]],
+            face::platform_of(platform),
+        )
+        .map(JsLabel)
+        .ok_or_else(|| JsError::new("not a PNG this studio can read"))
+    }
+
+    /// A label cut from a photograph of the cart, rather than composed from a logo: the printed
+    /// label the cartridge actually wears.
+    pub fn from_scan(scan_png: &[u8], platform: &str) -> Result<JsLabel, JsError> {
+        label::Label::from_scan(scan_png, face::platform_of(platform))
             .map(JsLabel)
-            .ok_or_else(|| JsError::new("not a PNG this studio can read"))
+            .ok_or_else(|| JsError::new("not a cart scan this studio can read"))
     }
 
     pub fn deep(&self) -> Vec<u8> {
