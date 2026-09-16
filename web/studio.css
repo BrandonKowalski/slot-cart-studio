@@ -59,10 +59,12 @@ label.btn:focus-within{outline:2px solid var(--ink);outline-offset:3px}
 .progress{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:24px 0 0;color:var(--muted);font-size:15px}
 .progress progress{width:min(320px,100%);accent-color:var(--ink)}
 
-/* One slot pixel is one CSS pixel at phone width and two above it, never a fraction: a label
-   has to be judged at cart size, and a blurred cart is no judge. */
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,268px),1fr));gap:18px;margin-top:28px}
-.cart{background:var(--housing);border:1px solid var(--rule);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:6px;min-width:0}
+/* One slot pixel is one CSS pixel, at every width and never a fraction: a cart is the size the
+   SP draws it, 240x135 of the 720x480 the device composites, and a blurred cart is no judge. */
+/* Cards size to their own content: stretching each to its row's tallest left a short title
+   sitting above a hand's width of empty box. */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,268px),1fr));align-items:start;gap:18px;margin-top:28px}
+.cart{background:var(--housing);border:1px solid var(--rule);border-radius:12px;padding:12px 12px 14px;display:flex;flex-direction:column;gap:6px;min-width:0}
 .cart[data-state="has-label"]{opacity:.72}
 .face{display:grid;place-items:center;background:var(--recess);border-radius:8px;padding:8px 0}
 .face canvas{width:240px;height:135px;image-rendering:pixelated}
@@ -70,17 +72,24 @@ label.btn:focus-within{outline:2px solid var(--ink);outline-offset:3px}
 .drop p{margin:0}
 .drop.over{border-color:var(--ink);color:var(--ink)}
 .drop .btn{padding:7px 12px;font-size:14px}
-.stem{font-size:16px;font-weight:600;line-height:1.35;margin:6px 0 0;overflow-wrap:anywhere}
-.game{margin:0;color:var(--muted);font-size:14px;overflow-wrap:anywhere}
+/* One line, centred under the cart, with the filename on hover: a wrapped dump name outweighed
+   the thing it names. */
+.stem{font-size:15px;font-weight:600;line-height:1.35;margin:6px 0 0;text-align:center;text-wrap:balance;overflow-wrap:anywhere}
+.tags{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin:0}
+.tags:empty{display:none}
+.chip{background:var(--recess);border:1px solid var(--rule);border-radius:999px;padding:2px 8px;font-size:11px;color:var(--muted);white-space:nowrap}
+/* Only carries what the cart cannot show: a match that disagrees with the name, or a refusal. */
+.game{margin:0;color:var(--muted);font-size:13px;text-align:center;overflow-wrap:anywhere}
+.game:empty{display:none}
 .hue-row label{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--muted)}
 .hue-row input{flex:1;accent-color:var(--ink)}
 .cart-actions .btn{padding:7px 12px;font-size:14px}
-.status{margin:0;font-size:13px;color:var(--muted);min-height:1.2em}
+/* A row holding only a hidden button, and a status with nothing to say, took height anyway. */
+.cart-actions:not(:has(.reject:not([hidden]))){display:none}
+.status{margin:0;font-size:13px;color:var(--muted)}
+.status:empty{display:none}
 
-@media (min-width:720px){
-  .grid{grid-template-columns:repeat(auto-fill,minmax(520px,1fr))}
-  .face canvas,.drop{width:480px;height:270px}
-}
-
-.write-bar{position:sticky;bottom:0;display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-top:24px;padding:14px 0;background:var(--page);border-top:1px solid var(--rule)}
+/* Above the carts and pinned there: the button belongs with the choice you just made, and the
+   carts scroll under it. */
+.write-bar{position:sticky;top:0;z-index:1;display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-top:24px;padding:14px 0;background:var(--page);border-bottom:1px solid var(--rule)}
 .credits{margin-top:48px;color:var(--muted);font-size:14px}

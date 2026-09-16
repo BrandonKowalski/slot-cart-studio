@@ -14,8 +14,8 @@
 <body>
 <main class="wrap">
   <header class="intro">
-    <h1 class="wordmark">slot. <span>cart studio</span></h1>
-    <p class="lede">Choose your slot SD card. Every cart without a label gets one: its logo from libretro on a gradient, shown on the cart the way the device will draw it, before anything is written.</p>
+    <h1 class="wordmark">slot <span>cart studio</span></h1>
+    <p class="lede">Choose your slot SD card and this tool will create a cart label using the logo from the libretro thumbnail database.</p>
     <div class="actions">
       <button class="btn" id="pick" type="button" hidden>Choose SD card</button>
       <label class="btn" id="pick-files-label" hidden>Choose SD card<input id="pick-files" class="visually-hidden" type="file" webkitdirectory></label>
@@ -30,15 +30,15 @@
     <span id="progress-text"></span>
   </div>
 
-  <section class="grid" id="grid" aria-label="Carts"></section>
-
   <div class="write-bar" id="write-bar" hidden>
     <button class="btn" id="write" type="button" disabled>Write labels</button>
     <span id="summary" aria-live="polite"></span>
   </div>
 
+  <section class="grid" id="grid" aria-label="Carts"></section>
+
   <footer class="credits">
-    <p>Game names from <a href="https://github.com/libretro/libretro-database">libretro-database</a>, logos and box art from <a href="https://github.com/libretro-thumbnails/Nintendo_-_Game_Boy_Advance">libretro-thumbnails</a>. Made for <a href="https://slot.kowalski.io">slot.</a>, a GBA frontend for the Anbernic RG SP.</p>
+    <p>Game names from <a href="https://github.com/libretro/libretro-database">libretro-database</a>, logos and box art from <a href="https://github.com/libretro-thumbnails/Nintendo_-_Game_Boy_Advance">libretro-thumbnails</a>.<br />Made for <a href="https://slot.kowalski.io">slot</a>, a GBA frontend for the Anbernic RG SP.</p>
   </footer>
 </main>
 
@@ -52,6 +52,7 @@
       </div>
     </div>
     <h2 class="stem"></h2>
+    <p class="tags"></p>
     <p class="game"></p>
     <div class="hue-row" hidden>
       <label>Hue <input class="hue" type="range" min="0" max="359" step="1"></label>

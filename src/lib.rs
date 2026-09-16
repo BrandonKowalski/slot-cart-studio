@@ -108,6 +108,19 @@ pub fn fallback_hue(stem: &str) -> u16 {
     hue::fallback_hue(stem)
 }
 
+/// The title slot puts on a cart with no label art: the stem without its bracketed tags or its
+/// spaced-hyphen subtitle break. The page names a cart the way the device does.
+#[wasm_bindgen]
+pub fn clean_label(stem: &str) -> String {
+    cart::clean_label(stem)
+}
+
+/// The bracketed groups `clean_label` drops, in order, one per group: `USA, Europe`, `Rev 1`.
+#[wasm_bindgen]
+pub fn label_tags(stem: &str) -> Vec<String> {
+    cart::label_tags(stem)
+}
+
 /// A label for one cart: a logo that recomposes as its hue moves.
 #[wasm_bindgen(js_name = Label)]
 pub struct JsLabel(label::Label);

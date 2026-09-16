@@ -8,9 +8,11 @@ import init, {
   Zip,
   box_hue,
   cart_size,
+  clean_label,
   existing_face,
   fallback_hue,
   header_code,
+  label_tags,
   stub_target,
   thumbnail_name,
 } from './pkg/slot_cart_studio.js';
@@ -128,11 +130,15 @@ function describe(c, state) {
     case 'error':
       return c.error;
     case 'has-label':
-      return c.result === 'written' ? 'Label written to the card' : 'Already has a label';
+      // The label is on the cart above, so saying it has one says nothing. A write is worth saying.
+      return c.result === 'written' ? 'Label written to the card' : '';
     default:
       if (c.rejected) return `Not ${c.game}`;
       if (!c.game) return dat ? 'Not in the No-Intro database' : 'The game database has not loaded';
-      return c.logoBytes || c.droppedBytes ? c.game : `${c.game}: libretro has no logo for it`;
+      if (!c.logoBytes && !c.droppedBytes) return `${c.game}: libretro has no logo for it`;
+      // The title above already says the game, so this line speaks only when the CRC disagrees
+      // with the name on the card — the renamed-ROM case worth catching before it is written.
+      return clean_label(c.game) === clean_label(c.stem) ? '' : `Matched ${c.game}`;
   }
 }
 
@@ -149,6 +155,7 @@ function buildCard(c) {
     root,
     canvas: q('canvas'),
     stem: q('.stem'),
+    tags: q('.tags'),
     game: q('.game'),
     status: q('.status'),
     hue: q('.hue'),
@@ -159,7 +166,19 @@ function buildCard(c) {
   };
   c.el.canvas.width = faceW;
   c.el.canvas.height = faceH;
-  c.el.stem.textContent = c.stem;
+  // The device's own title, with the file it came from on hover, and the bracketed groups it
+  // dropped shown as chips rather than left in the name.
+  c.el.stem.textContent = clean_label(c.stem);
+  c.el.stem.title = c.stem;
+  // A pill each: slot keeps `(USA, Europe)` as one tag so it never claims two releases, but as
+  // chips they read as the regions covered.
+  const tags = label_tags(c.stem)
+    .flatMap((group) => group.split(','))
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+  c.el.tags.replaceChildren(
+    ...tags.map((tag) => Object.assign(document.createElement('span'), { className: 'chip', textContent: tag })),
+  );
   c.el.hue.addEventListener('input', () => {
     c.hue = Number(c.el.hue.value);
     c.userHue = true;
@@ -298,7 +317,8 @@ async function open(source) {
   $('summary').textContent = '';
   $('grid').replaceChildren(...session.carts.map(buildCard));
   session.carts.forEach(paint);
-  $('write-bar').hidden = session.carts.length === 0;
+  // updateWriteBar, reached through paint, is what shows the bar again once a cart is ready.
+  $('write-bar').hidden = true;
   if (session.carts.length === 0) {
     banner('There are no .gba files in that card’s Games folder.');
     return;
@@ -399,6 +419,8 @@ function updateWriteBar() {
   if (!session) return;
   const n = readyCarts().length;
   const noun = n === 1 ? 'label' : 'labels';
+  // Nothing to write means no bar at all, except while a finished run's summary is still on it.
+  $('write-bar').hidden = n === 0 && !$('summary').textContent;
   $('write').disabled = n === 0 || writing || fatal;
   $('write').textContent = session.source.direct
     ? `Write ${n} ${noun} to the card`
@@ -475,9 +497,12 @@ async function start() {
   const direct = 'showDirectoryPicker' in window;
   $('pick').hidden = !direct;
   $('pick-files-label').hidden = direct;
-  $('mode').textContent = direct
-    ? 'Labels are written straight into Labels/ on the card. A cart that already has one is left alone.'
-    : 'This browser can’t write to the card, so the labels come as a zip to unzip at its top. Chrome and Edge write them in place.';
+  // Writing in place needs no explaining; the zip the other browsers fall back to does.
+  $('mode').hidden = direct;
+  if (!direct) {
+    $('mode').textContent =
+      'This browser can’t write to the card, so the labels come as a zip to unzip at its top. Chrome and Edge write them in place.';
+  }
 
   $('pick').addEventListener('click', async () => {
     let root;
