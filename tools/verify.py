@@ -163,11 +163,10 @@ def main():
          f'--user-data-dir={profile}', '--no-first-run', '--no-default-browser-check', 'about:blank'],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
-        version = wait(lambda: json.load(urllib.request.urlopen(f'http://127.0.0.1:{CDP_PORT}/json/version')), 30, 'Chrome')
+        wait(lambda: json.load(urllib.request.urlopen(f'http://127.0.0.1:{CDP_PORT}/json/version')), 30, 'Chrome')
         downloads = OUT / 'downloads'
         shutil.rmtree(downloads, ignore_errors=True)
         downloads.mkdir()
-        Cdp(version['webSocketDebuggerUrl']).send('Browser.setDownloadBehavior', behavior='allow', downloadPath=str(downloads))
 
         new = urllib.request.Request(f'http://127.0.0.1:{CDP_PORT}/json/new?about:blank', method='PUT')
         page = Cdp(json.load(urllib.request.urlopen(new))['webSocketDebuggerUrl'])
@@ -185,8 +184,8 @@ def main():
             sys.exit('the page scrolls sideways at 400 px')
 
         page.width(1280)
-        # Browser.setDownloadBehavior above is ignored by headless Chrome for this target; the
-        # page-level form of the same command is the one that actually takes effect.
+        # Headless Chrome ignores the browser-level Browser.setDownloadBehavior for this target;
+        # only the page-level form of the command takes effect.
         page.send('Page.setDownloadBehavior', behavior='allow', downloadPath=str(downloads))
         page.eval("document.getElementById('write').click()")
         wait(lambda: (downloads / 'labels.zip').exists(), 60, 'labels.zip to download')

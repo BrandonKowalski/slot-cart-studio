@@ -18,7 +18,7 @@
     <p class="lede">Choose your slot SD card. Every cart without a label gets one: its logo from libretro on a gradient, shown on the cart the way the device will draw it, before anything is written.</p>
     <div class="actions">
       <button class="btn" id="pick" type="button" hidden>Choose SD card</button>
-      <label class="btn" id="pick-files-label" hidden>Choose SD card<input id="pick-files" type="file" webkitdirectory hidden></label>
+      <label class="btn" id="pick-files-label" hidden>Choose SD card<input id="pick-files" class="visually-hidden" type="file" webkitdirectory></label>
     </div>
     <p class="mode" id="mode"></p>
   </header>
@@ -48,7 +48,7 @@
       <canvas hidden></canvas>
       <div class="drop" hidden>
         <p>Drop a logo PNG here</p>
-        <label class="btn ghost">Choose a file<input type="file" accept="image/png,.png" hidden></label>
+        <label class="btn ghost">Choose a file<input class="visually-hidden" type="file" accept="image/png,.png"></label>
       </div>
     </div>
     <h2 class="stem"></h2>

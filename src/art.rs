@@ -1,7 +1,7 @@
 //! Slot's `art::cover`, fed from memory. Slot's module opens the label's path, which a browser
 //! cannot do, so this one looks the path up in a stash `face` fills for the length of one draw.
-//! The decode and the cover are slot's code line for line, and `tests/face.rs` holds the result
-//! to slot's pixel for pixel.
+//! The decode and the cover are slot's code line for line, apart from the decode's bound on the
+//! frame buffer, and `tests/face.rs` holds the result to slot's pixel for pixel.
 
 use std::cell::RefCell;
 use std::path::Path;
@@ -110,6 +110,12 @@ pub(crate) fn decode(png: &[u8]) -> Option<(Vec<u8>, u32, u32)> {
     dec.set_limits(png::Limits { bytes: 64 << 20 });
 
     let mut reader = dec.read_info().ok()?;
+    // Unlike slot's art.rs, a frame over 64 MiB is refused before it is allocated. The limit above
+    // doesn't cover this buffer, which is sized from the header alone, so a 45-byte PNG can ask
+    // for gigabytes; on wasm32 that traps and leaves the page unusable. A label is 1280x640.
+    if reader.output_buffer_size() > 64 << 20 {
+        return None;
+    }
     let mut buf = vec![0u8; reader.output_buffer_size()];
     let info = reader.next_frame(&mut buf).ok()?;
     let src = &buf[..info.buffer_size()];
@@ -137,4 +143,39 @@ pub(crate) fn decode(png: &[u8]) -> Option<(Vec<u8>, u32, u32)> {
         png::ColorType::Indexed => return None,
     }
     Some((rgba, info.width, info.height))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn chunk(png: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
+        png.extend_from_slice(&(data.len() as u32).to_be_bytes());
+        png.extend_from_slice(kind);
+        png.extend_from_slice(data);
+        let mut crc = crc32fast::Hasher::new();
+        crc.update(kind);
+        crc.update(data);
+        png.extend_from_slice(&crc.finalize().to_be_bytes());
+    }
+
+    #[test]
+    fn a_header_that_asks_for_a_huge_frame_is_refused() {
+        // 20000x20000 RGBA is a 1.6 GB frame, asked for in 45 bytes with no image data in them.
+        let mut ihdr = Vec::new();
+        ihdr.extend_from_slice(&20_000u32.to_be_bytes());
+        ihdr.extend_from_slice(&20_000u32.to_be_bytes());
+        ihdr.extend_from_slice(&[8, 6, 0, 0, 0]);
+        let mut png = b"\x89PNG\r\n\x1a\n".to_vec();
+        chunk(&mut png, b"IHDR", &ihdr);
+        // Without an IDAT, read_info runs out of bytes first and the bound is never reached.
+        chunk(&mut png, b"IDAT", &[]);
+
+        let header = png::Decoder::new(std::io::Cursor::new(&png)).read_info();
+        assert!(
+            header.is_ok_and(|r| r.output_buffer_size() > 64 << 20),
+            "the header alone passes read_info, so only the bound can refuse it"
+        );
+        assert!(decode(&png).is_none());
+    }
 }

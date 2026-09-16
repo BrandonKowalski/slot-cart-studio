@@ -176,7 +176,12 @@ function buildCard(c) {
     c.el.drop.classList.remove('over');
     takeLogo(c, e.dataTransfer.files[0]);
   });
-  c.el.pickLogo.addEventListener('change', () => takeLogo(c, c.el.pickLogo.files[0]));
+  c.el.pickLogo.addEventListener('change', () => {
+    const file = c.el.pickLogo.files[0];
+    // An input fires no change when handed the file it already holds, so it lets go of it here.
+    c.el.pickLogo.value = '';
+    takeLogo(c, file);
+  });
   return root;
 }
 
@@ -489,8 +494,12 @@ async function start() {
     }
   });
   $('pick-files').addEventListener('change', async (e) => {
+    // Emptied at once, or choosing the same card again fires no change. The FileList belongs to
+    // the input, so the files are copied out of it first.
+    const files = [...e.target.files];
+    e.target.value = '';
     try {
-      await open(fromFiles(e.target.files));
+      await open(fromFiles(files));
     } catch (err) {
       banner(err.message);
     }
