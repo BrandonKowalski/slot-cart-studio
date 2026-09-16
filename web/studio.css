@@ -81,14 +81,12 @@ label.btn:focus-within{outline:2px solid var(--ink);outline-offset:3px}
 /* Only carries what the cart cannot show: a match that disagrees with the name, or a refusal. */
 .game{margin:0;color:var(--muted);font-size:13px;text-align:center;overflow-wrap:anywhere}
 .game:empty{display:none}
-/* The colour you pick is the label's deep corner, so the control shows it as a well, with the
-   chip beside it previewing the sweep that corner produces. */
-.hue-row{display:flex;align-items:center;gap:8px}
-/* Safari draws its own swatch for a colour input, which put the same colour on screen twice
-   next to the chip. The input now lies invisible across the chip instead: the chip is what you
-   see, the input is what you click, and the picker still opens anchored to the box the pointer
-   was in — which a hidden input the size of a pixel would not do. */
-.hue-row .well{position:relative;display:inline-flex;flex:none;border-radius:6px}
+/* A plain button that opens the picker, centred with the row below it. No swatch of our own:
+   Safari draws one for a colour input anyway, and the cart above is already the colour at full
+   size. The real input lies transparent across the button, so there is nothing to draw twice and
+   the picker opens anchored to the button rather than to a hidden input off the side of the card. */
+.hue-row{display:flex;align-items:center;justify-content:center;gap:8px}
+.hue-row .well{position:relative;padding:7px 12px;font-size:14px}
 .hue-row input[type="color"]{
   position:absolute;
   inset:0;
@@ -103,10 +101,8 @@ label.btn:focus-within{outline:2px solid var(--ink);outline-offset:3px}
   -webkit-appearance:none;
   appearance:none;
 }
-/* The ring belongs on the chip you can see, not on the transparent input over it. */
+/* The ring belongs on the button you can see, not on the transparent input over it. */
 .hue-row .well:focus-within{outline:2px solid var(--ink);outline-offset:3px}
-.hue-label{font-size:13px;color:var(--muted)}
-.stops{width:40px;height:24px;border-radius:6px;border:1px solid var(--rule);background:linear-gradient(135deg,var(--deep,var(--recess)),var(--pale,var(--muted)))}
 .cart-actions{display:flex;justify-content:center}
 .cart-actions .btn{padding:7px 12px;font-size:14px}
 /* A row holding only a hidden button, and a status with nothing to say, took height anyway. */
