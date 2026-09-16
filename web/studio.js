@@ -15,7 +15,6 @@ import init, {
   header_code,
   label_tags,
   logo_luma,
-  pale_colour,
   stop_colours,
   stub_target,
   thumbnail_name,
@@ -180,7 +179,6 @@ function buildCard(c) {
     status: q('.status'),
     hue: q('.hue'),
     hueRow: q('.hue-row'),
-    stops: q('.stops'),
     reject: q('.reject'),
     drop: q('.drop'),
     pickLogo: q('.drop input'),
@@ -243,12 +241,10 @@ function paint(c) {
   const state = stateOf(c);
   const { root, canvas, game, status, hue, hueRow, reject, drop } = c.el;
   root.dataset.state = state;
-  // The well holds the deep corner and the chip previews the sweep it makes. Both come from
-  // stop_colours, so the house numbers live in src/label.rs alone; a picked colour derives its
-  // own pale corner the same way the label will.
-  const computed = stopsOf(c);
-  const deep = c.deep ?? Array.from(computed).slice(0, 3);
-  const pale = c.deep ? Array.from(pale_colour(c.deep)) : Array.from(computed).slice(3);
+  // The button opens the picker on the label's deep corner, which comes from stop_colours so the
+  // house numbers live in src/label.rs alone. The pale corner is derived from it in Rust when the
+  // label is composed, so there is nothing to work out here.
+  const deep = c.deep ?? Array.from(stopsOf(c)).slice(0, 3);
   let face = null;
   if (state === 'has-label') face = c.existing;
   if (state === 'ready') {
@@ -267,8 +263,6 @@ function paint(c) {
   drop.hidden = state !== 'needs-logo';
   hueRow.hidden = state !== 'ready';
   hue.value = hex(deep);
-  hueRow.style.setProperty('--deep', `rgb(${deep.join(' ')})`);
-  hueRow.style.setProperty('--pale', `rgb(${pale.join(' ')})`);
   reject.hidden = !c.game || !['ready', 'needs-logo'].includes(state);
   reject.textContent = c.rejected ? 'Restore the match' : 'Wrong game';
   game.textContent = describe(c, state);
