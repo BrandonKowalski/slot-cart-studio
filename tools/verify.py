@@ -4,6 +4,10 @@ picker opens it, then screenshot the page at 1280 and 400 wide and download the 
 
 Everything lands in out/. The card is slot's own sdcard/ Games folder with its Labels/ left
 behind, so every cart gets a generated label that can be set beside its hand-made one.
+
+A second pass opens a card that already has labels for three of its carts, one of them spelled
+decomposed, and fails unless those three stay out of the zip. In the zip flow nothing else stops
+labels.zip from overwriting a label someone made by hand.
 """
 
 import base64
@@ -16,6 +20,7 @@ import sys
 import tempfile
 import threading
 import time
+import unicodedata
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -24,23 +29,29 @@ import websocket
 
 STUDIO = Path(__file__).resolve().parent.parent
 SLOT_GAMES = STUDIO.parent / 'slot' / 'sdcard' / 'Games'
+SLOT_LABELS = STUDIO.parent / 'slot' / 'sdcard' / 'Labels'
 OUT = STUDIO / 'out'
 CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 HTTP_PORT, CDP_PORT = 8765, 9223
+# The second pass's labels: two of slot's hand-made ones, and Emerald's under an extra cart whose
+# ROM is named composed and whose label decomposed, so only a normalised comparison pairs them.
+KEPT = ['Advance Wars', 'Metroid Fusion']
+PROBE = unicodedata.normalize('NFC', 'Pokémon Probe')
+PROBE_OF = 'Pokemon - Emerald Version (USA, Europe)'
 
 OPEN_FILES = """
-(async (paths) => {
+(async (card, paths) => {
   const files = [];
   for (const path of paths) {
-    const r = await fetch('/card/' + path.split('/').map(encodeURIComponent).join('/'));
+    const r = await fetch('/' + card + '/' + path.split('/').map(encodeURIComponent).join('/'));
     if (!r.ok) throw new Error(path + ': HTTP ' + r.status);
     const file = new File([await r.blob()], path.split('/').pop());
-    Object.defineProperty(file, 'webkitRelativePath', { value: 'card/' + path });
+    Object.defineProperty(file, 'webkitRelativePath', { value: card + '/' + path });
     files.push(file);
   }
   await window.__studio.openFiles(files);
   return files.length;
-})(%s)
+})(%s, %s)
 """
 
 
@@ -103,6 +114,37 @@ def wait(check, timeout, what):
         time.sleep(0.25)
 
 
+def nfc(name):
+    return unicodedata.normalize('NFC', name)
+
+
+def open_card(page, card, paths):
+    """Hands the page a card's files and waits for every cart to settle. Returns their states."""
+    print('opened', page.eval(OPEN_FILES % (json.dumps(card), json.dumps(paths))), 'files')
+    wait(lambda: page.eval('window.__studio.idle()'), 600, 'every cart to be looked up')
+    states = page.eval('window.__studio.states()')
+    for s in states:
+        print(f"  {s['state']:<10} hue {s['hue']:>3}  {s['stem']}  ->  {s['game']}")
+    return states
+
+
+def stage_labelled(card, games):
+    """slot's carts, the probe cart, and the labels in KEPT and for the probe. Returns the paths
+    the page is handed, spelled as they were written."""
+    (card / 'Games').mkdir(parents=True)
+    (card / 'Labels').mkdir()
+    # A symlink per ROM rather than one for the folder, so the probe lands here and not in slot.
+    for g in games:
+        (card / 'Games' / g).symlink_to(SLOT_GAMES / g)
+    probe = f'{PROBE}.gba'
+    (card / 'Games' / probe).symlink_to(SLOT_GAMES / f'{PROBE_OF}.gba')
+    labels = {f'{stem}.png': SLOT_LABELS / f'{stem}.png' for stem in KEPT}
+    labels[unicodedata.normalize('NFD', f'{PROBE}.png')] = SLOT_LABELS / f'{PROBE_OF}.png'
+    for name, source in labels.items():
+        shutil.copy(source, card / 'Labels' / name)
+    return [f'Games/{g}' for g in games] + [f'Games/{probe}'] + [f'Labels/{name}' for name in labels]
+
+
 def main():
     if not (STUDIO / 'web' / 'pkg' / 'slot_cart_studio.js').exists():
         sys.exit('web/pkg is missing: run `task build` first')
@@ -133,10 +175,7 @@ def main():
         page.send('Page.navigate', url=f'http://127.0.0.1:{HTTP_PORT}/studio/')
         wait(lambda: page.eval("document.body && document.body.dataset.ready === 'true'"), 60, 'the studio to start')
 
-        print('opened', page.eval(OPEN_FILES % json.dumps(['Games/' + g for g in games])), 'files')
-        wait(lambda: page.eval('window.__studio.idle()'), 600, 'every cart to be looked up')
-        for s in page.eval('window.__studio.states()'):
-            print(f"  {s['state']:<10} hue {s['hue']:>3}  {s['stem']}  ->  {s['game']}")
+        open_card(page, 'card', ['Games/' + g for g in games])
 
         page.shot(1280, OUT / 'studio-1280.png')
         page.shot(400, OUT / 'studio-400.png')
@@ -162,6 +201,38 @@ def main():
         with zipfile.ZipFile(OUT / 'labels.zip') as z:
             z.extractall(card)
         print('labels unzipped into', card)
+
+        print('second pass: a card that already has labels for', ', '.join([*KEPT, PROBE]))
+        kept = {nfc(stem) for stem in [*KEPT, PROBE]}
+        expected = {nfc(Path(g).stem): 'ready' for g in games} | {stem: 'has-label' for stem in kept}
+        states = open_card(page, 'labelled', stage_labelled(stage / 'labelled', games))
+        page.shot(1280, OUT / 'studio-labelled-1280.png')
+        got = {nfc(s['stem']): s['state'] for s in states}
+        if got != expected:
+            for stem in sorted(got.keys() | expected.keys()):
+                if got.get(stem) != expected.get(stem):
+                    print(f'  {stem}: expected {expected.get(stem)}, got {got.get(stem)}')
+            sys.exit('the labelled card\'s carts are not in the states they should be')
+
+        kept_downloads = OUT / 'downloads-labelled'
+        shutil.rmtree(kept_downloads, ignore_errors=True)
+        kept_downloads.mkdir()
+        page.width(1280)
+        page.send('Page.setDownloadBehavior', behavior='allow', downloadPath=str(kept_downloads))
+        page.eval("document.getElementById('write').click()")
+        wait(lambda: (kept_downloads / 'labels.zip').exists(), 60, 'the labelled card\'s labels.zip to download')
+        time.sleep(1)
+        with zipfile.ZipFile(kept_downloads / 'labels.zip') as z:
+            entries = {nfc(name) for name in z.namelist()}
+        overwritten = sorted(entries & {f'Labels/{stem}.png' for stem in kept})
+        if overwritten:
+            sys.exit(f'labels.zip would overwrite labels the card already has: {overwritten}')
+        ready = {f'Labels/{stem}.png' for stem, state in expected.items() if state == 'ready'}
+        if entries != ready:
+            sys.exit(f'labels.zip holds {sorted(entries)}, not the ready carts {sorted(ready)}')
+        print(f'asserted: {len(kept)} carts are has-label: {", ".join(sorted(kept))}')
+        print(f'asserted: the other {len(ready)} carts are ready')
+        print(f'asserted: labels.zip holds exactly those {len(ready)}, and none of the {len(kept)} with labels')
     finally:
         chrome.terminate()
         server.shutdown()
