@@ -11,8 +11,12 @@ import init, {
   clean_label,
   existing_face,
   fallback_hue,
+  ground_hue,
   header_code,
   label_tags,
+  logo_luma,
+  pale_colour,
+  stop_colours,
   stub_target,
   thumbnail_name,
 } from './pkg/slot_cart_studio.js';
@@ -55,7 +59,11 @@ function newCart({ stem, file }) {
     rejected: false,
     snapshot: null,
     boxHue: null,
-    hue: fallback_hue(stem),
+    logoHue: null,
+    // How bright the logo is decides which way the ground goes, so it is read once with the logo
+    // and kept. 255 until there is a logo: nothing is drawn before then anyway.
+    logoLuma: 255,
+    deep: null,
     userHue: false,
     existing: null,
     error: null,
@@ -74,17 +82,29 @@ function stateOf(c) {
   return activeLogo(c) ? 'ready' : 'needs-logo';
 }
 
-// The box art belongs to the matched game, so its hue only stands while the match does.
-const baseHue = (c) =>
-  c.game && !c.rejected && c.boxHue !== null ? c.boxHue : fallback_hue(c.stem);
+// The box art belongs to the matched game, so its hue only stands while the match does. A ground
+// that lands on the logo's own hue turns away from it: a navy logo on navy reads as neither.
+const baseHueOf = (c) =>
+  c.game && !c.rejected && c.boxHue !== null
+    ? ground_hue(c.boxHue, c.logoHue ?? undefined)
+    : fallback_hue(c.stem);
+
+// A label is described by its deep corner, whether computed or picked, and the corner a hue
+// produces depends on the logo going over it: dark logos get a pale ground, bright ones a deep
+// one. stop_colours is that rule, so the page never restates the house numbers itself.
+const stopsOf = (c) => stop_colours(baseHueOf(c), c.logoLuma ?? 255);
+const baseDeep = (c) => Array.from(stopsOf(c)).slice(0, 3);
+
+const hex = (rgb) => `#${[...rgb].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+const fromHex = (value) => [1, 3, 5].map((at) => parseInt(value.slice(at, at + 2), 16));
 
 const readyCarts = () =>
   session ? session.carts.filter((c) => stateOf(c) === 'ready' && c.result !== 'skipped') : [];
 
 // A Label holds its 1280x640 composition in WASM memory, which never shrinks and stops at 4 GiB.
 // One kept per cart runs a big card out of it, so a Label lives only for the call that needs it.
-function withLabel(bytes, hue, use) {
-  const label = new Label(bytes, hue);
+function withLabel(bytes, deep, use) {
+  const label = new Label(bytes, deep);
   try {
     return use(label);
   } finally {
@@ -95,7 +115,7 @@ function withLabel(bytes, hue, use) {
 // Whether slot's decoder takes a logo, asked the only way the module can be asked: by making one.
 function readable(bytes) {
   try {
-    withLabel(bytes, 0, () => {});
+    withLabel(bytes, [0, 0, 0], () => {});
     return true;
   } catch (e) {
     if (e instanceof WebAssembly.RuntimeError) throw e;
@@ -160,6 +180,7 @@ function buildCard(c) {
     status: q('.status'),
     hue: q('.hue'),
     hueRow: q('.hue-row'),
+    stops: q('.stops'),
     reject: q('.reject'),
     drop: q('.drop'),
     pickLogo: q('.drop input'),
@@ -180,11 +201,13 @@ function buildCard(c) {
     ...tags.map((tag) => Object.assign(document.createElement('span'), { className: 'chip', textContent: tag })),
   );
   c.el.hue.addEventListener('input', () => {
-    c.hue = Number(c.el.hue.value);
+    // The well gives back "#rrggbb"; that colour is the label's deep corner, and the pale one is
+    // derived from it, so one pick describes the whole ground.
+    c.deep = fromHex(c.el.hue.value);
     c.userHue = true;
     schedulePaint(c);
   });
-  c.el.reject.addEventListener('click', () => (c.rejected ? restore(c) : reject(c)));
+  c.el.reject.addEventListener('click', () => (c.rejected ? restore(c) : openFinder(c)));
   c.el.drop.addEventListener('dragover', (e) => {
     e.preventDefault();
     c.el.drop.classList.add('over');
@@ -220,11 +243,17 @@ function paint(c) {
   const state = stateOf(c);
   const { root, canvas, game, status, hue, hueRow, reject, drop } = c.el;
   root.dataset.state = state;
+  // The well holds the deep corner and the chip previews the sweep it makes. Both come from
+  // stop_colours, so the house numbers live in src/label.rs alone; a picked colour derives its
+  // own pale corner the same way the label will.
+  const computed = stopsOf(c);
+  const deep = c.deep ?? Array.from(computed).slice(0, 3);
+  const pale = c.deep ? Array.from(pale_colour(c.deep)) : Array.from(computed).slice(3);
   let face = null;
   if (state === 'has-label') face = c.existing;
   if (state === 'ready') {
     try {
-      face = withLabel(activeLogo(c), c.hue, (label) => label.face(c.code, c.stem));
+      face = withLabel(activeLogo(c), deep, (label) => label.face(c.code, c.stem));
     } catch (e) {
       if (trapped(e)) return;
       throw e;
@@ -237,7 +266,9 @@ function paint(c) {
   }
   drop.hidden = state !== 'needs-logo';
   hueRow.hidden = state !== 'ready';
-  hue.value = String(c.hue);
+  hue.value = hex(deep);
+  hueRow.style.setProperty('--deep', `rgb(${deep.join(' ')})`);
+  hueRow.style.setProperty('--pale', `rgb(${pale.join(' ')})`);
   reject.hidden = !c.game || !['ready', 'needs-logo'].includes(state);
   reject.textContent = c.rejected ? 'Restore the match' : 'Wrong game';
   game.textContent = describe(c, state);
@@ -245,14 +276,74 @@ function paint(c) {
   updateWriteBar();
 }
 
+// The finder: one dialog for both ways out of a wrong match, naming the right game or handing
+// the cart a logo yourself. It owns no state — picking dresses the cart and repaints it.
+let finding = null;
+
+function openFinder(c) {
+  finding = c;
+  $('finder-cart').textContent = clean_label(c.stem);
+  $('finder-query').value = '';
+  $('finder-results').replaceChildren();
+  $('finder-note').textContent = c.game ? `Matched ${c.game}` : 'No match in the database.';
+  $('finder').showModal();
+  $('finder-query').focus();
+}
+
+function findGames() {
+  const c = finding;
+  if (!c) return;
+  const query = $('finder-query').value;
+  if (!dat) {
+    $('finder-note').textContent = 'The game database has not loaded.';
+    return;
+  }
+  const hits = dat.search(query, 30);
+  $('finder-results').replaceChildren(
+    ...hits.map((name) => {
+      const button = Object.assign(document.createElement('button'), {
+        type: 'button',
+        textContent: name,
+      });
+      button.addEventListener('click', () => track(chooseGame(c, name)));
+      return Object.assign(document.createElement('li'), {}).appendChild(button).parentElement;
+    }),
+  );
+  $('finder-note').textContent =
+    query.trim() && hits.length === 0 ? `Nothing in the database matches “${query.trim()}”.` : '';
+}
+
+// A game named by hand is dressed exactly as a matched one, so its logo, box art hue and the
+// clash rule all apply. The CRC keeps whatever it said; the name is what the label follows.
+async function chooseGame(c, name) {
+  $('finder').close();
+  const s = session;
+  c.game = name;
+  c.rejected = false;
+  c.snapshot = null;
+  c.droppedBytes = null;
+  c.logoBytes = null;
+  c.logoHue = null;
+  c.looking = true;
+  paint(c);
+  try {
+    await dress(s, c);
+  } catch (e) {
+    if (!trapped(e)) throw e;
+  }
+  if (s !== session) return;
+  c.looking = false;
+  paint(c);
+}
+
 // A CRC can be right about the bytes and wrong about what the user meant: a ROM renamed to
 // another game's name. Rejecting drops the match, its logo and its box art hue.
 function reject(c) {
-  c.snapshot = { hue: c.hue, userHue: c.userHue, droppedBytes: c.droppedBytes };
+  c.snapshot = { deep: c.deep, userHue: c.userHue, droppedBytes: c.droppedBytes };
   c.rejected = true;
   c.droppedBytes = null;
   c.userHue = false;
-  c.hue = baseHue(c);
+  c.deep = null;
   schedulePaint(c);
 }
 
@@ -277,7 +368,10 @@ async function takeLogo(c, file) {
     return;
   }
   c.droppedBytes = bytes;
-  if (!c.userHue) c.hue = baseHue(c);
+  // A dropped logo decides the clash and the ground's direction the same way a fetched one does.
+  c.logoHue = box_hue(bytes) ?? null;
+  c.logoLuma = logo_luma(bytes);
+  if (!c.userHue) c.deep = null;
   schedulePaint(c);
 }
 
@@ -317,7 +411,10 @@ async function open(source) {
   $('summary').textContent = '';
   $('grid').replaceChildren(...session.carts.map(buildCard));
   session.carts.forEach(paint);
-  // updateWriteBar, reached through paint, is what shows the bar again once a cart is ready.
+  // The card is chosen, so the chooser goes: the write bar sits in its place, once there is
+  // something to write. updateWriteBar, reached through paint, is what shows it.
+  $('pick').hidden = true;
+  $('pick-files-label').hidden = true;
   $('write-bar').hidden = true;
   if (session.carts.length === 0) {
     banner('There are no .gba files in that card’s Games folder.');
@@ -393,26 +490,37 @@ async function art(s, c) {
   paint(c);
   try {
     c.game = dat.game_for(c.crc) ?? null;
-    if (c.game) {
-      const name = thumbnail_name(c.game);
-      // The queue is shared, so a card replaced while its jobs wait gives up their turns without
-      // a request instead of making the new card wait behind its downloads.
-      const thumb = (folder) =>
-        limit(async () =>
-          s === session && !fatal ? fetchThumb(folder, name, stub_target) : null,
-        ).catch(noImage);
-      const [logo, box] = await Promise.all([thumb('Named_Logos'), thumb('Named_Boxarts')]);
-      if (s !== session || fatal) return;
-      c.boxHue = box ? (box_hue(box) ?? null) : null;
-      if (!c.userHue) c.hue = baseHue(c);
-      c.logoBytes = logo && readable(logo) ? logo : null;
-    }
+    await dress(s, c);
   } catch (e) {
     if (trapped(e)) return;
     throw e;
   }
   c.looking = false;
   paint(c);
+}
+
+// Fetch what `c.game` names and let it decide the cart's hue. The finder re-runs this for a game
+// chosen by hand, so a chosen match is dressed exactly the way a matched one is.
+async function dress(s, c) {
+  if (!c.game) return;
+  const name = thumbnail_name(c.game);
+  // The queue is shared, so a card replaced while its jobs wait gives up their turns without
+  // a request instead of making the new card wait behind its downloads.
+  const thumb = (folder) =>
+    limit(async () =>
+      s === session && !fatal ? fetchThumb(folder, name, stub_target) : null,
+    ).catch(noImage);
+  const [logo, box] = await Promise.all([thumb('Named_Logos'), thumb('Named_Boxarts')]);
+  if (s !== session || fatal) return;
+  c.boxHue = box ? (box_hue(box) ?? null) : null;
+  c.logoBytes = logo && readable(logo) ? logo : null;
+  // The logo's own hue decides whether the box art's ground would sit on top of it, so it is
+  // read before the hue is chosen. box_hue reads any PNG; on a logo it ignores the clear
+  // background the same way it ignores a cover's dull edges.
+  c.logoHue = c.logoBytes ? (box_hue(c.logoBytes) ?? null) : null;
+  // How bright the logo is decides which way its ground goes, so it is measured with the logo.
+  c.logoLuma = c.logoBytes ? logo_luma(c.logoBytes) : 255;
+  if (!c.userHue) c.deep = null;
 }
 
 function updateWriteBar() {
@@ -448,7 +556,7 @@ async function writeLabels() {
         if (fatal) return;
         let face = null;
         try {
-          const [png, drawn] = withLabel(activeLogo(c), c.hue, (label) => [
+          const [png, drawn] = withLabel(activeLogo(c), c.deep ?? baseDeep(c), (label) => [
             label.png(),
             label.face(c.code, c.stem),
           ]);
@@ -473,7 +581,10 @@ async function writeLabels() {
       // up here, where memory is given back, and not in the module.
       const parts = [];
       for (const c of carts) {
-        zip.add(`Labels/${c.stem}.png`, withLabel(activeLogo(c), c.hue, (label) => label.png()));
+        zip.add(
+          `Labels/${c.stem}.png`,
+          withLabel(activeLogo(c), c.deep ?? baseDeep(c), (label) => label.png()),
+        );
         parts.push(zip.take());
       }
       parts.push(zip.finish());
@@ -531,6 +642,32 @@ async function start() {
   });
   $('write').addEventListener('click', () => track(writeLabels()));
 
+  $('finder-query').addEventListener('input', findGames);
+  $('finder').addEventListener('close', () => {
+    finding = null;
+  });
+  const takeFromFinder = (file) => {
+    const c = finding;
+    if (!c || !file) return;
+    $('finder').close();
+    track(takeLogo(c, file));
+  };
+  $('finder-file').addEventListener('change', (e) => {
+    const [file] = e.target.files;
+    e.target.value = '';
+    takeFromFinder(file);
+  });
+  $('finder-drop').addEventListener('dragover', (e) => {
+    e.preventDefault();
+    $('finder-drop').classList.add('over');
+  });
+  $('finder-drop').addEventListener('dragleave', () => $('finder-drop').classList.remove('over'));
+  $('finder-drop').addEventListener('drop', (e) => {
+    e.preventDefault();
+    $('finder-drop').classList.remove('over');
+    takeFromFinder(e.dataTransfer.files[0]);
+  });
+
   // For tools/verify.py, which has no native picker to click. Never set on the published site.
   if (['localhost', '127.0.0.1'].includes(location.hostname)) {
     window.__studio = {
@@ -539,7 +676,12 @@ async function start() {
         busy === 0 && session !== null && session.carts.every((c) => stateOf(c) !== 'looking'),
       states: () =>
         session
-          ? session.carts.map((c) => ({ stem: c.stem, state: stateOf(c), game: c.game, hue: c.hue }))
+          ? session.carts.map((c) => ({
+              stem: c.stem,
+              state: stateOf(c),
+              game: c.game,
+              deep: hex(c.deep ?? baseDeep(c)),
+            }))
           : [],
     };
   }

@@ -14,21 +14,45 @@ const MID_ROW: f32 = 320.0;
 /// Bounds ignore the faint fringe some rips carry around a logo.
 const ALPHA_EDGE: u8 = 16;
 
-/// Deep top left, pale bottom right, one hue. Darker and narrower than the hand-made labels on
-/// slot's card, which run to 82% lightness: drawn on carts, that pale corner washed out the light
-/// parts of a logo — Ruby's white subtitle, Fusion's silver — and gold hues went to cream. A
-/// ground that stays deep across the whole label leaves the logo the brightest thing on it.
-pub fn stops(hue: u16) -> ([u8; 3], [u8; 3]) {
+/// How bright a logo has to be before the ground goes under it rather than over it. Measured on
+/// slot's own carts: Fusion's silver and Ruby's white sit well above it, Zelda II's navy and the
+/// Classic NES wordmarks below.
+pub const BRIGHT: f32 = 110.0;
+
+/// The ground's two corners for a hue, given how bright the logo landing on it is.
+///
+/// A bright logo wants a deep ground: the hand-made labels' own 82% lightness washed out Ruby's
+/// white subtitle and turned gold hues to cream. A dark logo wants the opposite, because darkening
+/// the ground under Zelda II's navy wordmark left neither of them readable — so it gets a pale
+/// ground and the logo reads as ink on paper.
+pub fn stops(hue: u16, logo_luma: f32) -> ([u8; 3], [u8; 3]) {
     let h = hue as f32;
-    (
-        hue::hsl_to_rgb(h, 0.65, 0.24),
-        hue::hsl_to_rgb(h, 0.60, 0.46),
-    )
+    if logo_luma < BRIGHT {
+        (
+            hue::hsl_to_rgb(h, 0.55, 0.62),
+            hue::hsl_to_rgb(h, 0.50, 0.84),
+        )
+    } else {
+        (
+            hue::hsl_to_rgb(h, 0.65, 0.24),
+            hue::hsl_to_rgb(h, 0.60, 0.46),
+        )
+    }
 }
 
-/// Opaque RGBA. The gradient leans on x far more than y, so it reads as diagonal on a wide label.
-pub fn gradient(hue: u16) -> Vec<u8> {
-    let (deep, pale) = stops(hue);
+/// The pale corner for a deep corner chosen by hand: same hue, lifted toward the light and eased
+/// off in saturation by the same distance the computed pairs travel, so a picked colour sweeps
+/// like a computed one instead of sitting flat.
+pub fn pale_for(deep: [u8; 3]) -> [u8; 3] {
+    let (h, s, l) = hue::rgb_to_hsl(deep);
+    // The computed pairs travel 22 points of lightness and shed 5 of saturation, either side of
+    // the brightness split; a picked colour travels the same distance.
+    hue::hsl_to_rgb(h, (s - 0.05).clamp(0.0, 1.0), (l + 0.22).clamp(0.0, 1.0))
+}
+
+/// Opaque RGBA between two corners. The gradient leans on x far more than y, so it reads as
+/// diagonal on a wide label.
+pub fn gradient(deep: [u8; 3], pale: [u8; 3]) -> Vec<u8> {
     let mut px = Vec::with_capacity((W * H * 4) as usize);
     for y in 0..H {
         for x in 0..W {
@@ -91,8 +115,8 @@ fn premultiplied(logo: &[u8], w: u32, (x0, y0, x1, y1): (u32, u32, u32, u32)) ->
 }
 
 /// The logo over the gradient, as opaque RGBA.
-pub fn compose(logo: &[u8], w: u32, h: u32, hue: u16) -> Vec<u8> {
-    let ground = gradient(hue);
+pub fn compose(logo: &[u8], w: u32, h: u32, deep: [u8; 3], pale: [u8; 3]) -> Vec<u8> {
+    let ground = gradient(deep, pale);
     let Some(bounds) = trim(logo, w, h) else {
         return ground;
     };
@@ -121,37 +145,38 @@ pub fn compose(logo: &[u8], w: u32, h: u32, hue: u16) -> Vec<u8> {
     dst.take()
 }
 
-/// One logo, recomposed whenever its hue moves.
+/// One logo over a ground, recomposed whenever that ground's colour moves.
 pub struct Label {
     logo: Vec<u8>,
     w: u32,
     h: u32,
-    hue: u16,
+    deep: [u8; 3],
     rgba: Vec<u8>,
 }
 
 impl Label {
-    /// `None` for bytes slot's decoder would refuse.
-    pub fn from_png(png: &[u8], hue: u16) -> Option<Label> {
+    /// `None` for bytes slot's decoder would refuse. `deep` is the ground's top-left corner,
+    /// whether the page computed it from box art or you picked it by hand; the pale corner is
+    /// derived from it, so one colour describes the whole ground.
+    pub fn from_png(png: &[u8], deep: [u8; 3]) -> Option<Label> {
         let (logo, w, h) = art::decode(png)?;
-        let hue = hue % 360;
-        let rgba = compose(&logo, w, h, hue);
+        let rgba = compose(&logo, w, h, deep, pale_for(deep));
         Some(Label {
             logo,
             w,
             h,
-            hue,
+            deep,
             rgba,
         })
     }
 
-    pub fn hue(&self) -> u16 {
-        self.hue
+    pub fn deep(&self) -> Vec<u8> {
+        self.deep.to_vec()
     }
 
-    pub fn set_hue(&mut self, hue: u16) {
-        self.hue = hue % 360;
-        self.rgba = compose(&self.logo, self.w, self.h, self.hue);
+    pub fn set_deep(&mut self, deep: &[u8]) {
+        self.deep = [deep[0], deep[1], deep[2]];
+        self.rgba = compose(&self.logo, self.w, self.h, self.deep, pale_for(self.deep));
     }
 
     /// Slot's cart face with this label on it.
@@ -196,8 +221,15 @@ mod tests {
     }
 
     /// The first and last rows, down column 640, where the label isn't bare gradient.
+    /// A ground for tests: the computed pair for a hue, under a logo bright enough to keep the
+    /// deep treatment, which is what every placement test below draws on.
+    fn ground_for(hue: u16) -> ([u8; 3], [u8; 3]) {
+        stops(hue, BRIGHT + 1.0)
+    }
+
     fn logo_rows(label: &[u8], hue: u16) -> (u32, u32) {
-        let ground = gradient(hue);
+        let (deep, pale) = ground_for(hue);
+        let ground = gradient(deep, pale);
         let rows: Vec<u32> = (0..H)
             .filter(|y| at(label, 640, *y) != at(&ground, 640, *y))
             .collect();
@@ -210,27 +242,47 @@ mod tests {
 
     #[test]
     fn the_corners_are_the_stops() {
-        let (deep, pale) = stops(200);
-        let g = gradient(200);
+        let (deep, pale) = ground_for(200);
+        let g = gradient(deep, pale);
         assert_eq!(at(&g, 0, 0), deep);
         // The house formula puts t at 0.9991 here, not 1.
         assert!(near(at(&g, W - 1, H - 1), pale, 1));
     }
 
     #[test]
-    fn the_stops_are_the_house_lightness_and_saturation() {
+    fn a_bright_logo_gets_a_deep_ground_and_a_dark_one_gets_a_pale_ground() {
         assert_eq!(
-            stops(0),
+            stops(0, BRIGHT + 1.0),
             (
                 hue::hsl_to_rgb(0.0, 0.65, 0.24),
                 hue::hsl_to_rgb(0.0, 0.60, 0.46)
             )
         );
+        assert_eq!(
+            stops(0, BRIGHT - 1.0),
+            (
+                hue::hsl_to_rgb(0.0, 0.55, 0.62),
+                hue::hsl_to_rgb(0.0, 0.50, 0.84)
+            )
+        );
+    }
+
+    #[test]
+    fn a_picked_colour_keeps_its_hue_and_lifts_toward_the_light() {
+        let deep = hue::hsl_to_rgb(210.0, 0.65, 0.24);
+        let pale = pale_for(deep);
+        let (dh, ds, dl) = hue::rgb_to_hsl(deep);
+        let (ph, ps, pl) = hue::rgb_to_hsl(pale);
+        assert!((ph - dh).abs() <= 1.0, "hue moved from {dh} to {ph}");
+        assert!(pl > dl, "pale {pl} is not lighter than deep {dl}");
+        assert!((pl - dl - 0.22).abs() <= 0.01, "lift was {}", pl - dl);
+        assert!(ps < ds, "pale {ps} is not eased off {ds}");
     }
 
     #[test]
     fn a_tall_logo_fills_rows_70_to_493() {
-        let label = compose(&solid(100, 100), 100, 100, 30);
+        let (deep, pale) = ground_for(30);
+        let label = compose(&solid(100, 100), 100, 100, deep, pale);
         let (first, last) = logo_rows(&label, 30);
         assert!((69..=71).contains(&first), "first logo row {first}");
         assert!((491..=493).contains(&last), "last logo row {last}");
@@ -239,7 +291,8 @@ mod tests {
 
     #[test]
     fn a_wide_logo_centres_on_row_320() {
-        let label = compose(&solid(400, 40), 400, 40, 30);
+        let (deep, pale) = ground_for(30);
+        let label = compose(&solid(400, 40), 400, 40, deep, pale);
         let (first, last) = logo_rows(&label, 30);
         let mid = (first + last) as f32 / 2.0;
         assert!((mid - 320.0).abs() <= 1.0, "logo centred on row {mid}");
@@ -258,12 +311,16 @@ mod tests {
         }
         logo[3] = 15;
         assert_eq!(trim(&logo, 200, 200), Some((50, 50, 150, 150)));
-        assert!(compose(&logo, 200, 200, 30) == compose(&solid(100, 100), 100, 100, 30));
+        let (deep, pale) = ground_for(30);
+        assert!(
+            compose(&logo, 200, 200, deep, pale) == compose(&solid(100, 100), 100, 100, deep, pale)
+        );
     }
 
     #[test]
     fn an_invisible_logo_leaves_the_bare_gradient() {
-        assert!(compose(&[0u8; 16 * 16 * 4], 16, 16, 90) == gradient(90));
+        let (deep, pale) = ground_for(90);
+        assert!(compose(&[0u8; 16 * 16 * 4], 16, 16, deep, pale) == gradient(deep, pale));
     }
 
     #[test]
@@ -278,8 +335,9 @@ mod tests {
                 .write_image_data(&solid(8, 4))
                 .unwrap();
         }
-        let label = Label::from_png(&logo, 45).expect("logo decodes");
-        assert_eq!(label.hue(), 45);
+        let deep = hue::hsl_to_rgb(45.0, 0.65, 0.24);
+        let label = Label::from_png(&logo, deep).expect("logo decodes");
+        assert_eq!(label.deep(), deep.to_vec());
         let out = label.png();
         let reader = png::Decoder::new(std::io::Cursor::new(out))
             .read_info()
@@ -293,6 +351,6 @@ mod tests {
 
     #[test]
     fn bytes_that_are_not_a_png_make_no_label() {
-        assert!(Label::from_png(b"not a png", 0).is_none());
+        assert!(Label::from_png(b"not a png", [101, 68, 21]).is_none());
     }
 }

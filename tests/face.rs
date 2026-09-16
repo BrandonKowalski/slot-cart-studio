@@ -129,7 +129,8 @@ fn a_composed_label_matches_slot_reading_its_png() {
             [0, 0, 0, 0]
         }
     });
-    let label = slot_cart_studio::label::Label::from_png(&logo, 210).expect("logo decodes");
+    let deep = slot_cart_studio::hue::hsl_to_rgb(210.0, 0.65, 0.24);
+    let label = slot_cart_studio::label::Label::from_png(&logo, deep).expect("logo decodes");
     let png = label.png();
     for code in [EMERALD, PLAIN] {
         let d = card(code, &png);
