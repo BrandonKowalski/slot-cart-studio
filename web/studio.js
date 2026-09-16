@@ -560,14 +560,17 @@ async function art(s, c) {
 // Fetch what `c.game` names and let it decide the cart's hue. The finder re-runs this for a game
 // chosen by hand, so a chosen match is dressed exactly the way a matched one is.
 async function dress(s, c) {
-  if (!c.game) return;
-  const name = thumbnail_name(c.game);
+  // A set of our own is found by checksum, so a cart no database has a name for can still be
+  // dressed from it. libretro is found by name, so those requests only happen when there is one.
+  const name = c.game ? thumbnail_name(c.game) : null;
   // The queue is shared, so a card replaced while its jobs wait gives up their turns without
   // a request instead of making the new card wait behind its downloads.
   const thumb = (folder) =>
-    limit(async () =>
-      s === session && !fatal ? fetchThumb(c.platform, folder, name, stub_target) : null,
-    ).catch(noImage);
+    !name
+      ? Promise.resolve(null)
+      : limit(async () =>
+          s === session && !fatal ? fetchThumb(c.platform, folder, name, stub_target) : null,
+        ).catch(noImage);
   // Our own set first, by checksum: it carries logos for platforms libretro has none for at all.
   const ours = (media) => {
     const path = c.crc === null ? null : artIndex?.[crcHex(c.crc)]?.[media];

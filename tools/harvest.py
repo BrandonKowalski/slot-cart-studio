@@ -291,7 +291,9 @@ def main():
         crc, romname, size = job
         if stop.is_set():
             return
-        name = entries[crc]
+        # The dat's name is only ever what this run calls a cart while it works; a rom it has
+        # never heard of goes by its checksum, which is what the file is named anyway.
+        name = entries.get(crc, crc)
         todo = [w for w in wanted if not (root / w / f'{crc}.png').exists()]
         if not todo:
             with lock:
@@ -345,8 +347,10 @@ def main():
                 break
             entries = dat_entries(platform)
             if args.card:
+                # Every rom on the card, whether No-Intro knows it or not: a file is named for its
+                # checksum, so a dump nobody has catalogued still has somewhere to go. Only a
+                # sweep of a whole platform needs the dat, because only that needs a list.
                 jobs = [(crc32(p), p.name, p.stat().st_size) for p in roms(args.card, platform)]
-                jobs = [(crc, r, s) for crc, r, s in jobs if crc in entries]
             else:
                 jobs = [(crc, f'{name}.bin', 0) for crc, name in entries.items()]
             if not jobs:
