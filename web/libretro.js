@@ -44,6 +44,23 @@ export function limiter(slots) {
     });
 }
 
+// A set of our own, hosted as static files: <platform>/<media>/<CRC32>.png, with an index.json
+// mapping a rom's checksum to what it holds. Looked up by checksum rather than by name, so it
+// needs no agreement about spelling and reaches roms No-Intro has never heard of. It is a
+// separate origin from the page, so whatever serves it has to allow the read.
+export async function fetchIndex(base) {
+  const r = await fetch(new URL('index.json', base));
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+export async function fetchArt(base, path) {
+  const r = await fetch(new URL(path, base));
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return new Uint8Array(await r.arrayBuffer());
+}
+
 // A thumbnail's bytes, or null when libretro has none. A git symlink comes back as a one-line
 // body naming its target in the same folder; `stubTarget`, from the Rust side, tells the two apart.
 export async function fetchThumb(platform, folder, name, stubTarget) {

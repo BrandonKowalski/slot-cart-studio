@@ -14,12 +14,13 @@ import init, {
   header_code,
   label_tags,
   logo_luma,
+  scan_face,
   stop_colours,
   stub_target,
   thumbnail_name,
 } from './pkg/slot_cart_studio.js';
 import { fromDirectory, fromFiles, labelKey, PLATFORMS } from './card.js';
-import { fetchDat, fetchThumb, limiter } from './libretro.js';
+import { fetchArt, fetchDat, fetchIndex, fetchThumb, limiter } from './libretro.js';
 
 const $ = (id) => document.getElementById(id);
 const limit = limiter(4);
@@ -27,8 +28,11 @@ const limit = limiter(4);
 const HEAD = 0xb0;
 const FATAL = 'The studio ran out of memory or hit an internal error. Reload the page to start again.';
 
-let faceW = 0;
-let faceH = 0;
+// The box each platform's cart is drawn in, taken from slot at startup. A Game Boy Game Pak is
+// the same width as a GBA cart and nearly twice as tall, so a canvas cut for one refuses the
+// other's pixels outright rather than drawing them badly.
+const faceBox = new Map();
+const boxOf = (platform) => faceBox.get(platform) ?? faceBox.get('GBA');
 // One parsed No-Intro database per platform, kept across cards: the databases are large and a
 // second card of the same platform should not fetch one again.
 const dats = new Map();
@@ -57,6 +61,8 @@ function newCart({ platform, stem, file }) {
     game: null,
     // Logos stay PNG bytes, which are small. The label made from one is not kept: see withLabel.
     logoBytes: null,
+    // A photograph of the cart, kept once fetched so switching kinds does not fetch it twice.
+    scanBytes: null,
     droppedBytes: null,
     rejected: false,
     snapshot: null,
@@ -74,13 +80,21 @@ function newCart({ platform, stem, file }) {
   };
 }
 
-const activeLogo = (c) => c.droppedBytes ?? (c.rejected ? null : c.logoBytes);
+// What a cart is wearing. A logo dropped by hand is always a logo and always wins: choosing
+// scans must not throw away art someone supplied themselves. A cart the set has no scan for
+// keeps its composed label rather than losing one it already had.
+function chosen(c) {
+  if (c.droppedBytes) return { kind: 'logo', bytes: c.droppedBytes };
+  if (c.rejected) return null;
+  if (artMode === 'scan' && c.scanBytes) return { kind: 'scan', bytes: c.scanBytes };
+  return c.logoBytes ? { kind: 'logo', bytes: c.logoBytes } : null;
+}
 
 function stateOf(c) {
   if (c.error) return 'error';
   if (c.existing) return 'has-label';
   if (c.looking) return 'looking';
-  return activeLogo(c) ? 'ready' : 'needs-logo';
+  return chosen(c) ? 'ready' : 'needs-logo';
 }
 
 // The box art belongs to the matched game, so its hue only stands while the match does.
@@ -94,6 +108,17 @@ const stopsOf = (c) => stop_colours(baseHueOf(c), c.logoLuma ?? 255);
 const baseDeep = (c) => Array.from(stopsOf(c)).slice(0, 3);
 
 const hex = (rgb) => `#${[...rgb].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+// A checksum as the set names its files: eight upper case hex digits.
+const crcHex = (crc) => crc.toString(16).toUpperCase().padStart(8, '0');
+// Where a set of our own lives, if there is one. Given on the address rather than built in, so a
+// local set and a hosted one are the same page with a different argument, and the published page
+// carries no address it cannot serve.
+const ART_BASE = new URLSearchParams(location.search).get('art') ?? '';
+let artIndex = null;
+// Which kind of label every cart wears: one composed from a logo, or one cut from a photograph
+// of the cart itself. It is a choice about the whole card, not about one cart, so switching it
+// fetches and recomposes every label.
+let artMode = 'logo';
 const fromHex = (value) => [1, 3, 5].map((at) => parseInt(value.slice(at, at + 2), 16));
 
 const readyCarts = () =>
@@ -101,8 +126,23 @@ const readyCarts = () =>
 
 // A Label holds its 1280x640 composition in WASM memory, which never shrinks and stops at 4 GiB.
 // One kept per cart runs a big card out of it, so a Label lives only for the call that needs it.
-function withLabel(bytes, deep, use) {
-  const label = new Label(bytes, deep);
+function withLabel(bytes, deep, platform, use) {
+  const label = new Label(bytes, deep, platform);
+  try {
+    return use(label);
+  } finally {
+    label.free();
+  }
+}
+
+// The label this cart is wearing, whichever kind that is, for as long as the call needs it.
+function withCartLabel(c, use) {
+  const art = chosen(c);
+  if (!art) return null;
+  const label =
+    art.kind === 'scan'
+      ? Label.from_scan(art.bytes, c.platform)
+      : new Label(art.bytes, c.deep ?? baseDeep(c), c.platform);
   try {
     return use(label);
   } finally {
@@ -113,7 +153,8 @@ function withLabel(bytes, deep, use) {
 // Whether slot's decoder takes a logo, asked the only way the module can be asked: by making one.
 function readable(bytes) {
   try {
-    withLabel(bytes, [0, 0, 0], () => {});
+    // Any platform will do: the question is only whether slot's decoder takes these bytes.
+    withLabel(bytes, [0, 0, 0], 'GBA', () => {});
     return true;
   } catch (e) {
     if (e instanceof WebAssembly.RuntimeError) throw e;
@@ -186,8 +227,9 @@ function buildCard(c) {
     drop: q('.drop'),
     pickLogo: q('.drop input'),
   };
-  c.el.canvas.width = faceW;
-  c.el.canvas.height = faceH;
+  const [boxW, boxH] = boxOf(c.platform);
+  c.el.canvas.width = boxW;
+  c.el.canvas.height = boxH;
   // The device's own title, with the file it came from on hover, and the bracketed groups it
   // dropped shown as chips rather than left in the name.
   c.el.stem.textContent = clean_label(c.stem);
@@ -252,7 +294,13 @@ function paint(c) {
   if (state === 'has-label') face = c.existing;
   if (state === 'ready') {
     try {
-      face = withLabel(activeLogo(c), deep, (label) => label.face(c.platform, c.code, c.stem));
+      const art = chosen(c);
+      // A scan is the cart, not a label on one: none of slot's shell is drawn under a photograph
+      // of the cartridge that exists.
+      face =
+        art.kind === 'scan'
+          ? scan_face(art.bytes, c.platform)
+          : withCartLabel(c, (label) => label.face(c.platform, c.code, c.stem));
     } catch (e) {
       if (trapped(e)) return;
       throw e;
@@ -261,10 +309,12 @@ function paint(c) {
   canvas.hidden = !face;
   if (face) {
     const pixels = new Uint8ClampedArray(face.buffer, face.byteOffset, face.byteLength);
-    canvas.getContext('2d').putImageData(new ImageData(pixels, faceW, faceH), 0, 0);
+    const [boxW, boxH] = boxOf(c.platform);
+    canvas.getContext('2d').putImageData(new ImageData(pixels, boxW, boxH), 0, 0);
   }
   drop.hidden = state !== 'needs-logo';
-  hueRow.hidden = state !== 'ready';
+  // A label cut from a photograph has no ground to colour, so the picker has nothing to do on it.
+  hueRow.hidden = state !== 'ready' || chosen(c)?.kind === 'scan';
   hue.value = hex(deep);
   // A cart with no match needs the finder more than a wrongly matched one, not less: searching by
   // name is how a cart libretro keeps under a name its filename does not use gets found at all.
@@ -410,6 +460,7 @@ async function open(source) {
   $('grid').replaceChildren(...session.carts.map(buildCard));
   session.carts.forEach(paint);
   showPlatform(platformsOf(session)[0] ?? PLATFORMS[0]);
+  renderKinds();
   // The card is chosen, so the chooser goes: the write bar sits in its place, once there is
   // something to write. updateWriteBar, reached through paint, is what shows it.
   $('pick').hidden = true;
@@ -517,17 +568,69 @@ async function dress(s, c) {
     limit(async () =>
       s === session && !fatal ? fetchThumb(c.platform, folder, name, stub_target) : null,
     ).catch(noImage);
-  const [logo, box] = await Promise.all([thumb('Named_Logos'), thumb('Named_Boxarts')]);
+  // Our own set first, by checksum: it carries logos for platforms libretro has none for at all.
+  const ours = (media) => {
+    const path = c.crc === null ? null : artIndex?.[crcHex(c.crc)]?.[media];
+    if (!path) return Promise.resolve(null);
+    return limit(async () =>
+      s === session && !fatal ? fetchArt(ART_BASE, path) : null,
+    ).catch(noImage);
+  };
+  // The ground's colour is read off the box art either way, so that request starts now and is
+  // waited on after the logo, whichever source the logo turns out to come from.
+  const boxJob = thumb('Named_Boxarts');
+  // A photograph of the cart is only fetched when that is the chosen kind: a card of composed
+  // labels should not pay to download a picture of every cartridge. What is already held is kept,
+  // so switching back to a kind this cart already has costs nothing.
+  if (artMode === 'scan' && !c.scanBytes) {
+    const scan = await ours('support-2D');
+    if (s !== session || fatal) return;
+    c.scanBytes = scan && readable(scan) ? scan : null;
+  }
+  if (!c.logoBytes) {
+    const logo = (await ours('wheel')) ?? (await thumb('Named_Logos'));
+    if (s !== session || fatal) return;
+    c.logoBytes = logo && readable(logo) ? logo : null;
+    // How bright the logo is decides which way its ground goes, so it is measured with the logo.
+    c.logoLuma = c.logoBytes ? logo_luma(c.logoBytes) : 255;
+  }
+  const box = await boxJob;
   if (s !== session || fatal) return;
   c.boxHue = box ? (box_hue(box) ?? null) : null;
-  c.logoBytes = logo && readable(logo) ? logo : null;
-  // How bright the logo is decides which way its ground goes, so it is measured with the logo.
-  c.logoLuma = c.logoBytes ? logo_luma(c.logoBytes) : 255;
   if (!c.userHue) c.deep = null;
 }
 
 // The platforms this card actually holds, in the order slot switches shelves through.
 const platformsOf = (s) => PLATFORMS.filter((p) => s.carts.some((c) => c.platform === p));
+
+// Offered only when there is a set to take photographs from: libretro has none of carts, so
+// without one there is nothing to switch to.
+function renderKinds() {
+  $('kinds').hidden = !artIndex || !session;
+  for (const button of $('kinds').querySelectorAll('button')) {
+    button.setAttribute('aria-pressed', String(button.dataset.kind === artMode));
+  }
+}
+
+// Every cart again, with the chosen kind. Each keeps what it already holds, so this fetches only
+// what the new kind needs and switching back costs nothing.
+async function relabel() {
+  const s = session;
+  if (!s) return;
+  const jobs = s.carts.filter((c) => c.game && !c.existing && !c.error);
+  for (const c of jobs) {
+    c.looking = true;
+    paint(c);
+  }
+  await Promise.all(
+    jobs.map(async (c) => {
+      await dress(s, c);
+      if (s !== session || fatal) return;
+      c.looking = false;
+      paint(c);
+    }),
+  );
+}
 
 // A tab per platform on the card, with what it holds. One platform is no choice at all, so a
 // card of nothing but GBA carts shows no switcher and reads exactly as it did before.
@@ -591,7 +694,7 @@ async function writeLabels() {
         if (fatal) return;
         let face = null;
         try {
-          const [png, drawn] = withLabel(activeLogo(c), c.deep ?? baseDeep(c), (label) => [
+          const [png, drawn] = withCartLabel(c, (label) => [
             label.png(),
             label.face(c.platform, c.code, c.stem),
           ]);
@@ -620,7 +723,7 @@ async function writeLabels() {
         progress(i, total, c.stem, 'Packing');
         zip.add(
           `Labels/${c.platform}/${c.stem}.png`,
-          withLabel(activeLogo(c), c.deep ?? baseDeep(c), (label) => label.png()),
+          withCartLabel(c, (label) => label.png()),
         );
         parts.push(zip.take());
         // Packing a few hundred carts is seconds of synchronous work with nothing on screen, so
@@ -653,7 +756,17 @@ async function writeLabels() {
 
 async function start() {
   await init();
-  [faceW, faceH] = cart_size();
+  for (const platform of PLATFORMS) faceBox.set(platform, Array.from(cart_size(platform)));
+  // A set of our own, if the address named one. Not having it is not a failure: every cart falls
+  // back to libretro, which is all the page had before there was a set to point at.
+  if (ART_BASE) {
+    try {
+      artIndex = await fetchIndex(ART_BASE);
+      console.info(`art set: ${Object.keys(artIndex).length} checksums from ${ART_BASE}`);
+    } catch (e) {
+      banner(`The art set at ${ART_BASE} didn’t load (${e.message}). Logos come from libretro alone.`);
+    }
+  }
   const direct = 'showDirectoryPicker' in window;
   $('pick').hidden = !direct;
   $('pick-files-label').hidden = direct;
@@ -663,6 +776,14 @@ async function start() {
     $('mode').textContent =
       'This browser can’t write back to the SD card. You will have to copy the contents of a zip file to the Labels folder.';
   }
+
+  $('kinds').addEventListener('click', (e) => {
+    const kind = e.target.closest('button')?.dataset.kind;
+    if (!kind || kind === artMode) return;
+    artMode = kind;
+    renderKinds();
+    track(relabel());
+  });
 
   $('pick').addEventListener('click', async () => {
     let root;
