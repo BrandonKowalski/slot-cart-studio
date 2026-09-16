@@ -22,6 +22,8 @@ struct Entry {
 #[derive(Default)]
 pub struct Zip {
     body: Vec<u8>,
+    /// How much of the archive `take` has handed out. Offsets still count from its first byte.
+    taken: u32,
     entries: Vec<Entry>,
 }
 
@@ -43,7 +45,7 @@ impl Zip {
             name: name.as_bytes().to_vec(),
             crc: crc32fast::hash(data),
             size: data.len() as u32,
-            offset: self.body.len() as u32,
+            offset: self.taken + self.body.len() as u32,
         };
         let b = &mut self.body;
         put32(b, LOCAL);
@@ -62,9 +64,19 @@ impl Zip {
         self.entries.push(entry);
     }
 
+    /// The archive written since the last take, leaving only the directory behind. In WASM a
+    /// card's worth of labels would otherwise sit in memory that never shrinks, so the page takes
+    /// each entry as it goes, and what `finish` returns follows the last of them.
+    pub fn take(&mut self) -> Vec<u8> {
+        let out = std::mem::take(&mut self.body);
+        self.taken += out.len() as u32;
+        out
+    }
+
     pub fn finish(self) -> Vec<u8> {
         let mut out = self.body;
-        let start = out.len() as u32;
+        let body = out.len();
+        let start = self.taken + body as u32;
         for e in &self.entries {
             put32(&mut out, CENTRAL);
             put16(&mut out, VERSION); // made by
@@ -85,7 +97,7 @@ impl Zip {
             put32(&mut out, e.offset);
             out.extend_from_slice(&e.name);
         }
-        let size = out.len() as u32 - start;
+        let size = (out.len() - body) as u32;
         let count = self.entries.len() as u16;
         put32(&mut out, END);
         put16(&mut out, 0); // this disk
@@ -108,6 +120,12 @@ mod tests {
     const END: u32 = 0x0605_4b50;
     const UTF8: u16 = 1 << 11;
 
+    const FILES: [(&str, &[u8]); 3] = [
+        ("Labels/Metroid Fusion (USA).png", b"one"),
+        ("Labels/Pokémon Émeraude.png", &[7u8; 1000]),
+        ("Labels/Empty.png", b""),
+    ];
+
     fn u16_at(b: &[u8], i: usize) -> u16 {
         u16::from_le_bytes([b[i], b[i + 1]])
     }
@@ -118,25 +136,20 @@ mod tests {
 
     #[test]
     fn the_directory_agrees_with_every_entry() {
-        let files: [(&str, &[u8]); 3] = [
-            ("Labels/Metroid Fusion (USA).png", b"one"),
-            ("Labels/Pokémon Émeraude.png", &[7u8; 1000]),
-            ("Labels/Empty.png", b""),
-        ];
         let mut zip = Zip::new();
-        for (name, data) in files {
+        for (name, data) in FILES {
             zip.add(name, data);
         }
         let z = zip.finish();
 
         let end = z.len() - 22;
         assert_eq!(u32_at(&z, end), END);
-        assert_eq!(u16_at(&z, end + 10) as usize, files.len());
+        assert_eq!(u16_at(&z, end + 10) as usize, FILES.len());
         let size = u32_at(&z, end + 12) as usize;
         let mut at = u32_at(&z, end + 16) as usize;
         assert_eq!(at + size, end, "the directory runs up to the end record");
 
-        for (name, data) in files {
+        for (name, data) in FILES {
             assert_eq!(u32_at(&z, at), CENTRAL);
             assert_eq!(u16_at(&z, at + 8) & UTF8, UTF8, "names are flagged UTF-8");
             assert_eq!(u16_at(&z, at + 10), 0, "stored, not deflated");
@@ -155,5 +168,19 @@ mod tests {
 
             at += 46 + name_len;
         }
+    }
+
+    #[test]
+    fn an_archive_taken_as_it_grows_is_the_same_archive() {
+        let mut whole = Zip::new();
+        let mut pieces = Zip::new();
+        let mut taken = pieces.take();
+        for (name, data) in FILES {
+            whole.add(name, data);
+            pieces.add(name, data);
+            taken.extend(pieces.take());
+        }
+        taken.extend(pieces.finish());
+        assert!(taken == whole.finish());
     }
 }
