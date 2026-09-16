@@ -60,3 +60,8 @@ tasks:
     deps: [build]
     cmds:
       - python3 tools/verify.py
+
+  sheet:
+    desc: After task verify, render out/sheet.png with generated labels on the left and slot's hand-made ones on the right
+    cmds:
+      - cargo run --example sheet -- out/card {{.SLOT}}/sdcard out/sheet.png
