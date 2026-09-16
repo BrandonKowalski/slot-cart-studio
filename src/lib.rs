@@ -120,14 +120,6 @@ pub fn fallback_hue(stem: &str) -> u16 {
     hue::fallback_hue(stem)
 }
 
-/// The hue a label's ground should take, given the box art's hue and the logo's own. A ground
-/// too close to the logo's hue turns away from it, so a dark logo never sits on a dark ground of
-/// the same colour.
-#[wasm_bindgen]
-pub fn ground_hue(box_hue: u16, logo_hue: Option<u16>) -> u16 {
-    hue::ground_hue(box_hue, logo_hue)
-}
-
 /// The title slot puts on a cart with no label art: the stem without its bracketed tags or its
 /// spaced-hyphen subtitle break. The page names a cart the way the device does.
 #[wasm_bindgen]
