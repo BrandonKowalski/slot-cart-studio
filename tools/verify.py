@@ -196,6 +196,21 @@ def main():
         if overflow > 400:
             sys.exit('the page scrolls sideways at 400 px')
 
+        # The switcher, clicked rather than counted: the Game Boy shelves are where the unmatched
+        # carts live, so this is also the only shot that shows what an unmatched cart offers.
+        tabs = page.eval("[...document.querySelectorAll('#tabs button')].map(b => b.textContent)")
+        print('tabs:', tabs)
+        if len(tabs) > 1:
+            page.eval("document.querySelectorAll('#tabs button')[%d].click()" % (len(tabs) - 1))
+            shown = page.eval(
+                "[...document.querySelectorAll('#grid > *')].filter(c => !c.hidden)"
+                ".map(c => c.querySelector('.stem').textContent)"
+            )
+            print(f'{tabs[-1]} shows: {shown}')
+            page.shot(1280, OUT / 'studio-tab-1280.png')
+            if not shown:
+                sys.exit(f'switching to {tabs[-1]} left no carts on screen')
+
         page.width(1280)
         # Headless Chrome ignores the browser-level Browser.setDownloadBehavior for this target;
         # only the page-level form of the command takes effect.
