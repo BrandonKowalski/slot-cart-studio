@@ -29,7 +29,6 @@ import websocket
 
 STUDIO = Path(__file__).resolve().parent.parent
 SLOT_GAMES = STUDIO.parent / 'slot' / 'sdcard' / 'Games'
-SLOT_LABELS = STUDIO.parent / 'slot' / 'sdcard' / 'Labels'
 OUT = STUDIO / 'out'
 CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 HTTP_PORT, CDP_PORT = 8765, 9223
@@ -124,7 +123,7 @@ def open_card(page, card, paths):
     wait(lambda: page.eval('window.__studio.idle()'), 600, 'every cart to be looked up')
     states = page.eval('window.__studio.states()')
     for s in states:
-        print(f"  {s['state']:<10} hue {s['hue']:>3}  {s['stem']}  ->  {s['game']}")
+        print(f"  {s['state']:<10} {s['deep']}  {s['stem']}  ->  {s['game']}")
     return states
 
 
@@ -138,8 +137,11 @@ def stage_labelled(card, games):
         (card / 'Games' / g).symlink_to(SLOT_GAMES / g)
     probe = f'{PROBE}.gba'
     (card / 'Games' / probe).symlink_to(SLOT_GAMES / f'{PROBE_OF}.gba')
-    labels = {f'{stem}.png': SLOT_LABELS / f'{stem}.png' for stem in KEPT}
-    labels[unicodedata.normalize('NFD', f'{PROBE}.png')] = SLOT_LABELS / f'{PROBE_OF}.png'
+    # The labels the first pass just wrote, not the live card's: a fixture that reads slot's sdcard
+    # breaks whenever that card changes, and it did.
+    written = OUT / 'card' / 'Labels'
+    labels = {f'{stem}.png': written / f'{stem}.png' for stem in KEPT}
+    labels[unicodedata.normalize('NFD', f'{PROBE}.png')] = written / f'{PROBE_OF}.png'
     for name, source in labels.items():
         shutil.copy(source, card / 'Labels' / name)
     return [f'Games/{g}' for g in games] + [f'Games/{probe}'] + [f'Labels/{name}' for name in labels]
