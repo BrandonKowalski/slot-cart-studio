@@ -7,11 +7,31 @@ use crate::{art, face, hue};
 
 pub const W: u32 = 1280;
 pub const H: u32 = 640;
-const BOX_W: f32 = 920.0;
-const BOX_H: f32 = 423.0;
-/// Where a logo that fills the box's height starts. A wider logo centres on `MID_ROW` instead.
-const TALL_TOP: f32 = 70.0;
-const MID_ROW: f32 = 320.0;
+
+/// The Game Boy label, at its own well's proportion rather than the GBA well's. slot fills a
+/// well by covering it, so a wide label on the near-square Game Boy well loses its sides —
+/// Metal Gear Solid read "METAL GEA". 176:150 is that well; the size is chosen so composing one
+/// costs about what a GBA label costs, because this is held in wasm memory a cart at a time.
+pub const GB_W: u32 = 1024;
+pub const GB_H: u32 = 873;
+
+/// The label a platform's well wants. The GBA label stays exactly 1280x640: that shape was
+/// settled by eye, and every label already written to a card has it.
+pub fn size(platform: Platform) -> (u32, u32) {
+    match platform {
+        Platform::Gba => (W, H),
+        Platform::Gb | Platform::Gbc => (GB_W, GB_H),
+    }
+}
+
+/// The logo's box, and where it sits, as fractions of the label rather than pixels of the GBA
+/// one: a label of another shape has to place its logo in the same relative place, not at
+/// offsets measured on a 1280 by 640.
+const BOX_W_OF: f32 = 920.0 / W as f32;
+const BOX_H_OF: f32 = 423.0 / H as f32;
+/// Where a logo that fills the box's height starts. A wider logo centres on `MID_ROW_OF` instead.
+const TALL_TOP_OF: f32 = 70.0 / H as f32;
+const MID_ROW_OF: f32 = 320.0 / H as f32;
 /// Bounds ignore the faint fringe some rips carry around a logo.
 const ALPHA_EDGE: u8 = 16;
 
@@ -66,11 +86,11 @@ pub fn pale_for(deep: [u8; 3]) -> [u8; 3] {
 
 /// Opaque RGBA between two corners. The gradient leans on x far more than y, so it reads as
 /// diagonal on a wide label.
-pub fn gradient(deep: [u8; 3], pale: [u8; 3]) -> Vec<u8> {
-    let mut px = Vec::with_capacity((W * H * 4) as usize);
-    for y in 0..H {
-        for x in 0..W {
-            let t = 0.88 * x as f32 / W as f32 + 0.12 * y as f32 / H as f32;
+pub fn gradient(lw: u32, lh: u32, deep: [u8; 3], pale: [u8; 3]) -> Vec<u8> {
+    let mut px = Vec::with_capacity((lw * lh * 4) as usize);
+    for y in 0..lh {
+        for x in 0..lw {
+            let t = 0.88 * x as f32 / lw as f32 + 0.12 * y as f32 / lh as f32;
             for c in 0..3 {
                 px.push((deep[c] as f32 + (pale[c] as f32 - deep[c] as f32) * t).round() as u8);
             }
@@ -98,16 +118,17 @@ pub fn trim(rgba: &[u8], w: u32, h: u32) -> Option<(u32, u32, u32, u32)> {
     bounds
 }
 
-/// Scale and top left for a trimmed logo: one factor that fits the 920x423 box, centred across.
-pub fn placement(w: u32, h: u32) -> (f32, f32, f32) {
-    let by_w = BOX_W / w as f32;
-    let by_h = BOX_H / h as f32;
+/// Scale and top left for a trimmed logo: one factor that fits the label's own box, centred
+/// across it.
+pub fn placement(lw: u32, lh: u32, w: u32, h: u32) -> (f32, f32, f32) {
+    let by_w = BOX_W_OF * lw as f32 / w as f32;
+    let by_h = BOX_H_OF * lh as f32 / h as f32;
     let scale = by_w.min(by_h);
-    let x = (W as f32 - w as f32 * scale) / 2.0;
+    let x = (lw as f32 - w as f32 * scale) / 2.0;
     let y = if by_h <= by_w {
-        TALL_TOP
+        TALL_TOP_OF * lh as f32
     } else {
-        MID_ROW - h as f32 * scale / 2.0
+        MID_ROW_OF * lh as f32 - h as f32 * scale / 2.0
     };
     (scale, x, y)
 }
@@ -129,8 +150,16 @@ fn premultiplied(logo: &[u8], w: u32, (x0, y0, x1, y1): (u32, u32, u32, u32)) ->
 }
 
 /// The logo over the gradient, as opaque RGBA.
-pub fn compose(logo: &[u8], w: u32, h: u32, deep: [u8; 3], pale: [u8; 3]) -> Vec<u8> {
-    let ground = gradient(deep, pale);
+pub fn compose(
+    logo: &[u8],
+    w: u32,
+    h: u32,
+    lw: u32,
+    lh: u32,
+    deep: [u8; 3],
+    pale: [u8; 3],
+) -> Vec<u8> {
+    let ground = gradient(lw, lh, deep, pale);
     let Some(bounds) = trim(logo, w, h) else {
         return ground;
     };
@@ -140,9 +169,9 @@ pub fn compose(logo: &[u8], w: u32, h: u32, deep: [u8; 3], pale: [u8; 3]) -> Vec
     else {
         return ground;
     };
-    let size = IntSize::from_wh(W, H).expect("the label's size is not zero");
-    let mut dst = Pixmap::from_vec(ground, size).expect("the gradient is W by H");
-    let (scale, x, y) = placement(tw, th);
+    let size = IntSize::from_wh(lw, lh).expect("the label's size is not zero");
+    let mut dst = Pixmap::from_vec(ground, size).expect("the gradient is the label's size");
+    let (scale, x, y) = placement(lw, lh, tw, th);
     let paint = PixmapPaint {
         quality: FilterQuality::Bicubic,
         ..PixmapPaint::default()
@@ -164,6 +193,9 @@ pub struct Label {
     logo: Vec<u8>,
     w: u32,
     h: u32,
+    /// The label's own size, which is the well's shape for the platform it was made for.
+    lw: u32,
+    lh: u32,
     deep: [u8; 3],
     rgba: Vec<u8>,
 }
@@ -172,13 +204,16 @@ impl Label {
     /// `None` for bytes slot's decoder would refuse. `deep` is the ground's top-left corner,
     /// whether the page computed it from box art or you picked it by hand; the pale corner is
     /// derived from it, so one colour describes the whole ground.
-    pub fn from_png(png: &[u8], deep: [u8; 3]) -> Option<Label> {
+    pub fn from_png(png: &[u8], deep: [u8; 3], platform: Platform) -> Option<Label> {
         let (logo, w, h) = art::decode(png)?;
-        let rgba = compose(&logo, w, h, deep, pale_for(deep));
+        let (lw, lh) = size(platform);
+        let rgba = compose(&logo, w, h, lw, lh, deep, pale_for(deep));
         Some(Label {
             logo,
             w,
             h,
+            lw,
+            lh,
             deep,
             rgba,
         })
@@ -188,14 +223,58 @@ impl Label {
         self.deep.to_vec()
     }
 
+    /// A label cut from a photograph of the cart itself rather than composed from a logo. The
+    /// scan frames the whole cartridge, so the well's own place on a cart says which part of the
+    /// picture is the printed label. There is no logo and no ground: what comes out is the label
+    /// Nintendo printed, which is why a colour picked for it has nothing to do.
+    pub fn from_scan(png: &[u8], _platform: Platform) -> Option<Label> {
+        let (src, w, h) = art::decode(png)?;
+        // The picture is kept whole and at its own size. slot covers a well with whatever it is
+        // handed, so a photograph is cropped by the same rule as any other label and the geometry
+        // stays slot's rather than becoming a second opinion of ours.
+        //
+        // A scan is cut out, though, and a card's label is opaque RGB: left alone, every clear
+        // corner would be written as black. Flattening on white keeps the file looking like the
+        // scan it is.
+        let mut rgba = Vec::with_capacity(src.len());
+        for px in src.chunks_exact(4) {
+            let a = px[3] as u32;
+            for &v in &px[..3] {
+                rgba.push(((v as u32 * a + 255 * (255 - a) + 127) / 255) as u8);
+            }
+            rgba.push(255);
+        }
+        Some(Label {
+            logo: Vec::new(),
+            w: 0,
+            h: 0,
+            lw: w,
+            lh: h,
+            deep: [0, 0, 0],
+            rgba,
+        })
+    }
+
     pub fn set_deep(&mut self, deep: &[u8]) {
+        // A scanned label has no logo to put back over a new ground, so a colour cannot move it.
+        if self.logo.is_empty() {
+            return;
+        }
         self.deep = [deep[0], deep[1], deep[2]];
-        self.rgba = compose(&self.logo, self.w, self.h, self.deep, pale_for(self.deep));
+        self.rgba = compose(
+            &self.logo,
+            self.w,
+            self.h,
+            self.lw,
+            self.lh,
+            self.deep,
+            pale_for(self.deep),
+        );
     }
 
     /// Slot's cart face with this label on it.
     pub fn face(&self, platform: Platform, code: &str, stem: &str) -> Vec<u8> {
-        face::from_rgba(&self.rgba, W, H, platform, code, stem)
+        face::from_rgba(&self.rgba, self.lw, self.lh, platform, code, stem)
     }
 
     /// Opaque 8-bit RGB, which is all a card's label needs.
@@ -207,7 +286,7 @@ impl Label {
             .collect();
         let mut out = Vec::new();
         {
-            let mut enc = png::Encoder::new(&mut out, W, H);
+            let mut enc = png::Encoder::new(&mut out, self.lw, self.lh);
             enc.set_color(png::ColorType::Rgb);
             enc.set_depth(png::BitDepth::Eight);
             enc.write_header()
@@ -243,7 +322,7 @@ mod tests {
 
     fn logo_rows(label: &[u8], hue: u16) -> (u32, u32) {
         let (deep, pale) = ground_for(hue);
-        let ground = gradient(deep, pale);
+        let ground = gradient(W, H, deep, pale);
         let rows: Vec<u32> = (0..H)
             .filter(|y| at(label, 640, *y) != at(&ground, 640, *y))
             .collect();
@@ -281,7 +360,7 @@ mod tests {
     #[test]
     fn the_corners_are_the_stops() {
         let (deep, pale) = ground_for(200);
-        let g = gradient(deep, pale);
+        let g = gradient(W, H, deep, pale);
         assert_eq!(at(&g, 0, 0), deep);
         // The house formula puts t at 0.9991 here, not 1.
         assert!(near(at(&g, W - 1, H - 1), pale, 1));
@@ -320,7 +399,7 @@ mod tests {
     #[test]
     fn a_tall_logo_fills_rows_70_to_493() {
         let (deep, pale) = ground_for(30);
-        let label = compose(&solid(100, 100), 100, 100, deep, pale);
+        let label = compose(&solid(100, 100), 100, 100, W, H, deep, pale);
         let (first, last) = logo_rows(&label, 30);
         assert!((69..=71).contains(&first), "first logo row {first}");
         assert!((491..=493).contains(&last), "last logo row {last}");
@@ -330,7 +409,7 @@ mod tests {
     #[test]
     fn a_wide_logo_centres_on_row_320() {
         let (deep, pale) = ground_for(30);
-        let label = compose(&solid(400, 40), 400, 40, deep, pale);
+        let label = compose(&solid(400, 40), 400, 40, W, H, deep, pale);
         let (first, last) = logo_rows(&label, 30);
         let mid = (first + last) as f32 / 2.0;
         assert!((mid - 320.0).abs() <= 1.0, "logo centred on row {mid}");
@@ -351,14 +430,17 @@ mod tests {
         assert_eq!(trim(&logo, 200, 200), Some((50, 50, 150, 150)));
         let (deep, pale) = ground_for(30);
         assert!(
-            compose(&logo, 200, 200, deep, pale) == compose(&solid(100, 100), 100, 100, deep, pale)
+            compose(&logo, 200, 200, W, H, deep, pale)
+                == compose(&solid(100, 100), 100, 100, W, H, deep, pale)
         );
     }
 
     #[test]
     fn an_invisible_logo_leaves_the_bare_gradient() {
         let (deep, pale) = ground_for(90);
-        assert!(compose(&[0u8; 16 * 16 * 4], 16, 16, deep, pale) == gradient(deep, pale));
+        assert!(
+            compose(&[0u8; 16 * 16 * 4], 16, 16, W, H, deep, pale) == gradient(W, H, deep, pale)
+        );
     }
 
     #[test]
@@ -374,7 +456,7 @@ mod tests {
                 .unwrap();
         }
         let deep = hue::hsl_to_rgb(45.0, 0.65, 0.24);
-        let label = Label::from_png(&logo, deep).expect("logo decodes");
+        let label = Label::from_png(&logo, deep, Platform::Gba).expect("logo decodes");
         assert_eq!(label.deep(), deep.to_vec());
         let out = label.png();
         let reader = png::Decoder::new(std::io::Cursor::new(out))
@@ -389,6 +471,80 @@ mod tests {
 
     #[test]
     fn bytes_that_are_not_a_png_make_no_label() {
-        assert!(Label::from_png(b"not a png", [101, 68, 21]).is_none());
+        assert!(Label::from_png(b"not a png", [101, 68, 21], Platform::Gba).is_none());
+    }
+
+    /// A scan is the photograph itself, at the size it came in: no crop of ours, so slot covers
+    /// the well by the same rule it covers any other label by. What the studio does have to
+    /// answer for is the cut-out's transparency, because a card's label is opaque RGB and a clear
+    /// corner would otherwise be written as black.
+    #[test]
+    fn a_scan_is_the_picture_itself_flattened_on_white() {
+        let (sw, sh) = (600u32, 700u32);
+        let mut px = vec![0u8; (sw * sh * 4) as usize];
+        for y in 0..sh {
+            for x in 0..sw {
+                let i = ((y * sw + x) * 4) as usize;
+                let cart = x > 50 && x < sw - 50 && y > 50 && y < sh - 50;
+                px[i..i + 4].copy_from_slice(if cart { &INK } else { &[0, 0, 0, 0] });
+            }
+        }
+        let mut png = Vec::new();
+        {
+            let mut enc = png::Encoder::new(&mut png, sw, sh);
+            enc.set_color(png::ColorType::Rgba);
+            enc.set_depth(png::BitDepth::Eight);
+            enc.write_header().unwrap().write_image_data(&px).unwrap();
+        }
+        let label = Label::from_scan(&png, Platform::Gbc).expect("a scan decodes");
+        assert_eq!(
+            (label.lw, label.lh),
+            (sw, sh),
+            "the picture keeps its own size"
+        );
+
+        let mid = (((sh / 2) * sw + sw / 2) * 4) as usize;
+        assert_eq!(&label.rgba[mid..mid + 3], &INK[..3], "the cart is the cart");
+        assert_eq!(
+            &label.rgba[0..4],
+            &[255, 255, 255, 255],
+            "clear goes white, not black"
+        );
+    }
+
+    /// A Game Boy label is its own well's shape, not the GBA one's. slot covers a well with what
+    /// it is given, so a 2.0 label on a 1.17 well loses its sides: composing at the well's ratio
+    /// is what stops a wide wordmark being cropped to its middle.
+    #[test]
+    fn a_game_boy_label_is_the_shape_of_its_own_well() {
+        assert_eq!(size(Platform::Gba), (W, H));
+        assert_eq!(size(Platform::Gb), (GB_W, GB_H));
+        assert_eq!(size(Platform::Gbc), (GB_W, GB_H));
+
+        // slot's Game Boy well is 176 x 150; the label matches that ratio to within a percent.
+        let want = 176.0 / 150.0;
+        let got = GB_W as f32 / GB_H as f32;
+        assert!((got - want).abs() < 0.01, "{got} is not the well's {want}");
+
+        // And what comes out carries it: a GBA label is still 1280 by 640, a Game Boy one is not.
+        let mut logo = Vec::new();
+        {
+            let mut enc = png::Encoder::new(&mut logo, 8, 4);
+            enc.set_color(png::ColorType::Rgba);
+            enc.set_depth(png::BitDepth::Eight);
+            enc.write_header()
+                .unwrap()
+                .write_image_data(&solid(8, 4))
+                .unwrap();
+        }
+        let deep = hue::hsl_to_rgb(200.0, 0.65, 0.24);
+        for (platform, want) in [(Platform::Gba, (W, H)), (Platform::Gbc, (GB_W, GB_H))] {
+            let label = Label::from_png(&logo, deep, platform).expect("logo decodes");
+            let reader = png::Decoder::new(std::io::Cursor::new(label.png()))
+                .read_info()
+                .unwrap();
+            let info = reader.info();
+            assert_eq!((info.width, info.height), want, "{platform:?}");
+        }
     }
 }
