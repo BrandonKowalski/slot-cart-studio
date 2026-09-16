@@ -37,10 +37,11 @@ pub fn cart_size() -> Vec<u32> {
     vec![cart::CART_W, cart::CART_H]
 }
 
-/// A label the card already has, on its cart.
+/// A label the card already has, on its cart. `platform` is the card folder the rom sits in,
+/// `GBA`, `GB` or `GBC`, which is how the page names a platform either side of the wasm boundary.
 #[wasm_bindgen]
-pub fn existing_face(png: &[u8], code: &str, stem: &str) -> Vec<u8> {
-    face::from_png(png, code, stem)
+pub fn existing_face(png: &[u8], platform: &str, code: &str, stem: &str) -> Vec<u8> {
+    face::from_png(png, face::platform_of(platform), code, stem)
 }
 
 /// A ROM's CRC32, fed in the chunks the page reads it in.
@@ -178,8 +179,8 @@ impl JsLabel {
         }
     }
 
-    pub fn face(&self, code: &str, stem: &str) -> Vec<u8> {
-        self.0.face(code, stem)
+    pub fn face(&self, platform: &str, code: &str, stem: &str) -> Vec<u8> {
+        self.0.face(face::platform_of(platform), code, stem)
     }
 
     pub fn png(&self) -> Vec<u8> {

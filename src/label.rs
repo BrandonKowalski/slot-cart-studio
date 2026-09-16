@@ -1,6 +1,7 @@
 //! The house style: a game's logo on a two-stop diagonal gradient, 1280x640.
 
 use resvg::tiny_skia::{FilterQuality, IntSize, Pixmap, PixmapPaint, Transform};
+use slot_store::Platform;
 
 use crate::{art, face, hue};
 
@@ -193,8 +194,8 @@ impl Label {
     }
 
     /// Slot's cart face with this label on it.
-    pub fn face(&self, code: &str, stem: &str) -> Vec<u8> {
-        face::from_rgba(&self.rgba, W, H, code, stem)
+    pub fn face(&self, platform: Platform, code: &str, stem: &str) -> Vec<u8> {
+        face::from_rgba(&self.rgba, W, H, platform, code, stem)
     }
 
     /// Opaque 8-bit RGB, which is all a card's label needs.

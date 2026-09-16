@@ -18,7 +18,7 @@ import init, {
   stub_target,
   thumbnail_name,
 } from './pkg/slot_cart_studio.js';
-import { fromDirectory, fromFiles } from './card.js';
+import { fromDirectory, fromFiles, labelKey, PLATFORMS } from './card.js';
 import { fetchDat, fetchThumb, limiter } from './libretro.js';
 
 const $ = (id) => document.getElementById(id);
@@ -29,7 +29,9 @@ const FATAL = 'The studio ran out of memory or hit an internal error. Reload the
 
 let faceW = 0;
 let faceH = 0;
-let dat = null;
+// One parsed No-Intro database per platform, kept across cards: the databases are large and a
+// second card of the same platform should not fetch one again.
+const dats = new Map();
 let session = null;
 let busy = 0;
 let writing = false;
@@ -44,8 +46,10 @@ const track = (promise) => {
   });
 };
 
-function newCart({ stem, file }) {
+function newCart({ platform, stem, file }) {
   return {
+    // The folder the rom sits in, and so the only thing that says which console it is for.
+    platform,
     stem,
     file,
     code: '',
@@ -148,7 +152,11 @@ function describe(c, state) {
       return c.result === 'written' ? 'Label written to the card' : '';
     default:
       if (c.rejected) return `Not ${c.game}`;
-      if (!c.game) return dat ? 'Not in the No-Intro database' : 'The game database has not loaded';
+      if (!c.game) {
+        return dats.has(c.platform)
+          ? 'Not in the No-Intro database'
+          : 'The game database has not loaded';
+      }
       if (!c.logoBytes && !c.droppedBytes) return `${c.game}: libretro has no logo for it`;
       // The title above already says the game, so this line speaks only when the CRC disagrees
       // with the name on the card — the renamed-ROM case worth catching before it is written.
@@ -244,7 +252,7 @@ function paint(c) {
   if (state === 'has-label') face = c.existing;
   if (state === 'ready') {
     try {
-      face = withLabel(activeLogo(c), deep, (label) => label.face(c.code, c.stem));
+      face = withLabel(activeLogo(c), deep, (label) => label.face(c.platform, c.code, c.stem));
     } catch (e) {
       if (trapped(e)) return;
       throw e;
@@ -283,11 +291,12 @@ function findGames() {
   const c = finding;
   if (!c) return;
   const query = $('finder-query').value;
-  if (!dat) {
-    $('finder-note').textContent = 'The game database has not loaded.';
+  const db = dats.get(c.platform);
+  if (!db) {
+    $('finder-note').textContent = `The ${c.platform} database has not loaded.`;
     return;
   }
-  const hits = dat.search(query, 30);
+  const hits = db.search(query, 30);
   $('finder-results').replaceChildren(
     ...hits.map((name) => {
       const button = Object.assign(document.createElement('button'), {
@@ -398,6 +407,7 @@ async function open(source) {
   $('summary').textContent = '';
   $('grid').replaceChildren(...session.carts.map(buildCard));
   session.carts.forEach(paint);
+  showPlatform(platformsOf(session)[0] ?? PLATFORMS[0]);
   // The card is chosen, so the chooser goes: the write bar sits in its place, once there is
   // something to write. updateWriteBar, reached through paint, is what shows it.
   $('pick').hidden = true;
@@ -427,11 +437,16 @@ async function identify(s) {
     progress(i, total, c.stem);
     try {
       const file = await c.file();
-      c.code = header_code(new Uint8Array(await file.slice(0, HEAD).arrayBuffer()));
-      const label = s.source.labels.get(c.stem.normalize('NFC'));
+      // Only a GBA rom carries a game code. On a Game Boy cart 0xAC is inside the RST vectors,
+      // so a code read from there is opcode bytes dressed up as one.
+      c.code =
+        c.platform === 'GBA'
+          ? header_code(new Uint8Array(await file.slice(0, HEAD).arrayBuffer()))
+          : '';
+      const label = s.source.labels.get(labelKey(c.platform, c.stem));
       if (label) {
         const bytes = new Uint8Array(await (await label()).arrayBuffer());
-        c.existing = existing_face(bytes, c.code, c.stem);
+        c.existing = existing_face(bytes, c.platform, c.code, c.stem);
       } else {
         c.crc = await crcOf(file);
       }
@@ -448,13 +463,16 @@ async function identify(s) {
 }
 
 async function match(s) {
-  if (!dat) {
+  // One database per platform, fetched only for the platforms this card actually holds: a card
+  // of nothing but GBA carts never pays for the two Game Boy databases.
+  for (const platform of new Set(s.carts.map((c) => c.platform))) {
+    if (dats.has(platform)) continue;
     try {
-      dat = Dat.parse(await fetchDat());
+      dats.set(platform, Dat.parse(await fetchDat(platform)));
     } catch (e) {
       if (trapped(e) || s !== session || fatal) return;
       banner(
-        `The game database didn’t load (${e.message}), so carts can’t be matched yet. Logos can still be dropped in by hand.`,
+        `The ${platform} database didn’t load (${e.message}), so carts can’t be matched yet. Logos can still be dropped in by hand.`,
         () => track(match(s)),
       );
       for (const c of s.carts) {
@@ -476,7 +494,7 @@ async function art(s, c) {
   c.looking = true;
   paint(c);
   try {
-    c.game = dat.game_for(c.crc) ?? null;
+    c.game = dats.get(c.platform)?.game_for(c.crc) ?? null;
     await dress(s, c);
   } catch (e) {
     if (trapped(e)) return;
@@ -495,7 +513,7 @@ async function dress(s, c) {
   // a request instead of making the new card wait behind its downloads.
   const thumb = (folder) =>
     limit(async () =>
-      s === session && !fatal ? fetchThumb(folder, name, stub_target) : null,
+      s === session && !fatal ? fetchThumb(c.platform, folder, name, stub_target) : null,
     ).catch(noImage);
   const [logo, box] = await Promise.all([thumb('Named_Logos'), thumb('Named_Boxarts')]);
   if (s !== session || fatal) return;
@@ -504,6 +522,38 @@ async function dress(s, c) {
   // How bright the logo is decides which way its ground goes, so it is measured with the logo.
   c.logoLuma = c.logoBytes ? logo_luma(c.logoBytes) : 255;
   if (!c.userHue) c.deep = null;
+}
+
+// The platforms this card actually holds, in the order slot switches shelves through.
+const platformsOf = (s) => PLATFORMS.filter((p) => s.carts.some((c) => c.platform === p));
+
+// A tab per platform on the card, with what it holds. One platform is no choice at all, so a
+// card of nothing but GBA carts shows no switcher and reads exactly as it did before.
+function renderTabs() {
+  const s = session;
+  const present = platformsOf(s);
+  $('tabs').hidden = present.length < 2;
+  $('tabs').replaceChildren(
+    ...present.map((p) => {
+      const n = s.carts.filter((c) => c.platform === p).length;
+      const tab = Object.assign(document.createElement('button'), {
+        type: 'button',
+        className: 'btn ghost',
+        textContent: `${p} (${n})`,
+      });
+      tab.setAttribute('aria-pressed', String(p === s.platform));
+      tab.addEventListener('click', () => showPlatform(p));
+      return tab;
+    }),
+  );
+}
+
+// Switching hides the other shelves rather than rebuilding the grid: a cart keeps its canvas, its
+// chosen colour and any logo dropped on it, so coming back to a tab finds it as it was left.
+function showPlatform(p) {
+  session.platform = p;
+  for (const c of session.carts) c.el.root.hidden = c.platform !== p;
+  renderTabs();
 }
 
 function updateWriteBar() {
@@ -541,10 +591,10 @@ async function writeLabels() {
         try {
           const [png, drawn] = withLabel(activeLogo(c), c.deep ?? baseDeep(c), (label) => [
             label.png(),
-            label.face(c.code, c.stem),
+            label.face(c.platform, c.code, c.stem),
           ]);
           face = drawn;
-          c.result = await s.source.write(c.stem, png);
+          c.result = await s.source.write(c.platform, c.stem, png);
         } catch (e) {
           if (trapped(e)) return;
           console.error(c.stem, e);
@@ -567,7 +617,7 @@ async function writeLabels() {
       for (const [i, c] of carts.entries()) {
         progress(i, total, c.stem, 'Packing');
         zip.add(
-          `Labels/${c.stem}.png`,
+          `Labels/${c.platform}/${c.stem}.png`,
           withLabel(activeLogo(c), c.deep ?? baseDeep(c), (label) => label.png()),
         );
         parts.push(zip.take());
@@ -674,6 +724,7 @@ async function start() {
       states: () =>
         session
           ? session.carts.map((c) => ({
+              platform: c.platform,
               stem: c.stem,
               state: stateOf(c),
               game: c.game,

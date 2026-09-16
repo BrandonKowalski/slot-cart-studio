@@ -2,16 +2,41 @@
 // be written to. Everything else hands over a flat list of files with their paths, which can only
 // be read, so the labels leave as a zip instead.
 
-// slot's own rule, from slot-store's scan.rs: a .gba in any case, never a dotfile. macOS leaves
-// `._` sidecars beside what it copies onto a card, extension and all.
-const isCart = (name) => !name.startsWith('.') && name.toLowerCase().endsWith('.gba');
-const isLabel = (name) => !name.startsWith('.') && name.toLowerCase().endsWith('.png');
-const stemOf = (name) => name.slice(0, -4);
+// slot files a cart under the folder its platform names, in Games/, Labels/, Saves/ and States/
+// alike, and the folder is what decides the platform: the rom is never opened to ask.
+export const PLATFORMS = ['GBA', 'GB', 'GBC'];
+
+// slot's own rule, from slot-store's platform.rs. A .gba under GB/ is not a Game Boy cart and is
+// passed over in silence, the way slot passes over it.
+const EXTENSIONS = { GBA: ['gba'], GB: ['gb', 'gbc'], GBC: ['gb', 'gbc'] };
+const ANY_ROM = ['gba', 'gb', 'gbc'];
+
+const named = (dir) => PLATFORMS.find((p) => p === dir.toUpperCase());
+const ext = (name) => name.slice(name.lastIndexOf('.') + 1).toLowerCase();
+// Never a dotfile: macOS leaves `._` sidecars beside what it copies onto a card, extension and
+// all, so the extension alone cannot tell them from the file they shadow.
+const visible = (name) => !name.startsWith('.');
+const isCart = (platform, name) => visible(name) && EXTENSIONS[platform].includes(ext(name));
+const isRom = (name) => visible(name) && ANY_ROM.includes(ext(name));
+const isLabel = (name) => visible(name) && ext(name) === 'png';
+const stemOf = (name) => name.slice(0, name.lastIndexOf('.'));
+
 // macOS lists exFAT names decomposed, whatever form was written, so names are compared composed.
-// What gets written is still the listing's own spelling.
-const key = (stem) => stem.normalize('NFC');
-const byStem = (a, b) => (a.stem < b.stem ? -1 : a.stem > b.stem ? 1 : 0);
+// What gets written is still the listing's own spelling. The platform is part of the key because
+// a .gb and a .gba can share a stem — two different games, two different carts.
+const labelKey = (platform, stem) => `${platform}/${stem.normalize('NFC')}`;
+const byCart = (a, b) =>
+  a.platform !== b.platform
+    ? PLATFORMS.indexOf(a.platform) - PLATFORMS.indexOf(b.platform)
+    : a.stem < b.stem
+      ? -1
+      : a.stem > b.stem
+        ? 1
+        : 0;
+
 const NO_GAMES = 'There is no Games folder there. Choose the top of your slot SD card.';
+const OLD_LAYOUT =
+  'This card still keeps its roms loose in Games. Start slot once on the device to sweep them into GBA, GB and GBC folders, then choose the card again.';
 
 export async function fromDirectory(root) {
   let games;
@@ -21,26 +46,47 @@ export async function fromDirectory(root) {
     throw new Error(NO_GAMES);
   }
   const carts = [];
+  let sawPlatform = false;
+  let loose = false;
   for await (const [name, handle] of games.entries()) {
-    if (handle.kind === 'file' && isCart(name)) {
-      carts.push({ stem: stemOf(name), file: () => handle.getFile() });
+    const platform = handle.kind === 'directory' ? named(name) : null;
+    if (!platform) {
+      if (handle.kind === 'file' && isRom(name)) loose = true;
+      continue;
+    }
+    sawPlatform = true;
+    for await (const [file, fh] of handle.entries()) {
+      if (fh.kind === 'file' && isCart(platform, file)) {
+        carts.push({ platform, stem: stemOf(file), file: () => fh.getFile() });
+      }
     }
   }
+  // A card swept by slot has the folders. One that has roms but no folders predates the sweep,
+  // and slot does that sweep itself on the device rather than the studio doing it over the wire.
+  if (!sawPlatform && loose) throw new Error(OLD_LAYOUT);
+
   const labels = new Map();
   try {
     const dir = await root.getDirectoryHandle('Labels');
     for await (const [name, handle] of dir.entries()) {
-      if (handle.kind === 'file' && isLabel(name)) labels.set(key(stemOf(name)), () => handle.getFile());
+      const platform = handle.kind === 'directory' ? named(name) : null;
+      if (!platform) continue;
+      for await (const [file, fh] of handle.entries()) {
+        if (fh.kind === 'file' && isLabel(file)) {
+          labels.set(labelKey(platform, stemOf(file)), () => fh.getFile());
+        }
+      }
     }
   } catch {
     // No Labels folder yet: every cart needs a label.
   }
   return {
-    carts: carts.sort(byStem),
+    carts: carts.sort(byCart),
     labels,
     direct: true,
-    async write(stem, bytes) {
-      const dir = await root.getDirectoryHandle('Labels', { create: true });
+    async write(platform, stem, bytes) {
+      const root_dir = await root.getDirectoryHandle('Labels', { create: true });
+      const dir = await root_dir.getDirectoryHandle(platform, { create: true });
       const name = `${stem}.png`;
       try {
         await dir.getFileHandle(name);
@@ -70,19 +116,30 @@ export async function fromDirectory(root) {
 export function fromFiles(files) {
   const carts = [];
   const labels = new Map();
-  let sawGames = false;
+  let sawPlatform = false;
+  let loose = false;
   for (const file of files) {
-    // The picked folder, then Games or Labels, then the file. Anything deeper is not slot's.
+    // The picked folder, then Games or Labels, then the platform, then the file. Anything
+    // shallower is the layout slot swept away; anything deeper is not slot's.
     const parts = file.webkitRelativePath.split('/');
-    if (parts.length !== 3) continue;
-    const [, dir, name] = parts;
+    if (parts.length === 3) {
+      const [, dir, name] = parts;
+      if (dir.toLowerCase() === 'games' && isRom(name)) loose = true;
+      continue;
+    }
+    if (parts.length !== 4) continue;
+    const [, dir, folder, name] = parts;
+    const platform = named(folder);
+    if (!platform) continue;
     if (dir.toLowerCase() === 'games') {
-      sawGames = true;
-      if (isCart(name)) carts.push({ stem: stemOf(name), file: async () => file });
+      sawPlatform = true;
+      if (isCart(platform, name)) carts.push({ platform, stem: stemOf(name), file: async () => file });
     } else if (dir.toLowerCase() === 'labels' && isLabel(name)) {
-      labels.set(key(stemOf(name)), async () => file);
+      labels.set(labelKey(platform, stemOf(name)), async () => file);
     }
   }
-  if (!sawGames) throw new Error(NO_GAMES);
-  return { carts: carts.sort(byStem), labels, direct: false, write: null };
+  if (!sawPlatform) throw new Error(loose ? OLD_LAYOUT : NO_GAMES);
+  return { carts: carts.sort(byCart), labels, direct: false, write: null };
 }
+
+export { labelKey };

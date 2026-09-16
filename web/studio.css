@@ -130,4 +130,10 @@ label.btn:focus-within{outline:2px solid var(--ink);outline-offset:3px}
 #finder-drop{width:100%;height:auto;min-height:92px;margin-top:14px}
 
 .write-bar{position:sticky;top:0;z-index:1;display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-top:24px;padding:14px 0;background:var(--page);border-bottom:1px solid var(--rule)}
+/* One per platform the card holds, shown only when it holds more than one. The pressed tab is
+   filled the way the primary button is, so which shelf you are on reads at a glance. */
+.tabs{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
+.tabs .btn{padding:8px 16px;font-size:15px}
+.tabs .btn[aria-pressed="true"]{background:var(--ink);color:var(--opening);border-color:var(--ink)}
+
 .credits{margin-top:48px;color:var(--muted);font-size:14px;text-align:center}
