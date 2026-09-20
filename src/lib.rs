@@ -36,7 +36,7 @@ use wasm_bindgen::prelude::*;
 /// serve both: a canvas cut for the wrong one refuses the pixels outright.
 #[wasm_bindgen]
 pub fn cart_size(platform: &str) -> Vec<u32> {
-    let (w, h) = cart::cart_box(face::platform_of(platform));
+    let (w, h) = cart::cart_box(face::platform_of(platform).shelf());
     vec![w, h]
 }
 

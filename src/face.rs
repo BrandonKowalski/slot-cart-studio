@@ -14,7 +14,7 @@ use crate::{art, cart};
 /// carts are drawn in and centred there, clear on every side, so it sits on the shelf the way any
 /// other face does.
 pub fn scan_whole(png: &[u8], platform: Platform) -> Vec<u8> {
-    let (bw, bh) = cart::cart_box(platform);
+    let (bw, bh) = cart::cart_box(platform.shelf());
     let blank = vec![0u8; (bw * bh * 4) as usize];
     let Some((src, w, h)) = art::decode(png) else {
         return blank;
@@ -67,10 +67,8 @@ pub fn scan_whole(png: &[u8], platform: Platform) -> Vec<u8> {
     out
 }
 
-/// The platform a card folder names. `cart_face` does not read this field: slot draws one cart
-/// silhouette, so a Game Boy cart wears the same shape a GBA one does and the preview stays
-/// whatever slot itself would draw. It is set anyway, because a `Cart` should say where its rom
-/// actually sits, and because the day slot gives the Game Boy its own art this picks it up.
+/// The platform a card folder names. Slot uses its shelf kind to choose the cartridge shape:
+/// Game Boy and Game Boy Color share the taller Game Pak, while GBA has its own silhouette.
 /// Anything unrecognised is GBA, which is the folder the page falls back to as well.
 pub fn platform_of(dir: &str) -> Platform {
     match dir {

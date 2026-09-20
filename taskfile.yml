@@ -8,8 +8,10 @@ vars:
   FACE_PATHS: >-
     crates/slot-ui/src/cart.rs crates/slot-ui/src/shell.rs crates/slot-ui/src/silhouette.rs
     crates/slot-ui/src/text.rs crates/slot-ui/src/art.rs crates/slot-ui/assets/cart.svg
-    crates/slot-ui/assets/cart_detail.svg crates/slot-ui/assets/label.ttf
+    crates/slot-ui/assets/cart_detail.svg crates/slot-ui/assets/gb_cart.svg
+    crates/slot-ui/assets/gb_cart_detail.svg crates/slot-ui/assets/label.ttf
     crates/slot-store/src/scan.rs crates/slot-store/src/gba.rs
+    crates/slot-store/src/platform.rs crates/slot-store/src/gb.rs
 
 tasks:
   default:

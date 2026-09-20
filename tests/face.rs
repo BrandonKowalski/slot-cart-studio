@@ -75,8 +75,8 @@ fn png_rgba(w: u32, h: u32, px: impl Fn(u32, u32) -> [u8; 4]) -> Vec<u8> {
 
 fn assert_same_as_slot(label: &[u8]) {
     // A GBA cart slot's shell table knows, one that falls through to the default grey, and a Game
-    // Boy cart, which carries no game code at all. slot draws one silhouette for all three today,
-    // so all three must come back identical to what the device would put on the shelf.
+    // Boy cart, which carries no game code at all. Each platform must match the face the device
+    // would put on its shelf, including the taller Game Boy silhouette.
     for (dir, code) in [("GBA", EMERALD), ("GBA", PLAIN), ("GB", "")] {
         let d = card(dir, code, label);
         let (want, read_code, stem) = slot_face(d.path());
@@ -85,6 +85,22 @@ fn assert_same_as_slot(label: &[u8]) {
             want == face::from_png(label, face::platform_of(dir), &read_code, &stem),
             "face differs from slot's in {dir} with code {code:?}"
         );
+    }
+}
+
+#[test]
+fn canvas_and_scan_sizes_match_each_platforms_rendered_face() {
+    for (dir, dimensions) in [("GBA", [240, 135]), ("GB", [240, 253]), ("GBC", [240, 253])] {
+        assert_eq!(slot_cart_studio::cart_size(dir), dimensions);
+        let platform = face::platform_of(dir);
+        let rendered = face::from_png(b"", platform, "", STEM);
+        let expected = (dimensions[0] * dimensions[1] * 4) as usize;
+        assert_eq!(rendered.len(), expected, "{dir} canvas must fit its face");
+        let scan = png_rgb(16, 16, |_, _| [255, 0, 0]);
+        let scanned = face::scan_whole(&scan, platform);
+        assert_eq!(scanned.len(), expected, "{dir} scan must fit its canvas");
+        assert!(scanned.chunks_exact(4).any(|px| px[3] > 0));
+        assert_eq!(face::scan_whole(b"invalid", platform), vec![0; expected]);
     }
 }
 
