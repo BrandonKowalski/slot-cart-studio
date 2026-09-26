@@ -23,8 +23,8 @@ import { fetchArt, fetchDat, fetchIndex, fetchThumb, limiter } from './libretro.
 
 const $ = (id) => document.getElementById(id);
 const limit = limiter(4);
-// The game code sits at 0xAC; nothing past the header is needed to read it.
-const HEAD = 0xb0;
+// The GBA game code sits at 0xAC and the Game Boy CGB flag at 0x143; nothing past that is read.
+const HEAD = 0x144;
 const FATAL = 'The studio ran out of memory or hit an internal error. Reload the page to start again.';
 
 // The box each platform's cart is drawn in, taken from slot at startup. A Game Boy Game Pak is
@@ -56,6 +56,8 @@ function newCart({ platform, stem, file }) {
     stem,
     file,
     code: '',
+    // A Game Boy pak's CGB flag, which picks its shell: grey, black or clear. 0 on a GBA cart.
+    cgb: 0,
     crc: null,
     game: null,
     // Logos stay PNG bytes, which are small. The label made from one is not kept: see withLabel.
@@ -270,7 +272,7 @@ function paint(c) {
   if (state === 'has-label') face = c.existing;
   if (state === 'ready') {
     try {
-      face = withCartLabel(c, (label) => label.face(c.platform, c.code, c.stem));
+      face = withCartLabel(c, (label) => label.face(c.platform, c.code, c.cgb, c.stem));
     } catch (e) {
       if (trapped(e)) return;
       throw e;
@@ -458,16 +460,15 @@ async function identify(s) {
     progress(i, total, c.stem);
     try {
       const file = await c.file();
+      const head = new Uint8Array(await file.slice(0, HEAD).arrayBuffer());
       // Only a GBA rom carries a game code. On a Game Boy cart 0xAC is inside the RST vectors,
       // so a code read from there is opcode bytes dressed up as one.
-      c.code =
-        c.platform === 'GBA'
-          ? header_code(new Uint8Array(await file.slice(0, HEAD).arrayBuffer()))
-          : '';
+      c.code = c.platform === 'GBA' ? header_code(head) : '';
+      c.cgb = c.platform === 'GBA' ? 0 : (head[0x143] ?? 0);
       const label = s.source.labels.get(labelKey(c.platform, c.stem));
       if (label) {
         const bytes = new Uint8Array(await (await label()).arrayBuffer());
-        c.existing = existing_face(bytes, c.platform, c.code, c.stem);
+        c.existing = existing_face(bytes, c.platform, c.code, c.cgb, c.stem);
       } else {
         c.crc = await crcOf(file);
       }
@@ -630,7 +631,7 @@ async function writeLabels() {
         try {
           const [png, drawn] = withCartLabel(c, (label) => [
             label.png(),
-            label.face(c.platform, c.code, c.stem),
+            label.face(c.platform, c.code, c.cgb, c.stem),
           ]);
           face = drawn;
           c.result = await s.source.write(c.platform, c.stem, png);

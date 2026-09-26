@@ -17,7 +17,7 @@ const STEM: &str = "Probe Cart (USA)";
 /// A card in the shape slot reads now: every file under the folder its platform names. `dir` is
 /// that folder, `GBA` or `GB`, which is also how the studio names a platform across the wasm
 /// boundary.
-fn card(dir: &str, code: &str, label: &[u8]) -> TempDir {
+fn card(dir: &str, code: &str, cgb: u8, label: &[u8]) -> TempDir {
     let d = tempfile::tempdir().expect("tempdir");
     for sub in ["Games", "Labels"] {
         std::fs::create_dir_all(d.path().join(sub).join(dir)).expect("content dir");
@@ -27,7 +27,8 @@ fn card(dir: &str, code: &str, label: &[u8]) -> TempDir {
     if !code.is_empty() {
         rom[0xac..0xac + code.len()].copy_from_slice(code.as_bytes());
     }
-    let ext = if dir == "GBA" { "gba" } else { "gb" };
+    rom[0x143] = cgb;
+    let ext = dir.to_lowercase();
     std::fs::write(d.path().join(format!("Games/{dir}/{STEM}.{ext}")), rom).expect("rom");
     std::fs::write(d.path().join(format!("Labels/{dir}/{STEM}.png")), label).expect("label");
     d
@@ -75,15 +76,23 @@ fn png_rgba(w: u32, h: u32, px: impl Fn(u32, u32) -> [u8; 4]) -> Vec<u8> {
 
 fn assert_same_as_slot(label: &[u8]) {
     // A GBA cart slot's shell table knows, one that falls through to the default grey, and a Game
-    // Boy cart, which carries no game code at all. slot draws one silhouette for all three today,
-    // so all three must come back identical to what the device would put on the shelf.
-    for (dir, code) in [("GBA", EMERALD), ("GBA", PLAIN), ("GB", "")] {
-        let d = card(dir, code, label);
+    // Boy pak for each CGB flag: grey, black and clear, the last in its own rounded mould. A pak
+    // filed under the other Game Boy folder still takes its shell from the flag, not the folder.
+    for (dir, code, cgb) in [
+        ("GBA", EMERALD, 0),
+        ("GBA", PLAIN, 0),
+        ("GB", "", 0x00),
+        ("GB", "", 0x80),
+        ("GB", "", 0xc0),
+        ("GBC", "", 0x00),
+        ("GBC", "", 0xc0),
+    ] {
+        let d = card(dir, code, cgb, label);
         let (want, read_code, stem) = slot_face(d.path());
         assert_eq!(read_code, code, "slot did not read the code back");
         assert!(
-            want == face::from_png(label, face::platform_of(dir), &read_code, &stem),
-            "face differs from slot's in {dir} with code {code:?}"
+            want == face::from_png(label, face::platform_of(dir), &read_code, cgb, &stem),
+            "face differs from slot's in {dir} with code {code:?} and CGB flag {cgb:#04x}"
         );
     }
 }
@@ -121,10 +130,10 @@ fn raw_rgba_draws_the_same_face_as_its_png() {
     let png = png_rgba(w, h, px);
     let raw = pixels(w, h, px);
     for code in [EMERALD, PLAIN] {
-        let d = card("GBA", code, &png);
+        let d = card("GBA", code, 0, &png);
         let (want, _, stem) = slot_face(d.path());
         assert!(
-            want == face::from_rgba(&raw, w, h, face::platform_of("GBA"), code, &stem),
+            want == face::from_rgba(&raw, w, h, face::platform_of("GBA"), code, 0, &stem),
             "raw RGBA face differs with code {code}"
         );
     }
@@ -144,10 +153,10 @@ fn a_composed_label_matches_slot_reading_its_png() {
         .expect("logo decodes");
     let png = label.png();
     for code in [EMERALD, PLAIN] {
-        let d = card("GBA", code, &png);
+        let d = card("GBA", code, 0, &png);
         let (want, _, stem) = slot_face(d.path());
         assert!(
-            want == label.face(face::platform_of("GBA"), code, &stem),
+            want == label.face(face::platform_of("GBA"), code, 0, &stem),
             "composed face differs with code {code}"
         );
     }
@@ -156,7 +165,7 @@ fn a_composed_label_matches_slot_reading_its_png() {
 #[test]
 fn the_game_code_is_read_the_way_slot_reads_it() {
     for code in [EMERALD, PLAIN, "AB", ""] {
-        let d = card("GBA", code, b"");
+        let d = card("GBA", code, 0, b"");
         let (_, slot_code, _) = slot_face(d.path());
         let rom = std::fs::read(d.path().join(format!("Games/GBA/{STEM}.gba"))).expect("rom");
         assert_eq!(

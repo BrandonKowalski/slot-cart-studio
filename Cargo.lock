@@ -446,7 +446,7 @@ dependencies = [
  "fontdue",
  "png 0.17.16",
  "resvg",
- "slot-store",
+ "slot-store-shim",
  "slot-ui",
  "tempfile",
  "usvg",
@@ -468,6 +468,13 @@ version = "0.1.0"
 [[package]]
 name = "slot-store"
 version = "0.1.0"
+
+[[package]]
+name = "slot-store-shim"
+version = "0.1.0"
+dependencies = [
+ "slot-store",
+]
 
 [[package]]
 name = "slot-ui"
