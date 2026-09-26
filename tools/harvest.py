@@ -2,9 +2,9 @@
 """Build a thumbnail set from ScreenScraper, to host beside libretro's.
 
 libretro has no Named_Logos for Game Boy Color at all — the folder does not exist — so every GBC
-cart falls back to a hand-dropped logo. ScreenScraper has both a clear logo (`wheel`) and a scan
-of the cartridge itself (`support-2D`), under CC BY-NC-SA 4.0: redistributable with attribution,
-as long as the set that results carries the same licence.
+cart falls back to a hand-dropped logo. ScreenScraper has a clear logo (`wheel`) for most of
+them, under CC BY-NC-SA 4.0: redistributable with attribution, as long as the set that results
+carries the same licence.
 
 This runs locally. Credentials come from the environment, the images land in a folder you push to
 a repository of your own, and the studio only ever fetches the result over https. None of the CORS
@@ -14,7 +14,7 @@ and credential problems that rule ScreenScraper out of the page itself apply her
         tools/harvest.py --probe "../slot/sdcard/Games/GBC/Pokemon - Crystal Version.gbc"
 
     SS_... tools/harvest.py --card ../slot/sdcard --out ../slot-thumbnails
-    SS_... tools/harvest.py --dat GBC --out ../slot-thumbnails --media wheel
+    SS_... tools/harvest.py --dat all --out ../slot-thumbnails
 
 Alongside the images it writes index.json, mapping CRC32 to the file that was saved. The studio
 already computes a cart's CRC32, so that index is an exact lookup: no name matching, no probing a
@@ -250,7 +250,7 @@ def main():
     ap.add_argument('--dat', choices=sorted(PLATFORMS) + ['all'],
                     help='every dump a platform has, not just a card; "all" for every platform')
     ap.add_argument('--out', help='where the set is written')
-    ap.add_argument('--media', default='wheel,support-2D', help='comma separated: wheel, support-2D, box-2D')
+    ap.add_argument('--media', default='wheel', help='comma separated ScreenScraper media types')
     ap.add_argument('--probe', help='print every media one rom has, and stop')
     ap.add_argument('--limit', type=int, help='stop after this many games, for a trial run')
     args = ap.parse_args()

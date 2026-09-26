@@ -40,12 +40,6 @@ pub fn cart_size(platform: &str) -> Vec<u32> {
     vec![w, h]
 }
 
-/// A cart shown as the photograph of it, rather than as slot's shell with a label pasted on.
-#[wasm_bindgen]
-pub fn scan_face(scan_png: &[u8], platform: &str) -> Vec<u8> {
-    face::scan_whole(scan_png, face::platform_of(platform))
-}
-
 /// A label the card already has, on its cart. `platform` is the card folder the rom sits in,
 /// `GBA`, `GB` or `GBC`, which is how the page names a platform either side of the wasm boundary.
 #[wasm_bindgen]
@@ -180,14 +174,6 @@ impl JsLabel {
         )
         .map(JsLabel)
         .ok_or_else(|| JsError::new("not a PNG this studio can read"))
-    }
-
-    /// A label cut from a photograph of the cart, rather than composed from a logo: the printed
-    /// label the cartridge actually wears.
-    pub fn from_scan(scan_png: &[u8], platform: &str) -> Result<JsLabel, JsError> {
-        label::Label::from_scan(scan_png, face::platform_of(platform))
-            .map(JsLabel)
-            .ok_or_else(|| JsError::new("not a cart scan this studio can read"))
     }
 
     pub fn deep(&self) -> Vec<u8> {

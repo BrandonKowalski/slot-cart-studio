@@ -2,70 +2,9 @@
 
 use std::path::{Path, PathBuf};
 
-use resvg::tiny_skia::{FilterQuality, IntSize, Pixmap, PixmapPaint, Transform};
 use slot_store::Platform;
 
 use crate::{art, cart};
-
-/// A photograph of the cart, shown as the whole cart rather than as a label on a drawn one.
-///
-/// Deliberately not `cart_face`: the point of this mode is the cartridge that exists, so none of
-/// slot's shell is drawn under or around it. The picture is fitted to the box its platform's
-/// carts are drawn in and centred there, clear on every side, so it sits on the shelf the way any
-/// other face does.
-pub fn scan_whole(png: &[u8], platform: Platform) -> Vec<u8> {
-    let (bw, bh) = cart::cart_box(platform);
-    let blank = vec![0u8; (bw * bh * 4) as usize];
-    let Some((src, w, h)) = art::decode(png) else {
-        return blank;
-    };
-    let Some(size) = IntSize::from_wh(w, h) else {
-        return blank;
-    };
-    // tiny-skia draws premultiplied; `art::decode` hands back straight alpha.
-    let mut premul = Vec::with_capacity(src.len());
-    for px in src.chunks_exact(4) {
-        let a = px[3] as u32;
-        for &v in &px[..3] {
-            premul.push(((v as u32 * a + 127) / 255) as u8);
-        }
-        premul.push(px[3]);
-    }
-    let (Some(from), Some(mut dst)) = (Pixmap::from_vec(premul, size), Pixmap::new(bw, bh)) else {
-        return blank;
-    };
-    let scale = (bw as f32 / w as f32).min(bh as f32 / h as f32);
-    dst.draw_pixmap(
-        0,
-        0,
-        from.as_ref(),
-        &PixmapPaint {
-            quality: FilterQuality::Bicubic,
-            ..PixmapPaint::default()
-        },
-        Transform::from_row(
-            scale,
-            0.0,
-            0.0,
-            scale,
-            (bw as f32 - w as f32 * scale) / 2.0,
-            (bh as f32 - h as f32 * scale) / 2.0,
-        ),
-        None,
-    );
-    // Back to straight alpha, which is what the page puts into an ImageData.
-    let mut out = dst.take();
-    for px in out.chunks_exact_mut(4) {
-        let a = px[3] as u32;
-        if a == 0 || a == 255 {
-            continue;
-        }
-        for v in px[..3].iter_mut() {
-            *v = ((*v as u32 * 255 + a / 2) / a).min(255) as u8;
-        }
-    }
-    out
-}
 
 /// The platform a card folder names. `cart_face` does not read this field: slot draws one cart
 /// silhouette, so a Game Boy cart wears the same shape a GBA one does and the preview stays

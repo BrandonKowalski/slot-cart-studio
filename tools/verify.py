@@ -251,22 +251,6 @@ def main():
             if not shown:
                 sys.exit(f'switching to {tabs[-1]} left no carts on screen')
 
-        # The other kind of label, switched the way a person would: every cart fetched again and
-        # cut from a photograph of the cart instead of composed from a logo.
-        kinds = page.eval("[...document.querySelectorAll('#kinds button')].map(b => b.textContent)")
-        if kinds:
-            print('kinds:', kinds)
-            page.eval("document.querySelector('#kinds button[data-kind=\"scan\"]').click()")
-            wait(lambda: page.eval('window.__studio.idle()'), 300, 'every cart to be relabelled')
-            ready = page.eval("window.__studio.states().filter(s => s.state === 'ready').length")
-            print(f'scans: {ready} carts ready')
-            page.shot(1280, OUT / 'studio-scans-1280.png')
-            for problem in dict.fromkeys(page.problems):
-                print('   PAGE ERROR:', problem)
-            # Back to composed labels, so what the rest of the run writes is what it expects.
-            page.eval("document.querySelector('#kinds button[data-kind=\"logo\"]').click()")
-            wait(lambda: page.eval('window.__studio.idle()'), 300, 'the composed labels back')
-
         page.width(1280)
         # Headless Chrome ignores the browser-level Browser.setDownloadBehavior for this target;
         # only the page-level form of the command takes effect.

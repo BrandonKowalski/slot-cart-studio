@@ -14,7 +14,6 @@ import init, {
   header_code,
   label_tags,
   logo_luma,
-  scan_face,
   stop_colours,
   stub_target,
   thumbnail_name,
@@ -61,8 +60,6 @@ function newCart({ platform, stem, file }) {
     game: null,
     // Logos stay PNG bytes, which are small. The label made from one is not kept: see withLabel.
     logoBytes: null,
-    // A photograph of the cart, kept once fetched so switching kinds does not fetch it twice.
-    scanBytes: null,
     droppedBytes: null,
     rejected: false,
     snapshot: null,
@@ -80,21 +77,13 @@ function newCart({ platform, stem, file }) {
   };
 }
 
-// What a cart is wearing. A logo dropped by hand is always a logo and always wins: choosing
-// scans must not throw away art someone supplied themselves. A cart the set has no scan for
-// keeps its composed label rather than losing one it already had.
-function chosen(c) {
-  if (c.droppedBytes) return { kind: 'logo', bytes: c.droppedBytes };
-  if (c.rejected) return null;
-  if (artMode === 'scan' && c.scanBytes) return { kind: 'scan', bytes: c.scanBytes };
-  return c.logoBytes ? { kind: 'logo', bytes: c.logoBytes } : null;
-}
+const activeLogo = (c) => c.droppedBytes ?? (c.rejected ? null : c.logoBytes);
 
 function stateOf(c) {
   if (c.error) return 'error';
   if (c.existing) return 'has-label';
   if (c.looking) return 'looking';
-  return chosen(c) ? 'ready' : 'needs-logo';
+  return activeLogo(c) ? 'ready' : 'needs-logo';
 }
 
 // The box art belongs to the matched game, so its hue only stands while the match does.
@@ -115,10 +104,6 @@ const crcHex = (crc) => crc.toString(16).toUpperCase().padStart(8, '0');
 // carries no address it cannot serve.
 const ART_BASE = new URLSearchParams(location.search).get('art') ?? '';
 let artIndex = null;
-// Which kind of label every cart wears: one composed from a logo, or one cut from a photograph
-// of the cart itself. It is a choice about the whole card, not about one cart, so switching it
-// fetches and recomposes every label.
-let artMode = 'logo';
 const fromHex = (value) => [1, 3, 5].map((at) => parseInt(value.slice(at, at + 2), 16));
 
 const readyCarts = () =>
@@ -135,19 +120,10 @@ function withLabel(bytes, deep, platform, use) {
   }
 }
 
-// The label this cart is wearing, whichever kind that is, for as long as the call needs it.
+// The label this cart is wearing, for as long as the call needs it.
 function withCartLabel(c, use) {
-  const art = chosen(c);
-  if (!art) return null;
-  const label =
-    art.kind === 'scan'
-      ? Label.from_scan(art.bytes, c.platform)
-      : new Label(art.bytes, c.deep ?? baseDeep(c), c.platform);
-  try {
-    return use(label);
-  } finally {
-    label.free();
-  }
+  const logo = activeLogo(c);
+  return logo ? withLabel(logo, c.deep ?? baseDeep(c), c.platform, use) : null;
 }
 
 // Whether slot's decoder takes a logo, asked the only way the module can be asked: by making one.
@@ -294,13 +270,7 @@ function paint(c) {
   if (state === 'has-label') face = c.existing;
   if (state === 'ready') {
     try {
-      const art = chosen(c);
-      // A scan is the cart, not a label on one: none of slot's shell is drawn under a photograph
-      // of the cartridge that exists.
-      face =
-        art.kind === 'scan'
-          ? scan_face(art.bytes, c.platform)
-          : withCartLabel(c, (label) => label.face(c.platform, c.code, c.stem));
+      face = withCartLabel(c, (label) => label.face(c.platform, c.code, c.stem));
     } catch (e) {
       if (trapped(e)) return;
       throw e;
@@ -313,8 +283,7 @@ function paint(c) {
     canvas.getContext('2d').putImageData(new ImageData(pixels, boxW, boxH), 0, 0);
   }
   drop.hidden = state !== 'needs-logo';
-  // A label cut from a photograph has no ground to colour, so the picker has nothing to do on it.
-  hueRow.hidden = state !== 'ready' || chosen(c)?.kind === 'scan';
+  hueRow.hidden = state !== 'ready';
   hue.value = hex(deep);
   // A cart with no match needs the finder more than a wrongly matched one, not less: searching by
   // name is how a cart libretro keeps under a name its filename does not use gets found at all.
@@ -460,7 +429,6 @@ async function open(source) {
   $('grid').replaceChildren(...session.carts.map(buildCard));
   session.carts.forEach(paint);
   showPlatform(platformsOf(session)[0] ?? PLATFORMS[0]);
-  renderKinds();
   // The card is chosen, so the chooser goes: the write bar sits in its place, once there is
   // something to write. updateWriteBar, reached through paint, is what shows it.
   $('pick').hidden = true;
@@ -582,14 +550,6 @@ async function dress(s, c) {
   // The ground's colour is read off the box art either way, so that request starts now and is
   // waited on after the logo, whichever source the logo turns out to come from.
   const boxJob = thumb('Named_Boxarts');
-  // A photograph of the cart is only fetched when that is the chosen kind: a card of composed
-  // labels should not pay to download a picture of every cartridge. What is already held is kept,
-  // so switching back to a kind this cart already has costs nothing.
-  if (artMode === 'scan' && !c.scanBytes) {
-    const scan = await ours('support-2D');
-    if (s !== session || fatal) return;
-    c.scanBytes = scan && readable(scan) ? scan : null;
-  }
   if (!c.logoBytes) {
     const logo = (await ours('wheel')) ?? (await thumb('Named_Logos'));
     if (s !== session || fatal) return;
@@ -605,35 +565,6 @@ async function dress(s, c) {
 
 // The platforms this card actually holds, in the order slot switches shelves through.
 const platformsOf = (s) => PLATFORMS.filter((p) => s.carts.some((c) => c.platform === p));
-
-// Offered only when there is a set to take photographs from: libretro has none of carts, so
-// without one there is nothing to switch to.
-function renderKinds() {
-  $('kinds').hidden = !artIndex || !session;
-  for (const button of $('kinds').querySelectorAll('button')) {
-    button.setAttribute('aria-pressed', String(button.dataset.kind === artMode));
-  }
-}
-
-// Every cart again, with the chosen kind. Each keeps what it already holds, so this fetches only
-// what the new kind needs and switching back costs nothing.
-async function relabel() {
-  const s = session;
-  if (!s) return;
-  const jobs = s.carts.filter((c) => c.game && !c.existing && !c.error);
-  for (const c of jobs) {
-    c.looking = true;
-    paint(c);
-  }
-  await Promise.all(
-    jobs.map(async (c) => {
-      await dress(s, c);
-      if (s !== session || fatal) return;
-      c.looking = false;
-      paint(c);
-    }),
-  );
-}
 
 // A tab per platform on the card, with what it holds. One platform is no choice at all, so a
 // card of nothing but GBA carts shows no switcher and reads exactly as it did before.
@@ -779,14 +710,6 @@ async function start() {
     $('mode').textContent =
       'This browser can’t write back to the SD card. You will have to copy the contents of a zip file to the Labels folder.';
   }
-
-  $('kinds').addEventListener('click', (e) => {
-    const kind = e.target.closest('button')?.dataset.kind;
-    if (!kind || kind === artMode) return;
-    artMode = kind;
-    renderKinds();
-    track(relabel());
-  });
 
   $('pick').addEventListener('click', async () => {
     let root;

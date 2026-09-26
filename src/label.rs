@@ -223,43 +223,7 @@ impl Label {
         self.deep.to_vec()
     }
 
-    /// A label cut from a photograph of the cart itself rather than composed from a logo. The
-    /// scan frames the whole cartridge, so the well's own place on a cart says which part of the
-    /// picture is the printed label. There is no logo and no ground: what comes out is the label
-    /// Nintendo printed, which is why a colour picked for it has nothing to do.
-    pub fn from_scan(png: &[u8], _platform: Platform) -> Option<Label> {
-        let (src, w, h) = art::decode(png)?;
-        // The picture is kept whole and at its own size. slot covers a well with whatever it is
-        // handed, so a photograph is cropped by the same rule as any other label and the geometry
-        // stays slot's rather than becoming a second opinion of ours.
-        //
-        // A scan is cut out, though, and a card's label is opaque RGB: left alone, every clear
-        // corner would be written as black. Flattening on white keeps the file looking like the
-        // scan it is.
-        let mut rgba = Vec::with_capacity(src.len());
-        for px in src.chunks_exact(4) {
-            let a = px[3] as u32;
-            for &v in &px[..3] {
-                rgba.push(((v as u32 * a + 255 * (255 - a) + 127) / 255) as u8);
-            }
-            rgba.push(255);
-        }
-        Some(Label {
-            logo: Vec::new(),
-            w: 0,
-            h: 0,
-            lw: w,
-            lh: h,
-            deep: [0, 0, 0],
-            rgba,
-        })
-    }
-
     pub fn set_deep(&mut self, deep: &[u8]) {
-        // A scanned label has no logo to put back over a new ground, so a colour cannot move it.
-        if self.logo.is_empty() {
-            return;
-        }
         self.deep = [deep[0], deep[1], deep[2]];
         self.rgba = compose(
             &self.logo,
@@ -472,44 +436,6 @@ mod tests {
     #[test]
     fn bytes_that_are_not_a_png_make_no_label() {
         assert!(Label::from_png(b"not a png", [101, 68, 21], Platform::Gba).is_none());
-    }
-
-    /// A scan is the photograph itself, at the size it came in: no crop of ours, so slot covers
-    /// the well by the same rule it covers any other label by. What the studio does have to
-    /// answer for is the cut-out's transparency, because a card's label is opaque RGB and a clear
-    /// corner would otherwise be written as black.
-    #[test]
-    fn a_scan_is_the_picture_itself_flattened_on_white() {
-        let (sw, sh) = (600u32, 700u32);
-        let mut px = vec![0u8; (sw * sh * 4) as usize];
-        for y in 0..sh {
-            for x in 0..sw {
-                let i = ((y * sw + x) * 4) as usize;
-                let cart = x > 50 && x < sw - 50 && y > 50 && y < sh - 50;
-                px[i..i + 4].copy_from_slice(if cart { &INK } else { &[0, 0, 0, 0] });
-            }
-        }
-        let mut png = Vec::new();
-        {
-            let mut enc = png::Encoder::new(&mut png, sw, sh);
-            enc.set_color(png::ColorType::Rgba);
-            enc.set_depth(png::BitDepth::Eight);
-            enc.write_header().unwrap().write_image_data(&px).unwrap();
-        }
-        let label = Label::from_scan(&png, Platform::Gbc).expect("a scan decodes");
-        assert_eq!(
-            (label.lw, label.lh),
-            (sw, sh),
-            "the picture keeps its own size"
-        );
-
-        let mid = (((sh / 2) * sw + sw / 2) * 4) as usize;
-        assert_eq!(&label.rgba[mid..mid + 3], &INK[..3], "the cart is the cart");
-        assert_eq!(
-            &label.rgba[0..4],
-            &[255, 255, 255, 255],
-            "clear goes white, not black"
-        );
     }
 
     /// A Game Boy label is its own well's shape, not the GBA one's. slot covers a well with what
