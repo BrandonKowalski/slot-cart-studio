@@ -1,10 +1,10 @@
-//! slot-store as slot's cart face sees it, with one function swapped. `gb::class` opens the rom
-//! for its CGB flag, which a browser cannot do, so this one answers from a flag the page read.
+//! slot-store as slot's cart face sees it, with the Game Boy header reads swapped. Those open the
+//! rom, which a browser cannot do, so these answer from header bytes the page read.
 
 pub use ::slot_store_real::*;
 
 pub mod gb {
-    use std::cell::Cell;
+    use std::cell::RefCell;
     use std::path::Path;
 
     pub use ::slot_store_real::gb::*;
@@ -12,23 +12,32 @@ pub mod gb {
     const KEY: &str = "stash:rom";
 
     thread_local! {
-        static FLAG: Cell<Option<u8>> = const { Cell::new(None) };
+        static HEAD: RefCell<Option<Vec<u8>>> = const { RefCell::new(None) };
     }
 
-    /// Runs `f` with a rom key whose CGB flag is `flag`, for the length of one draw.
-    pub fn with_flag<R>(flag: u8, f: impl FnOnce(&Path) -> R) -> R {
-        FLAG.with(|s| s.set(Some(flag)));
+    /// Runs `f` with a rom key whose header is `head`, for the length of one draw.
+    pub fn with_header<R>(head: &[u8], f: impl FnOnce(&Path) -> R) -> R {
+        HEAD.with(|s| *s.borrow_mut() = Some(head.to_vec()));
         let out = f(Path::new(KEY));
-        FLAG.with(|s| s.set(None));
+        HEAD.with(|s| *s.borrow_mut() = None);
         out
     }
 
-    /// Slot's signature and slot's rule; any other path is slot's own `class`.
+    fn stashed(rom: &Path) -> Option<Option<Header>> {
+        if rom != Path::new(KEY) {
+            return None;
+        }
+        HEAD.with(|s| s.borrow().as_ref().map(|b| Header::parse(b)))
+    }
+
+    /// Slot's signatures; any other path is slot's own read.
+    pub fn header(rom: &Path) -> Option<Header> {
+        stashed(rom).unwrap_or_else(|| ::slot_store_real::gb::header(rom))
+    }
+
     pub fn class(rom: &Path) -> Class {
-        match FLAG.with(Cell::get).filter(|_| rom == Path::new(KEY)) {
-            Some(0xc0) => Class::ColourOnly,
-            Some(0x80) => Class::DualMode,
-            Some(_) => Class::Original,
+        match stashed(rom) {
+            Some(h) => h.map_or(Class::Original, |h| h.class()),
             None => ::slot_store_real::gb::class(rom),
         }
     }

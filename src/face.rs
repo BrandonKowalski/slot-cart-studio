@@ -6,8 +6,8 @@ use slot_store::Platform;
 
 use crate::{art, cart};
 
-/// The platform a card folder names. It picks the GBA cart or a Game Boy pak; which pak is the
-/// CGB flag's to say. Anything unrecognised is GBA, which is the folder the page falls back to
+/// The platform a card folder names. It picks the GBA cart or a Game Boy pak; which pak, and
+/// its plastic, is the header's to say. Anything unrecognised is GBA, which is the folder the page falls back to
 /// as well.
 pub fn platform_of(dir: &str) -> Platform {
     match dir {
@@ -17,12 +17,12 @@ pub fn platform_of(dir: &str) -> Platform {
     }
 }
 
-/// Slot's `cart_face` reads a cart's label through `art::cover` and its pak's CGB flag through
-/// `gb::class`. Both answer from a stash here, so the cart names the stash keys where file paths
+/// Slot's `cart_face` reads a cart's label through `art::cover` and its pak's header through
+/// `gb`. Both answer from a stash here, so the cart names the stash keys where file paths
 /// would go. The title is left empty because slot's generated label is titled from the stem, not
 /// the header.
-fn draw(platform: Platform, code: &str, cgb: u8, stem: &str, key: &Path) -> Vec<u8> {
-    slot_store::gb::with_flag(cgb, |rom| {
+fn draw(platform: Platform, code: &str, head: &[u8], stem: &str, key: &Path) -> Vec<u8> {
+    slot_store::gb::with_header(head, |rom| {
         cart::cart_face(&slot_store::Cart {
             platform,
             stem: stem.to_string(),
@@ -37,8 +37,8 @@ fn draw(platform: Platform, code: &str, cgb: u8, stem: &str, key: &Path) -> Vec<
 
 /// PNG bytes as a card holds them. Bytes that don't decode fall back to slot's generated label,
 /// as they do on the device.
-pub fn from_png(png: &[u8], platform: Platform, code: &str, cgb: u8, stem: &str) -> Vec<u8> {
-    art::with_png(png, |key| draw(platform, code, cgb, stem, key))
+pub fn from_png(png: &[u8], platform: Platform, code: &str, head: &[u8], stem: &str) -> Vec<u8> {
+    art::with_png(png, |key| draw(platform, code, head, stem, key))
 }
 
 /// Straight RGBA, `w` by `h`: a label composed in memory, shown without a PNG round trip.
@@ -48,8 +48,8 @@ pub fn from_rgba(
     h: u32,
     platform: Platform,
     code: &str,
-    cgb: u8,
+    head: &[u8],
     stem: &str,
 ) -> Vec<u8> {
-    art::with_rgba(rgba, w, h, |key| draw(platform, code, cgb, stem, key))
+    art::with_rgba(rgba, w, h, |key| draw(platform, code, head, stem, key))
 }

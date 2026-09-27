@@ -17,7 +17,11 @@ const STEM: &str = "Probe Cart (USA)";
 /// A card in the shape slot reads now: every file under the folder its platform names. `dir` is
 /// that folder, `GBA` or `GB`, which is also how the studio names a platform across the wasm
 /// boundary.
-fn card(dir: &str, code: &str, cgb: u8, label: &[u8]) -> TempDir {
+/// A Game Boy header: title, the code at 0x13F, CGB flag, and whether it was sold in Japan.
+type Gb = (&'static [u8], &'static [u8], u8, bool);
+const NO_GB: Gb = (b"", b"", 0, false);
+
+fn card(dir: &str, code: &str, (title, gb_code, cgb, japan): Gb, label: &[u8]) -> TempDir {
     let d = tempfile::tempdir().expect("tempdir");
     for sub in ["Games", "Labels"] {
         std::fs::create_dir_all(d.path().join(sub).join(dir)).expect("content dir");
@@ -27,11 +31,20 @@ fn card(dir: &str, code: &str, cgb: u8, label: &[u8]) -> TempDir {
     if !code.is_empty() {
         rom[0xac..0xac + code.len()].copy_from_slice(code.as_bytes());
     }
+    rom[0x134..0x134 + title.len()].copy_from_slice(title);
+    rom[0x13f..0x13f + gb_code.len()].copy_from_slice(gb_code);
     rom[0x143] = cgb;
+    rom[0x14a] = u8::from(!japan);
     let ext = dir.to_lowercase();
     std::fs::write(d.path().join(format!("Games/{dir}/{STEM}.{ext}")), rom).expect("rom");
     std::fs::write(d.path().join(format!("Labels/{dir}/{STEM}.png")), label).expect("label");
     d
+}
+
+/// The header bytes the page hands the studio for the only cart on `root`.
+fn head(root: &Path) -> Vec<u8> {
+    let rom = &slot_store::scan(root).expect("scan")[0].rom;
+    std::fs::read(rom).expect("rom")[..0x150].to_vec()
 }
 
 /// Slot's face for the only cart on `root`, with the code and stem slot read for it.
@@ -78,21 +91,33 @@ fn assert_same_as_slot(label: &[u8]) {
     // A GBA cart slot's shell table knows, one that falls through to the default grey, and a Game
     // Boy pak for each CGB flag: grey, black and clear, the last in its own rounded mould. A pak
     // filed under the other Game Boy folder still takes its shell from the flag, not the folder.
-    for (dir, code, cgb) in [
-        ("GBA", EMERALD, 0),
-        ("GBA", PLAIN, 0),
-        ("GB", "", 0x00),
-        ("GB", "", 0x80),
-        ("GB", "", 0xc0),
-        ("GBC", "", 0x00),
-        ("GBC", "", 0xc0),
+    // Then paks slot's table colours by their header: by code, by title, and a Japanese copy
+    // that shares a title but not the plastic.
+    for (dir, code, gb) in [
+        ("GBA", EMERALD, NO_GB),
+        ("GBA", PLAIN, NO_GB),
+        ("GB", "", (b"", b"", 0x00, false)),
+        ("GB", "", (b"", b"", 0x80, false)),
+        ("GB", "", (b"", b"", 0xc0, false)),
+        ("GBC", "", (b"", b"", 0x00, false)),
+        ("GBC", "", (b"", b"", 0xc0, false)),
+        ("GBC", "", (b"POKEMON_GLD", b"AAUE", 0x80, false)),
+        ("GBC", "", (b"PM_CRYSTAL", b"BYTE", 0xc0, false)),
+        ("GB", "", (b"POKEMON RED", b"", 0x00, false)),
+        ("GB", "", (b"POKEMON RED", b"", 0x00, true)),
     ] {
-        let d = card(dir, code, cgb, label);
+        let d = card(dir, code, gb, label);
         let (want, read_code, stem) = slot_face(d.path());
         assert_eq!(read_code, code, "slot did not read the code back");
         assert!(
-            want == face::from_png(label, face::platform_of(dir), &read_code, cgb, &stem),
-            "face differs from slot's in {dir} with code {code:?} and CGB flag {cgb:#04x}"
+            want == face::from_png(
+                label,
+                face::platform_of(dir),
+                &read_code,
+                &head(d.path()),
+                &stem
+            ),
+            "face differs from slot's in {dir} with code {code:?} and header {gb:?}"
         );
     }
 }
@@ -130,10 +155,10 @@ fn raw_rgba_draws_the_same_face_as_its_png() {
     let png = png_rgba(w, h, px);
     let raw = pixels(w, h, px);
     for code in [EMERALD, PLAIN] {
-        let d = card("GBA", code, 0, &png);
+        let d = card("GBA", code, NO_GB, &png);
         let (want, _, stem) = slot_face(d.path());
         assert!(
-            want == face::from_rgba(&raw, w, h, face::platform_of("GBA"), code, 0, &stem),
+            want == face::from_rgba(&raw, w, h, face::platform_of("GBA"), code, &[], &stem),
             "raw RGBA face differs with code {code}"
         );
     }
@@ -153,10 +178,10 @@ fn a_composed_label_matches_slot_reading_its_png() {
         .expect("logo decodes");
     let png = label.png();
     for code in [EMERALD, PLAIN] {
-        let d = card("GBA", code, 0, &png);
+        let d = card("GBA", code, NO_GB, &png);
         let (want, _, stem) = slot_face(d.path());
         assert!(
-            want == label.face(face::platform_of("GBA"), code, 0, &stem),
+            want == label.face(face::platform_of("GBA"), code, &[], &stem),
             "composed face differs with code {code}"
         );
     }
@@ -165,7 +190,7 @@ fn a_composed_label_matches_slot_reading_its_png() {
 #[test]
 fn the_game_code_is_read_the_way_slot_reads_it() {
     for code in [EMERALD, PLAIN, "AB", ""] {
-        let d = card("GBA", code, 0, b"");
+        let d = card("GBA", code, NO_GB, b"");
         let (_, slot_code, _) = slot_face(d.path());
         let rom = std::fs::read(d.path().join(format!("Games/GBA/{STEM}.gba"))).expect("rom");
         assert_eq!(

@@ -3,13 +3,17 @@ version: '3'
 vars:
   SLOT: ../slot
   # What the studio's faces are made of: the four files compiled in place, slot's art.rs that
-  # src/art.rs copies, the assets they include, where `Cart` comes from, and gba.rs, whose
-  # header rule src/rom.rs mirrors.
+  # src/art.rs copies, the assets they include, where `Cart` comes from, gba.rs, whose header
+  # rule src/rom.rs mirrors, and gb.rs, whose header the shim answers for.
   FACE_PATHS: >-
     crates/slot-ui/src/cart.rs crates/slot-ui/src/shell.rs crates/slot-ui/src/silhouette.rs
     crates/slot-ui/src/text.rs crates/slot-ui/src/art.rs crates/slot-ui/assets/cart.svg
-    crates/slot-ui/assets/cart_detail.svg crates/slot-ui/assets/label.ttf
-    crates/slot-store/src/scan.rs crates/slot-store/src/gba.rs
+    crates/slot-ui/assets/cart_detail.svg crates/slot-ui/assets/gb_cart.svg
+    crates/slot-ui/assets/gb_cart_detail.svg crates/slot-ui/assets/gbc_cart.svg
+    crates/slot-ui/assets/gbc_cart_detail.svg crates/slot-ui/assets/lettering_gb.png
+    crates/slot-ui/assets/lettering_gbc.png crates/slot-ui/assets/lettering_gba.png
+    crates/slot-ui/assets/label.ttf crates/slot-store/src/scan.rs crates/slot-store/src/gba.rs
+    crates/slot-store/src/gb.rs
 
 tasks:
   default:
