@@ -272,7 +272,7 @@ function paint(c) {
   if (state === 'has-label') face = c.existing;
   if (state === 'ready') {
     try {
-      face = withCartLabel(c, (label) => label.face(c.platform, c.code, c.head, c.stem));
+      face = withCartLabel(c, (label) => label.face(c.platform, c.code, c.head, '', c.stem));
     } catch (e) {
       if (trapped(e)) return;
       throw e;
@@ -468,7 +468,7 @@ async function identify(s) {
       const label = s.source.labels.get(labelKey(c.platform, c.stem));
       if (label) {
         const bytes = new Uint8Array(await (await label()).arrayBuffer());
-        c.existing = existing_face(bytes, c.platform, c.code, c.head, c.stem);
+        c.existing = existing_face(bytes, c.platform, c.code, c.head, '', c.stem);
       } else {
         c.crc = await crcOf(file);
       }
@@ -631,7 +631,7 @@ async function writeLabels() {
         try {
           const [png, drawn] = withCartLabel(c, (label) => [
             label.png(),
-            label.face(c.platform, c.code, c.head, c.stem),
+            label.face(c.platform, c.code, c.head, '', c.stem),
           ]);
           face = drawn;
           c.result = await s.source.write(c.platform, c.stem, png);

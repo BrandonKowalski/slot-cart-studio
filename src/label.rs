@@ -237,8 +237,17 @@ impl Label {
     }
 
     /// Slot's cart face with this label on it.
-    pub fn face(&self, platform: Platform, code: &str, head: &[u8], stem: &str) -> Vec<u8> {
-        face::from_rgba(&self.rgba, self.lw, self.lh, platform, code, head, stem)
+    pub fn face(
+        &self,
+        platform: Platform,
+        code: &str,
+        head: &[u8],
+        shell: &str,
+        stem: &str,
+    ) -> Vec<u8> {
+        face::from_rgba(
+            &self.rgba, self.lw, self.lh, platform, code, head, shell, stem,
+        )
     }
 
     /// Opaque 8-bit RGB, which is all a card's label needs.

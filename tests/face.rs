@@ -115,6 +115,7 @@ fn assert_same_as_slot(label: &[u8]) {
                 face::platform_of(dir),
                 &read_code,
                 &head(d.path()),
+                "",
                 &stem
             ),
             "face differs from slot's in {dir} with code {code:?} and header {gb:?}"
@@ -158,7 +159,7 @@ fn raw_rgba_draws_the_same_face_as_its_png() {
         let d = card("GBA", code, NO_GB, &png);
         let (want, _, stem) = slot_face(d.path());
         assert!(
-            want == face::from_rgba(&raw, w, h, face::platform_of("GBA"), code, &[], &stem),
+            want == face::from_rgba(&raw, w, h, face::platform_of("GBA"), code, &[], "", &stem),
             "raw RGBA face differs with code {code}"
         );
     }
@@ -181,8 +182,46 @@ fn a_composed_label_matches_slot_reading_its_png() {
         let d = card("GBA", code, NO_GB, &png);
         let (want, _, stem) = slot_face(d.path());
         assert!(
-            want == label.face(face::platform_of("GBA"), code, &[], &stem),
+            want == label.face(face::platform_of("GBA"), code, &[], "", &stem),
             "composed face differs with code {code}"
+        );
+    }
+}
+
+/// A card whose cart_shell.ini chooses a shell draws the cart the way the studio draws it when
+/// handed the same line.
+#[test]
+fn a_chosen_shell_matches_slot() {
+    let label = png_rgb(64, 64, |_, _| [0x20, 0x90, 0xd0]);
+    for (dir, code, gb, line) in [
+        (
+            "GB",
+            "",
+            (b"" as &[u8], b"" as &[u8], 0x00u8, false),
+            "rounded 336699 clear",
+        ),
+        ("GBC", "", (b"", b"", 0xc0, false), "notched 123456 glitter"),
+        ("GBA", EMERALD, NO_GB, "auto c0282c solid"),
+        ("GBA", PLAIN, NO_GB, "rounded 2b3a88 clear"),
+    ] {
+        let d = card(dir, code, gb, &label);
+        std::fs::create_dir_all(d.path().join("System")).unwrap();
+        std::fs::write(
+            d.path().join("System/cart_shell.ini"),
+            format!("{STEM} = {line}\n"),
+        )
+        .unwrap();
+        let (want, read_code, stem) = slot_face(d.path());
+        assert!(
+            want == face::from_png(
+                &label,
+                face::platform_of(dir),
+                &read_code,
+                &head(d.path()),
+                line,
+                &stem
+            ),
+            "face differs from slot's in {dir} with {line:?}"
         );
     }
 }

@@ -21,6 +21,7 @@ mod silhouette;
 mod text;
 
 mod art;
+pub mod choice;
 pub mod dat;
 pub mod face;
 pub mod hue;
@@ -44,8 +45,15 @@ pub fn cart_size(platform: &str) -> Vec<u32> {
 /// `GBA`, `GB` or `GBC`, which is how the page names a platform either side of the wasm boundary.
 /// `head` is a Game Boy rom's first 0x150 bytes, which pick its pak; a GBA cart passes none.
 #[wasm_bindgen]
-pub fn existing_face(png: &[u8], platform: &str, code: &str, head: &[u8], stem: &str) -> Vec<u8> {
-    face::from_png(png, face::platform_of(platform), code, head, stem)
+pub fn existing_face(
+    png: &[u8],
+    platform: &str,
+    code: &str,
+    head: &[u8],
+    shell: &str,
+    stem: &str,
+) -> Vec<u8> {
+    face::from_png(png, face::platform_of(platform), code, head, shell, stem)
 }
 
 /// A ROM's CRC32, fed in the chunks the page reads it in.
@@ -187,8 +195,16 @@ impl JsLabel {
         }
     }
 
-    pub fn face(&self, platform: &str, code: &str, head: &[u8], stem: &str) -> Vec<u8> {
-        self.0.face(face::platform_of(platform), code, head, stem)
+    pub fn face(
+        &self,
+        platform: &str,
+        code: &str,
+        head: &[u8],
+        shell: &str,
+        stem: &str,
+    ) -> Vec<u8> {
+        self.0
+            .face(face::platform_of(platform), code, head, shell, stem)
     }
 
     pub fn png(&self) -> Vec<u8> {
@@ -219,4 +235,34 @@ impl JsZip {
     pub fn finish(self) -> Vec<u8> {
         self.0.finish()
     }
+}
+
+/// The shell slot draws this cart in with no choice made, as a `cart_shell.ini` value.
+#[wasm_bindgen]
+pub fn auto_shell(platform: &str, code: &str, head: &[u8]) -> String {
+    choice::auto_shell(face::platform_of(platform), code, head)
+}
+
+#[wasm_bindgen]
+pub fn shell_presets() -> Vec<String> {
+    choice::presets()
+}
+
+#[wasm_bindgen]
+pub fn cart_shells(text: &str) -> Vec<String> {
+    choice::cart_shells(text)
+}
+
+#[wasm_bindgen]
+pub fn merge_cart_shells(
+    text: &str,
+    stems: Vec<String>,
+    values: Vec<String>,
+) -> Result<String, JsError> {
+    choice::merge_cart_shells(text, &stems, &values).map_err(|e| JsError::new(&e.to_string()))
+}
+
+#[wasm_bindgen]
+pub fn shell_key_ok(stem: &str) -> bool {
+    choice::shell_key_ok(stem)
 }
