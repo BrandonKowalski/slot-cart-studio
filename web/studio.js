@@ -126,7 +126,7 @@ const mergedShells = (s, carts, values) =>
 // A Label holds its 1280x640 composition in WASM memory, which never shrinks and stops at 4 GiB.
 // One kept per cart runs a big card out of it, so a Label lives only for the call that needs it.
 function withLabel(bytes, deep, platform, use) {
-  const label = new Label(bytes, deep, platform);
+  const label = new Label(bytes, deep, platform, '', 0, new Uint8Array(0));
   try {
     return use(label);
   } finally {

@@ -173,7 +173,14 @@ pub struct JsLabel(label::Label);
 #[wasm_bindgen(js_class = Label)]
 impl JsLabel {
     #[wasm_bindgen(constructor)]
-    pub fn new(logo_png: &[u8], deep: &[u8], platform: &str) -> Result<JsLabel, JsError> {
+    pub fn new(
+        logo_png: &[u8],
+        deep: &[u8],
+        platform: &str,
+        band_edge: &str,
+        band_size: f32,
+        band_colour: &[u8],
+    ) -> Result<JsLabel, JsError> {
         if deep.len() < 3 {
             return Err(JsError::new("a ground colour needs three channels"));
         }
@@ -181,6 +188,7 @@ impl JsLabel {
             logo_png,
             [deep[0], deep[1], deep[2]],
             face::platform_of(platform),
+            label::Band::parse(band_edge, band_size, band_colour),
         )
         .map(JsLabel)
         .ok_or_else(|| JsError::new("not a PNG this studio can read"))

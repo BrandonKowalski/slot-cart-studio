@@ -149,7 +149,66 @@ fn premultiplied(logo: &[u8], w: u32, (x0, y0, x1, y1): (u32, u32, u32, u32)) ->
     out
 }
 
-/// The logo over the gradient, as opaque RGBA.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum Edge {
+    Top,
+    Bottom,
+    Left,
+    Right,
+}
+
+/// A flat strip of colour along one edge of the label, as the real label has.
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub struct Band {
+    pub edge: Edge,
+    /// Thickness, as a fraction of the label across that edge.
+    pub size: f32,
+    pub colour: [u8; 3],
+}
+
+impl Band {
+    pub fn parse(edge: &str, size: f32, colour: &[u8]) -> Option<Band> {
+        let edge = match edge {
+            "top" => Edge::Top,
+            "bottom" => Edge::Bottom,
+            "left" => Edge::Left,
+            "right" => Edge::Right,
+            _ => return None,
+        };
+        (size > 0.0 && size < 0.5 && colour.len() >= 3).then(|| Band {
+            edge,
+            size,
+            colour: [colour[0], colour[1], colour[2]],
+        })
+    }
+
+    fn across(&self, n: u32) -> u32 {
+        ((n as f32 * self.size).round() as u32).min(n)
+    }
+
+    /// The strip, as x0, y0, x1, y1 on a label `lw` by `lh`.
+    fn strip(&self, lw: u32, lh: u32) -> (u32, u32, u32, u32) {
+        match self.edge {
+            Edge::Top => (0, 0, lw, self.across(lh)),
+            Edge::Bottom => (0, lh - self.across(lh), lw, lh),
+            Edge::Left => (0, 0, self.across(lw), lh),
+            Edge::Right => (lw - self.across(lw), 0, lw, lh),
+        }
+    }
+
+    /// The rest of the label, as x, y, width, height, which the logo is placed within.
+    fn rest(&self, lw: u32, lh: u32) -> (u32, u32, u32, u32) {
+        match self.edge {
+            Edge::Top => (0, self.across(lh), lw, lh - self.across(lh)),
+            Edge::Bottom => (0, 0, lw, lh - self.across(lh)),
+            Edge::Left => (self.across(lw), 0, lw - self.across(lw), lh),
+            Edge::Right => (0, 0, lw - self.across(lw), lh),
+        }
+    }
+}
+
+/// The logo over the gradient, and the band if there is one, as opaque RGBA.
+#[allow(clippy::too_many_arguments)]
 pub fn compose(
     logo: &[u8],
     w: u32,
@@ -158,8 +217,18 @@ pub fn compose(
     lh: u32,
     deep: [u8; 3],
     pale: [u8; 3],
+    band: Option<Band>,
 ) -> Vec<u8> {
-    let ground = gradient(lw, lh, deep, pale);
+    let mut ground = gradient(lw, lh, deep, pale);
+    if let Some(b) = band {
+        let (x0, y0, x1, y1) = b.strip(lw, lh);
+        for y in y0..y1 {
+            for x in x0..x1 {
+                let i = ((y * lw + x) * 4) as usize;
+                ground[i..i + 3].copy_from_slice(&b.colour);
+            }
+        }
+    }
     let Some(bounds) = trim(logo, w, h) else {
         return ground;
     };
@@ -171,7 +240,8 @@ pub fn compose(
     };
     let size = IntSize::from_wh(lw, lh).expect("the label's size is not zero");
     let mut dst = Pixmap::from_vec(ground, size).expect("the gradient is the label's size");
-    let (scale, x, y) = placement(lw, lh, tw, th);
+    let (ax, ay, aw, ah) = band.map_or((0, 0, lw, lh), |b| b.rest(lw, lh));
+    let (scale, x, y) = placement(aw, ah, tw, th);
     let paint = PixmapPaint {
         quality: FilterQuality::Bicubic,
         ..PixmapPaint::default()
@@ -181,7 +251,7 @@ pub fn compose(
         0,
         src.as_ref(),
         &paint,
-        Transform::from_row(scale, 0.0, 0.0, scale, x, y),
+        Transform::from_row(scale, 0.0, 0.0, scale, x + ax as f32, y + ay as f32),
         None,
     );
     // The ground is opaque everywhere, so premultiplied and straight are the same bytes.
@@ -197,6 +267,7 @@ pub struct Label {
     lw: u32,
     lh: u32,
     deep: [u8; 3],
+    band: Option<Band>,
     rgba: Vec<u8>,
 }
 
@@ -204,10 +275,15 @@ impl Label {
     /// `None` for bytes slot's decoder would refuse. `deep` is the ground's top-left corner,
     /// whether the page computed it from box art or you picked it by hand; the pale corner is
     /// derived from it, so one colour describes the whole ground.
-    pub fn from_png(png: &[u8], deep: [u8; 3], platform: Platform) -> Option<Label> {
+    pub fn from_png(
+        png: &[u8],
+        deep: [u8; 3],
+        platform: Platform,
+        band: Option<Band>,
+    ) -> Option<Label> {
         let (logo, w, h) = art::decode(png)?;
         let (lw, lh) = size(platform);
-        let rgba = compose(&logo, w, h, lw, lh, deep, pale_for(deep));
+        let rgba = compose(&logo, w, h, lw, lh, deep, pale_for(deep), band);
         Some(Label {
             logo,
             w,
@@ -215,6 +291,7 @@ impl Label {
             lw,
             lh,
             deep,
+            band,
             rgba,
         })
     }
@@ -233,6 +310,7 @@ impl Label {
             self.lh,
             self.deep,
             pale_for(self.deep),
+            self.band,
         );
     }
 
@@ -372,7 +450,7 @@ mod tests {
     #[test]
     fn a_tall_logo_fills_rows_70_to_493() {
         let (deep, pale) = ground_for(30);
-        let label = compose(&solid(100, 100), 100, 100, W, H, deep, pale);
+        let label = compose(&solid(100, 100), 100, 100, W, H, deep, pale, None);
         let (first, last) = logo_rows(&label, 30);
         assert!((69..=71).contains(&first), "first logo row {first}");
         assert!((491..=493).contains(&last), "last logo row {last}");
@@ -382,7 +460,7 @@ mod tests {
     #[test]
     fn a_wide_logo_centres_on_row_320() {
         let (deep, pale) = ground_for(30);
-        let label = compose(&solid(400, 40), 400, 40, W, H, deep, pale);
+        let label = compose(&solid(400, 40), 400, 40, W, H, deep, pale, None);
         let (first, last) = logo_rows(&label, 30);
         let mid = (first + last) as f32 / 2.0;
         assert!((mid - 320.0).abs() <= 1.0, "logo centred on row {mid}");
@@ -403,8 +481,8 @@ mod tests {
         assert_eq!(trim(&logo, 200, 200), Some((50, 50, 150, 150)));
         let (deep, pale) = ground_for(30);
         assert!(
-            compose(&logo, 200, 200, W, H, deep, pale)
-                == compose(&solid(100, 100), 100, 100, W, H, deep, pale)
+            compose(&logo, 200, 200, W, H, deep, pale, None)
+                == compose(&solid(100, 100), 100, 100, W, H, deep, pale, None)
         );
     }
 
@@ -412,7 +490,8 @@ mod tests {
     fn an_invisible_logo_leaves_the_bare_gradient() {
         let (deep, pale) = ground_for(90);
         assert!(
-            compose(&[0u8; 16 * 16 * 4], 16, 16, W, H, deep, pale) == gradient(W, H, deep, pale)
+            compose(&[0u8; 16 * 16 * 4], 16, 16, W, H, deep, pale, None)
+                == gradient(W, H, deep, pale)
         );
     }
 
@@ -429,7 +508,7 @@ mod tests {
                 .unwrap();
         }
         let deep = hue::hsl_to_rgb(45.0, 0.65, 0.24);
-        let label = Label::from_png(&logo, deep, Platform::Gba).expect("logo decodes");
+        let label = Label::from_png(&logo, deep, Platform::Gba, None).expect("logo decodes");
         assert_eq!(label.deep(), deep.to_vec());
         let out = label.png();
         let reader = png::Decoder::new(std::io::Cursor::new(out))
@@ -444,7 +523,7 @@ mod tests {
 
     #[test]
     fn bytes_that_are_not_a_png_make_no_label() {
-        assert!(Label::from_png(b"not a png", [101, 68, 21], Platform::Gba).is_none());
+        assert!(Label::from_png(b"not a png", [101, 68, 21], Platform::Gba, None).is_none());
     }
 
     /// A Game Boy label is its own well's shape, not the GBA one's. slot covers a well with what
@@ -474,12 +553,84 @@ mod tests {
         }
         let deep = hue::hsl_to_rgb(200.0, 0.65, 0.24);
         for (platform, want) in [(Platform::Gba, (W, H)), (Platform::Gbc, (GB_W, GB_H))] {
-            let label = Label::from_png(&logo, deep, platform).expect("logo decodes");
+            let label = Label::from_png(&logo, deep, platform, None).expect("logo decodes");
             let reader = png::Decoder::new(std::io::Cursor::new(label.png()))
                 .read_info()
                 .unwrap();
             let info = reader.info();
             assert_eq!((info.width, info.height), want, "{platform:?}");
         }
+    }
+    #[test]
+    fn a_band_is_drawn_along_its_edge_and_the_logo_stays_off_it() {
+        let (deep, pale) = ground_for(30);
+        let band = Band {
+            edge: Edge::Top,
+            size: 0.2,
+            colour: [200, 10, 20],
+        };
+        let label = compose(&solid(100, 100), 100, 100, W, H, deep, pale, Some(band));
+        let strip = (H as f32 * 0.2).round() as u32;
+        for y in 0..strip {
+            for x in (0..W).step_by(37) {
+                assert_eq!(at(&label, x, y), [200, 10, 20], "band at {x},{y}");
+            }
+        }
+        let ink = [INK[0], INK[1], INK[2]];
+        let first_ink = (0..H)
+            .find(|y| (0..W).step_by(4).any(|x| near(at(&label, x, *y), ink, 2)))
+            .expect("a logo row");
+        assert!(
+            first_ink >= strip,
+            "logo starts at row {first_ink}, inside the band"
+        );
+    }
+
+    #[test]
+    fn set_deep_keeps_the_band() {
+        let mut logo = Vec::new();
+        {
+            let mut enc = png::Encoder::new(&mut logo, 8, 4);
+            enc.set_color(png::ColorType::Rgba);
+            enc.set_depth(png::BitDepth::Eight);
+            enc.write_header()
+                .unwrap()
+                .write_image_data(&solid(8, 4))
+                .unwrap();
+        }
+        let band = Band {
+            edge: Edge::Left,
+            size: 0.1,
+            colour: [5, 150, 60],
+        };
+        let mut label =
+            Label::from_png(&logo, [60, 20, 90], Platform::Gba, Some(band)).expect("decodes");
+        label.set_deep(&[20, 90, 60]);
+        let mut reader = png::Decoder::new(std::io::Cursor::new(label.png()))
+            .read_info()
+            .unwrap();
+        let mut rgb = vec![0; reader.output_buffer_size()];
+        reader.next_frame(&mut rgb).unwrap();
+        assert_eq!(
+            &rgb[..3],
+            &[5, 150, 60],
+            "the band's corner after Label Color moved"
+        );
+    }
+
+    #[test]
+    fn a_band_parses_only_from_a_known_edge_and_a_real_size() {
+        assert_eq!(
+            Band::parse("top", 0.2, &[1, 2, 3]),
+            Some(Band {
+                edge: Edge::Top,
+                size: 0.2,
+                colour: [1, 2, 3]
+            })
+        );
+        assert_eq!(Band::parse("", 0.2, &[1, 2, 3]), None);
+        assert_eq!(Band::parse("middle", 0.2, &[1, 2, 3]), None);
+        assert_eq!(Band::parse("top", 0.0, &[1, 2, 3]), None);
+        assert_eq!(Band::parse("top", 0.2, &[1, 2]), None);
     }
 }
