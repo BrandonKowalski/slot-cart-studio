@@ -342,6 +342,16 @@ def main():
             sys.exit(f'the card\'s cart_shell.ini was not read: {shells.get("Catrap (USA)")!r}')
         print('asserted: the card\'s existing shell choice was read')
 
+        # A cart that already has its label still gets a pencil, on screen, not merely in the dom.
+        no_pencil = page.eval(
+            "window.__studio.states().map((s, i) => [s, document.querySelectorAll('#grid > .cart')[i]])"
+            ".filter(([s, card]) => s.state === 'has-label' && s.platform === 'GBA'"
+            " && card.querySelector('.shell-open').offsetParent === null).map(([s]) => s.stem)"
+        )
+        if no_pencil:
+            sys.exit(f'these carts with labels show no shell pencil: {no_pencil}')
+        print('asserted: carts that already have labels show the shell pencil')
+
         chosen = 'Advance Wars'
         preset = page.eval('window.__studio.shellPresets()')[5].split('\t')[1]
         before = page.eval(CART_CANVAS % json.dumps(chosen))
