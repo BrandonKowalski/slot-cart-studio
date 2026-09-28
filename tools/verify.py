@@ -351,7 +351,7 @@ def main():
         with zipfile.ZipFile(kept_downloads / 'labels.zip') as z:
             written = z.read('System/cart_shell.ini').decode()
         want = f'{chosen} = auto {preset.split(" ", 1)[1]}'
-        if not written.startswith(SHELLS_ON_CARD) or want not in written.splitlines():
+        if written != SHELLS_ON_CARD + want + '\n':
             sys.exit(f'cart_shell.ini came out as {written!r}, not the card\'s lines plus {want!r}')
         print(f'asserted: cart_shell.ini keeps the card\'s lines and adds {chosen}\'s shell')
         print(f'asserted: {len(kept)} carts are has-label: {", ".join(sorted(kept))}')
