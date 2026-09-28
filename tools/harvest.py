@@ -6,6 +6,11 @@ cart falls back to a hand-dropped logo. ScreenScraper has a clear logo (`wheel`)
 them, under CC BY-NC-SA 4.0: redistributable with attribution, as long as the set that results
 carries the same licence.
 
+It also records each cart's `look`: the ground colour and edge band of its printed label, measured
+from ScreenScraper's scan of the cartridge as it downloads. Only the measurements are kept, in
+index.json; the scan is never saved. Measuring needs Pillow and numpy; a run of `--media wheel`
+alone does not.
+
 This runs locally. Credentials come from the environment, the images land in a folder you push to
 a repository of your own, and the studio only ever fetches the result over https. None of the CORS
 and credential problems that rule ScreenScraper out of the page itself apply here.
@@ -203,15 +208,32 @@ def pick(medias, want):
     return same[0] if same else None
 
 
-def save(url, dest):
-    dest.parent.mkdir(parents=True, exist_ok=True)
+def fetch(url):
     with urllib.request.urlopen(url, timeout=120) as r:
         body = r.read()
     # A truncated or error body is not an image, and a broken file on the card is worse than none.
-    if len(body) < 256:
+    return body if len(body) >= 256 else None
+
+
+def save(body, dest):
+    if not body:
         return False
+    dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_bytes(body)
     return True
+
+
+# `look` is not a ScreenScraper media: it is measured from the cart scan and kept in the index.
+SOURCE = {'look': 'support-2D'}
+
+
+def todo_for(crc, wanted, index, root, relook):
+    """The media this cart still needs: files not on disk, and a look not yet recorded."""
+    def needed(w):
+        if w == 'look':
+            return relook or 'look' not in index.get(crc, {})
+        return not (root / w / f'{crc}.png').exists()
+    return [w for w in wanted if needed(w)]
 
 
 def roms(card, platform):
@@ -250,7 +272,9 @@ def main():
     ap.add_argument('--dat', choices=sorted(PLATFORMS) + ['all'],
                     help='every dump a platform has, not just a card; "all" for every platform')
     ap.add_argument('--out', help='where the set is written')
-    ap.add_argument('--media', default='wheel', help='comma separated ScreenScraper media types')
+    ap.add_argument('--media', default='wheel,look',
+                    help='comma separated ScreenScraper media types, or look for the label measured from the cart scan')
+    ap.add_argument('--relook', action='store_true', help='measure every look again')
     ap.add_argument('--probe', help='print every media one rom has, and stop')
     ap.add_argument('--limit', type=int, help='stop after this many games, for a trial run')
     args = ap.parse_args()
@@ -274,6 +298,12 @@ def main():
     pause = 60.0 / q['per_min'] if q['per_min'] else 1.0
 
     wanted = [m.strip() for m in args.media.split(',') if m.strip()]
+    if 'look' in wanted:
+        try:
+            global look
+            import look
+        except ImportError:
+            sys.exit('measuring looks needs Pillow and numpy: python3 -m pip install Pillow numpy, or pass --media wheel')
     index_path = Path(args.out) / 'index.json'
     index = json.loads(index_path.read_text()) if index_path.exists() else {}
 
@@ -294,7 +324,7 @@ def main():
         # The dat's name is only ever what this run calls a cart while it works; a rom it has
         # never heard of goes by its checksum, which is what the file is named anyway.
         name = entries.get(crc, crc)
-        todo = [w for w in wanted if not (root / w / f'{crc}.png').exists()]
+        todo = todo_for(crc, wanted, index, root, args.relook)
         if not todo:
             with lock:
                 n['skipped'] += 1
@@ -318,21 +348,25 @@ def main():
             print(f'  {name}: {type(e).__name__}')
             return
         medias = ((data or {}).get('response', {}).get('jeu') or {}).get('medias', [])
-        got = []
+        got, measured = [], None
         for want in todo:
-            m = pick(medias, want)
-            dest = root / want / f'{crc}.png'
+            m = pick(medias, SOURCE.get(want, want))
             try:
-                if m and save(m['url'], dest):
+                body = fetch(m['url']) if m else None
+                if want == 'look':
+                    measured = look.measure_look(body) if body else None
+                    if measured:
+                        got.append(want)
+                elif save(body, root / want / f'{crc}.png'):
                     got.append(want)
             except Exception:
                 pass
         with lock:
             if got:
                 n['saved'] += len(got)
-                index.setdefault(crc, {}).update(
-                    {w: str((root / w / f'{crc}.png').relative_to(args.out))
-                     for w in got})
+                entry = index.setdefault(crc, {})
+                for w in got:
+                    entry[w] = measured if w == 'look' else str((root / w / f'{crc}.png').relative_to(args.out))
             else:
                 n['missed'] += 1
             n['done'] += 1
