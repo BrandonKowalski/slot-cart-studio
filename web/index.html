@@ -57,10 +57,9 @@
   </dialog>
 
   <dialog id="shell" class="finder shell-dialog">
-    <form method="dialog" class="finder-head">
+    <div class="finder-head">
       <h2 id="shell-cart"></h2>
-      <button class="btn ghost" value="close" type="submit">Close</button>
-    </form>
+    </div>
     <div class="shell-body">
       <canvas id="shell-face" class="shell-face" aria-label="The cart in its shell"></canvas>
       <div class="shell-controls">
@@ -81,6 +80,16 @@
         <div class="choice-row">
           <button class="btn ghost" type="button" id="shell-reset">Reset to Automatic</button>
         </div>
+      </div>
+    </div>
+    <div class="shell-actions">
+      <div class="shell-history">
+        <button class="btn ghost" type="button" id="shell-undo" title="Undo (⌘Z)">Undo</button>
+        <button class="btn ghost" type="button" id="shell-redo" title="Redo (⇧⌘Z)">Redo</button>
+      </div>
+      <div class="shell-history">
+        <button class="btn ghost" type="button" id="shell-cancel">Cancel</button>
+        <button class="btn" type="button" id="shell-save">Save</button>
       </div>
     </div>
   </dialog>

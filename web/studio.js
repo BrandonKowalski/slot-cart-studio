@@ -399,16 +399,32 @@ function restore(c) {
   schedulePaint(c);
 }
 
-// The shell dialog edits one cart's choice in place; the cart repaints as it changes.
+// The shell dialog edits one cart's choice in place, repainting as it goes. Save keeps it; Cancel,
+// Escape or a click away put back what the cart had when the dialog opened. Undo and Redo step
+// through this visit's changes, and a drag through the colour picker is one of them.
 let shelling = null;
+let shellWas = '';
+let undoShells = [];
+let redoShells = [];
+let pickingColour = false;
 
 const choiceOf = (c) => {
   const [outline, colour, finish] = (c.shell || auto_shell(c.platform, c.code, c.head)).split(' ');
   return { outline, colour, finish };
 };
 
-function setShell(c, next) {
-  c.shell = next ? `${next.outline} ${next.colour} ${next.finish}` : '';
+function setShell(c, next, { record = true } = {}) {
+  const value = next ? `${next.outline} ${next.colour} ${next.finish}` : '';
+  if (value === c.shell) return;
+  if (record) {
+    undoShells.push(c.shell);
+    redoShells = [];
+  }
+  applyShell(c, value);
+}
+
+function applyShell(c, value) {
+  c.shell = value;
   if (c.existingPng) {
     c.existing = existing_face(c.existingPng, c.platform, c.code, c.head, c.shell, c.stem);
   }
@@ -430,6 +446,8 @@ function renderShell() {
     b.setAttribute('aria-pressed', String(colour === now.colour && finish === now.finish));
   }
   $('shell-colour').value = `#${now.colour}`;
+  $('shell-undo').disabled = undoShells.length === 0;
+  $('shell-redo').disabled = redoShells.length === 0;
   let face;
   try {
     face = faceOf(c, stateOf(c), true);
@@ -441,8 +459,20 @@ function renderShell() {
   if (face) drawFace($('shell-face'), face, c.platform);
 }
 
+function stepShell(from, to) {
+  const c = shelling;
+  if (!c || from.length === 0) return;
+  to.push(c.shell);
+  applyShell(c, from.pop());
+}
+
 function openShell(c) {
   shelling = c;
+  shellWas = c.shell;
+  undoShells = [];
+  redoShells = [];
+  pickingColour = false;
+  $('shell').returnValue = '';
   $('shell-cart').textContent = clean_label(c.stem);
   $('shell-outline').hidden = c.platform === 'GBA';
   [$('shell-face').width, $('shell-face').height] = boxOf(c.platform);
@@ -862,10 +892,34 @@ async function start() {
     if (finish && shelling) setShell(shelling, { ...choiceOf(shelling), finish });
   });
   $('shell-colour').addEventListener('input', () => {
-    if (shelling) setShell(shelling, { ...choiceOf(shelling), colour: $('shell-colour').value.slice(1) });
+    if (!shelling) return;
+    const colour = $('shell-colour').value.slice(1);
+    setShell(shelling, { ...choiceOf(shelling), colour }, { record: !pickingColour });
+    pickingColour = true;
   });
+  $('shell-colour').addEventListener('change', () => (pickingColour = false));
   $('shell-reset').addEventListener('click', () => shelling && setShell(shelling, null));
-  $('shell').addEventListener('close', () => (shelling = null));
+  $('shell-undo').addEventListener('click', () => stepShell(undoShells, redoShells));
+  $('shell-redo').addEventListener('click', () => stepShell(redoShells, undoShells));
+  $('shell-save').addEventListener('click', () => $('shell').close('save'));
+  $('shell-cancel').addEventListener('click', () => $('shell').close());
+  $('shell').addEventListener('keydown', (e) => {
+    if (!(e.metaKey || e.ctrlKey)) return;
+    const key = e.key.toLowerCase();
+    if (key === 'z' && !e.shiftKey) stepShell(undoShells, redoShells);
+    else if ((key === 'z' && e.shiftKey) || key === 'y') stepShell(redoShells, undoShells);
+    else return;
+    e.preventDefault();
+  });
+  // Clicking the dimmed page outside the dialog is a Cancel.
+  $('shell').addEventListener('click', (e) => {
+    if (e.target === $('shell')) $('shell').close();
+  });
+  $('shell').addEventListener('close', () => {
+    const c = shelling;
+    shelling = null;
+    if (c && $('shell').returnValue !== 'save' && c.shell !== shellWas) applyShell(c, shellWas);
+  });
   for (const platform of PLATFORMS) faceBox.set(platform, Array.from(cart_size(platform)));
   // A set of our own, if the address named one. Not having it is not a failure: every cart falls
   // back to libretro, which is all the page had before there was a set to point at.

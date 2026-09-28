@@ -353,7 +353,27 @@ def main():
         print('asserted: carts that already have labels show the shell pencil')
 
         chosen = 'Advance Wars'
-        preset = page.eval('window.__studio.shellPresets()')[5].split('\t')[1]
+        presets = [p.split('\t')[1] for p in page.eval('window.__studio.shellPresets()')]
+        preset = presets[5]
+
+        def shell_of():
+            return next(s['shell'] for s in page.eval('window.__studio.shells()') if nfc(s['stem']) == chosen)
+
+        # Undo and Redo step through this visit's choices; Cancel puts back what the cart had.
+        was = shell_of()
+        page.eval(OPEN_SHELL % json.dumps(chosen))
+        for i in (5, 7):
+            page.eval("document.querySelectorAll('#shell-presets button')[%d].click()" % i)
+        page.eval("document.getElementById('shell-undo').click()")
+        after_undo = shell_of()
+        page.eval("document.getElementById('shell-redo').click()")
+        after_redo = shell_of()
+        page.eval("document.getElementById('shell-cancel').click()")
+        wait(lambda: shell_of() == was, 10, 'Cancel to put the shell back')
+        if (after_undo, after_redo) != (presets[5], presets[7]):
+            sys.exit(f'Undo gave {after_undo!r} and Redo {after_redo!r}, not {presets[5]!r} and {presets[7]!r}')
+        print('asserted: Undo and Redo step through the choices, and Cancel puts the shell back')
+
         before = page.eval(CART_CANVAS % json.dumps(chosen))
         page.eval(OPEN_SHELL % json.dumps(chosen))
         page.eval("document.querySelectorAll('#shell-presets button')[5].click()")
@@ -363,7 +383,8 @@ def main():
         page.shot(1280, OUT / 'studio-shell-1280.png')
         page.shot(400, OUT / 'studio-shell-400.png')
         page.width(1280)
-        page.eval("document.getElementById('shell').close()")
+        page.eval("document.getElementById('shell-save').click()")
+        wait(lambda: shell_of() == preset, 10, 'Save to keep the shell')
         if in_dialog != on_card:
             sys.exit(f'the shell dialog does not show {chosen} as its card does')
         print(f'asserted: the shell dialog shows {chosen} as its card does, while choosing')

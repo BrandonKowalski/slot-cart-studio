@@ -156,4 +156,7 @@ label.btn:focus-within{outline:2px solid var(--ink);outline-offset:3px}
 .shell-body{display:grid;grid-template-columns:260px 1fr;gap:22px;align-items:start}
 .shell-face{display:block;width:100%;height:auto}
 .shell-controls>:first-child:not([hidden]),.shell-controls>[hidden]+*{margin-top:0}
+.shell-actions{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;margin-top:22px;padding-top:16px;border-top:1px solid var(--rule)}
+.shell-history{display:flex;gap:8px}
+.shell-actions .btn{padding:8px 16px;font-size:14px}
 @media (max-width:620px){.shell-body{grid-template-columns:1fr}.shell-face{max-width:240px;margin:0 auto}}
