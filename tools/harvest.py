@@ -6,10 +6,6 @@ cart falls back to a hand-dropped logo. ScreenScraper has a clear logo (`wheel`)
 them, under CC BY-NC-SA 4.0: redistributable with attribution, as long as the set that results
 carries the same licence.
 
-It also keeps each cart's printed label (`label`), cut from ScreenScraper's scan of the cartridge
-(`support-2D`) as it downloads, so the set holds the label and not the whole scan. Cropping needs
-Pillow; a run of `--media wheel` alone does not.
-
 This runs locally. Credentials come from the environment, the images land in a folder you push to
 a repository of your own, and the studio only ever fetches the result over https. None of the CORS
 and credential problems that rule ScreenScraper out of the page itself apply here.
@@ -35,7 +31,6 @@ later run skips whatever is already on disk, so a set is built across as many da
 """
 
 import argparse
-import io
 import json
 import os
 import re
@@ -208,61 +203,15 @@ def pick(medias, want):
     return same[0] if same else None
 
 
-def fetch(url):
+def save(url, dest):
+    dest.parent.mkdir(parents=True, exist_ok=True)
     with urllib.request.urlopen(url, timeout=120) as r:
         body = r.read()
     # A truncated or error body is not an image, and a broken file on the card is worse than none.
-    return body if len(body) >= 256 else None
-
-
-def save(body, dest):
-    if not body:
+    if len(body) < 256:
         return False
-    dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_bytes(body)
     return True
-
-
-# `label` is not a ScreenScraper media: it is the printed label cut out of the cart scan.
-SOURCE = {'label': 'support-2D'}
-
-# Most of ScreenScraper's cart scans are one template per console, square on and the same size, so
-# the label sits in the same place in every one. Measured by overlaying scans of different games:
-# the label is the only part that changes. Each box stops short of every pixel that stays the same
-# across 400 harvested labels, which is where plastic showed at the edges and in the rounded
-# corners of the well.
-LABEL_BOX = {
-    (600, 678): (91, 209, 504, 572),  # Game Boy pak
-    (600, 355): (88, 86, 515, 302),  # GBA cart
-    (600, 701): (97, 254, 519, 631),  # Game Boy Color pak, photographed
-}
-# Any other scan is a photograph. The Game Boy box, as fractions of the template's 600 by 665 cart,
-# is applied to the photographed cart's own outline instead.
-LABEL_FRAC = (91 / 600, 209 / 665, 504 / 600, 572 / 665)
-
-
-def crop_label(data):
-    """PNG bytes of the printed label in a cart scan, or None when it cannot be placed."""
-    from PIL import Image, UnidentifiedImageError
-
-    try:
-        im = Image.open(io.BytesIO(data))
-        im.load()
-    except (UnidentifiedImageError, OSError):
-        return None
-    im = im.convert('RGBA')
-    box = LABEL_BOX.get(im.size)
-    if box is None:
-        outline = im.getchannel('A').point(lambda a: 255 if a > 128 else 0).getbbox()
-        if outline is None or outline == (0, 0, *im.size):
-            return None
-        l, t, r, b = outline
-        w, h = r - l, b - t
-        box = tuple(round(v) for v in (
-            l + LABEL_FRAC[0] * w, t + LABEL_FRAC[1] * h, l + LABEL_FRAC[2] * w, t + LABEL_FRAC[3] * h))
-    out = io.BytesIO()
-    im.crop(box).convert('RGB').save(out, 'PNG', optimize=True)
-    return out.getvalue()
 
 
 def roms(card, platform):
@@ -301,8 +250,7 @@ def main():
     ap.add_argument('--dat', choices=sorted(PLATFORMS) + ['all'],
                     help='every dump a platform has, not just a card; "all" for every platform')
     ap.add_argument('--out', help='where the set is written')
-    ap.add_argument('--media', default='wheel,label',
-                    help='comma separated ScreenScraper media types, or label for the label cut from the cart scan')
+    ap.add_argument('--media', default='wheel', help='comma separated ScreenScraper media types')
     ap.add_argument('--probe', help='print every media one rom has, and stop')
     ap.add_argument('--limit', type=int, help='stop after this many games, for a trial run')
     args = ap.parse_args()
@@ -326,11 +274,6 @@ def main():
     pause = 60.0 / q['per_min'] if q['per_min'] else 1.0
 
     wanted = [m.strip() for m in args.media.split(',') if m.strip()]
-    if 'label' in wanted:
-        try:
-            import PIL  # noqa: F401
-        except ImportError:
-            sys.exit('cropping labels needs Pillow: python3 -m pip install Pillow, or pass --media wheel')
     index_path = Path(args.out) / 'index.json'
     index = json.loads(index_path.read_text()) if index_path.exists() else {}
 
@@ -342,7 +285,7 @@ def main():
 
     lock = threading.Lock()
     stop = threading.Event()
-    n = {'asked': 0, 'saved': 0, 'missed': 0, 'skipped': 0, 'done': 0, 'unplaced': 0}
+    n = {'asked': 0, 'saved': 0, 'missed': 0, 'skipped': 0, 'done': 0}
 
     def work(platform, root, system, entries, job):
         crc, romname, size = job
@@ -376,21 +319,15 @@ def main():
             return
         medias = ((data or {}).get('response', {}).get('jeu') or {}).get('medias', [])
         got = []
-        unplaced = False
         for want in todo:
-            m = pick(medias, SOURCE.get(want, want))
+            m = pick(medias, want)
             dest = root / want / f'{crc}.png'
             try:
-                body = fetch(m['url']) if m else None
-                if body and want == 'label':
-                    body = crop_label(body)
-                    unplaced = body is None
-                if save(body, dest):
+                if m and save(m['url'], dest):
                     got.append(want)
             except Exception:
                 pass
         with lock:
-            n['unplaced'] += unplaced
             if got:
                 n['saved'] += len(got)
                 index.setdefault(crc, {}).update(
@@ -439,8 +376,6 @@ def main():
             index_path.write_text(json.dumps(index, indent=1, sort_keys=True))
             print(f'\n{saved} files, {missed} games with none, {skipped} already there, '
                   f'{asked} api calls\nindex: {index_path} ({len(index)} crcs)')
-            if n['unplaced']:
-                print(f"{n['unplaced']} cart scans had no label that could be placed, and were left out")
 
 
 if __name__ == '__main__':
