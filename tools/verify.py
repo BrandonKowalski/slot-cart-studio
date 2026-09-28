@@ -41,6 +41,9 @@ CDP_PORT = int(os.environ.get('STUDIO_CDP_PORT', 9223))
 KEPT = ['Advance Wars', 'Metroid Fusion']
 PROBE = unicodedata.normalize('NFC', 'Pokémon Probe')
 PROBE_OF = 'Pokemon - Emerald Version (USA, Europe)'
+# What the labelled card already holds: a comment and another cart's choice, both of which a
+# write must leave as they are.
+SHELLS_ON_CARD = '# chosen by hand\nCatrap (USA) = rounded 112233 solid\n'
 
 OPEN_FILES = """
 (async (card, paths) => {
@@ -55,6 +58,16 @@ OPEN_FILES = """
   await window.__studio.openFiles(files);
   return files.length;
 })(%s, %s)
+"""
+
+# The data URL of one cart's preview, and a click on its Shell button, by stem.
+CART_CANVAS = """
+(stem => document.querySelectorAll('#grid > .cart')[
+  window.__studio.states().findIndex(s => s.stem === stem)].querySelector('canvas').toDataURL())(%s)
+"""
+OPEN_SHELL = """
+(stem => document.querySelectorAll('#grid > .cart')[
+  window.__studio.states().findIndex(s => s.stem === stem)].querySelector('.shell-open').click())(%s)
 """
 
 
@@ -158,7 +171,10 @@ def stage_labelled(card, games):
     for name, source in labels.items():
         (card / 'Labels' / name).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(source, card / 'Labels' / name)
-    return [f'Games/{g}' for g in games] + [f'Games/{probe}'] + [f'Labels/{name}' for name in labels]
+    (card / 'System').mkdir(parents=True, exist_ok=True)
+    (card / 'System' / 'cart_shell.ini').write_text(SHELLS_ON_CARD)
+    return ([f'Games/{g}' for g in games] + [f'Games/{probe}'] + [f'Labels/{name}' for name in labels]
+            + ['System/cart_shell.ini'])
 
 
 def main():
@@ -297,6 +313,21 @@ def main():
                     print(f'  {stem}: expected {expected.get(stem)}, got {got.get(stem)}')
             sys.exit('the labelled card\'s carts are not in the states they should be')
 
+        shells = {nfc(s['stem']): s['shell'] for s in page.eval('window.__studio.shells()')}
+        if shells.get('Catrap (USA)') != 'rounded 112233 solid':
+            sys.exit(f'the card\'s cart_shell.ini was not read: {shells.get("Catrap (USA)")!r}')
+        print('asserted: the card\'s existing shell choice was read')
+
+        chosen = 'Advance Wars'
+        preset = page.eval('window.__studio.shellPresets()')[5].split('\t')[1]
+        before = page.eval(CART_CANVAS % json.dumps(chosen))
+        page.eval(OPEN_SHELL % json.dumps(chosen))
+        page.eval("document.querySelectorAll('#shell-presets button')[5].click()")
+        page.eval("document.getElementById('shell').close()")
+        if page.eval(CART_CANVAS % json.dumps(chosen)) == before:
+            sys.exit(f'choosing a shell did not redraw {chosen}')
+        print(f'asserted: choosing a shell redrew {chosen}')
+
         kept_downloads = OUT / 'downloads-labelled'
         shutil.rmtree(kept_downloads, ignore_errors=True)
         kept_downloads.mkdir()
@@ -315,8 +346,14 @@ def main():
             for stem, state in expected.items()
             if state == 'ready'
         }
-        if entries != ready:
-            sys.exit(f'labels.zip holds {sorted(entries)}, not the ready carts {sorted(ready)}')
+        if entries != ready | {'System/cart_shell.ini'}:
+            sys.exit(f'labels.zip holds {sorted(entries)}, not the ready carts and the shells')
+        with zipfile.ZipFile(kept_downloads / 'labels.zip') as z:
+            written = z.read('System/cart_shell.ini').decode()
+        want = f'{chosen} = auto {preset.split(" ", 1)[1]}'
+        if not written.startswith(SHELLS_ON_CARD) or want not in written.splitlines():
+            sys.exit(f'cart_shell.ini came out as {written!r}, not the card\'s lines plus {want!r}')
+        print(f'asserted: cart_shell.ini keeps the card\'s lines and adds {chosen}\'s shell')
         print(f'asserted: {len(kept)} carts are has-label: {", ".join(sorted(kept))}')
         print(f'asserted: the other {len(ready)} carts are ready')
         print(f'asserted: labels.zip holds exactly those {len(ready)}, and none of the {len(kept)} with labels')
