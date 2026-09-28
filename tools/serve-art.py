@@ -8,7 +8,7 @@ the studio measures a logo's brightness to choose its ground, which is a read, n
 http.server` would look like it worked and hand the page an opaque image instead. This adds the
 header, so the local set behaves the way the hosted one will.
 
-    tools/serve-art.py ~/Desktop/CartStudioArt 8766
+    tools/serve-art.py ~/CartStudioArt 8766
 """
 
 import functools
@@ -28,7 +28,7 @@ class Cors(http.server.SimpleHTTPRequestHandler):
 
 
 def main():
-    root = Path(sys.argv[1] if len(sys.argv) > 1 else '~/Desktop/CartStudioArt').expanduser()
+    root = Path(sys.argv[1] if len(sys.argv) > 1 else '~/CartStudioArt').expanduser()
     port = int(sys.argv[2]) if len(sys.argv) > 2 else 8766
     if not (root / 'index.json').is_file():
         sys.exit(f'no index.json under {root}: harvest a set there first')
