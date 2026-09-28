@@ -834,6 +834,7 @@ async function start() {
       b.dataset.value = value;
       b.style.background = `#${value.split(' ')[1]}`;
       b.addEventListener('click', () => {
+        if (!shelling) return;
         const [, colour, finish] = value.split(' ');
         setShell(shelling, { ...choiceOf(shelling), colour, finish });
       });
