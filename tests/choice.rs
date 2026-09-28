@@ -41,8 +41,7 @@ fn nfc_mismatched_stems_are_still_the_same_cart() {
     assert_eq!(set.matches(" = ").count(), 1, "{set:?}");
     assert!(set.contains("rounded 86b9bf glitter"), "{set:?}");
 
-    let removed =
-        choice::merge_cart_shells(&set, &[stem.to_string()], &["".to_string()]).unwrap();
+    let removed = choice::merge_cart_shells(&set, &[stem.to_string()], &["".to_string()]).unwrap();
     assert_eq!(removed, "");
 }
 
