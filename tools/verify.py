@@ -276,15 +276,16 @@ def main():
             sys.exit('no needs-logo cart in the fixture to check the shell preview on')
         if not page.eval(CANVAS_HIDDEN % json.dumps(needs_logo)):
             sys.exit(f'{needs_logo} shows a canvas before a shell is chosen')
+        # One open/close cycle for both checks: the dialog's own close event is a queued task, so
+        # closing and reopening it in quick succession races that task's `shelling = null` against
+        # the reopen's `shelling = c` and can leave the reset click acting on no cart at all.
         page.eval(OPEN_SHELL % json.dumps(needs_logo))
         page.eval("document.querySelectorAll('#shell-presets button')[5].click()")
-        page.eval("document.getElementById('shell').close()")
         if page.eval(CANVAS_HIDDEN % json.dumps(needs_logo)):
             sys.exit(f'{needs_logo} still shows no canvas after a shell was chosen')
         print(f'asserted: {needs_logo} (needs-logo) shows no canvas until a shell is chosen, '
               'then shows the generated label')
         # Left as found: back to Automatic, so it does not show up as a shell change below.
-        page.eval(OPEN_SHELL % json.dumps(needs_logo))
         page.eval("document.getElementById('shell-reset').click()")
         page.eval("document.getElementById('shell').close()")
         if not page.eval(CANVAS_HIDDEN % json.dumps(needs_logo)):
