@@ -83,6 +83,15 @@ class MeasureLook(unittest.TestCase):
         self.assertIsNone(got['band'])
         self.assertTrue(got['sure'])
 
+    def test_a_strip_the_colour_of_the_ground_is_not_a_band(self):
+        # The ground runs to the bottom edge past a dark rule; the strip below the rule is
+        # the ground again, not a band of its own.
+        im, (l, t, r, b) = scan((600, 355))
+        h = b - t
+        im.paste((10, 10, 10), (l, t + round(h * 0.84), r, t + round(h * 0.92)))
+        got = look.measure_look(png(im))
+        self.assertIsNone(got['band'])
+
     def test_busy_artwork_is_not_sure(self):
         im, (l, t, r, b) = scan((600, 355))
         rnd = random.Random(2)

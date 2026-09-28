@@ -16,10 +16,14 @@ LABEL_BOX = {
 GAME_BOY = {(600, 678), (600, 701)}
 SIDE_STRIP = 0.09
 
-FLAT = 18.0
+# A line is flat when most of it is one colour: lettering printed across a band is the rest.
+FLAT_NEAR = 40.0
+FLAT_SHARE = 0.75
+# How far a line's colour may drift from the band's first line before the band ends.
+SAME = 18.0
 BAND_APART = 60.0
-BAND_MIN, BAND_MAX = 0.05, 0.30
-GROUND_SHARE = 0.60
+BAND_MIN, BAND_MAX = 0.03, 0.30
+GROUND_SHARE = 0.45
 BORDERLINE = 0.25
 RIVAL = 0.70
 RING = 0.10
@@ -56,20 +60,21 @@ def _from(px, edge):
 
 
 def _flat(line):
+    """The line's colour, and whether most of the line is that colour."""
     median = np.median(line, axis=0)
-    return median, float(np.linalg.norm(line - median, axis=1).mean())
+    return median, float((np.linalg.norm(line - median, axis=1) <= FLAT_NEAR).mean()) >= FLAT_SHARE
 
 
 def _candidate(px, edge):
     rows = _from(px, edge)
     n = rows.shape[0]
-    colour, spread = _flat(rows[0])
-    if spread > FLAT:
+    colour, flat = _flat(rows[0])
+    if not flat:
         return None
     k = 1
     while k < n:
-        median, spread = _flat(rows[k])
-        if spread > FLAT or np.linalg.norm(median - colour) > FLAT:
+        median, flat = _flat(rows[k])
+        if not flat or np.linalg.norm(median - colour) > SAME:
             break
         k += 1
     size = k / n
@@ -128,6 +133,9 @@ def measure_look(data):
     counts = np.bincount(nearest, minlength=CLUSTERS)
     ground = centres[int(np.argmax(counts))]
     share = counts.max() / max(1, len(ring_px))
+    # A strip the colour of the ground is the ground running on past something, not a band.
+    if band is not None and np.linalg.norm(band['colour'] - ground) < BAND_APART:
+        band = None
 
     return {
         'ground': _hex(ground),
