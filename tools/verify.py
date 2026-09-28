@@ -69,6 +69,10 @@ OPEN_SHELL = """
 (stem => document.querySelectorAll('#grid > .cart')[
   window.__studio.states().findIndex(s => s.stem === stem)].querySelector('.shell-open').click())(%s)
 """
+CANVAS_HIDDEN = """
+(stem => document.querySelectorAll('#grid > .cart')[
+  window.__studio.states().findIndex(s => s.stem === stem)].querySelector('canvas').hidden)(%s)
+"""
 
 
 class Quiet(http.server.SimpleHTTPRequestHandler):
@@ -266,6 +270,25 @@ def main():
             page.shot(1280, OUT / 'studio-tab-1280.png')
             if not shown:
                 sys.exit(f'switching to {tabs[-1]} left no carts on screen')
+
+        needs_logo = next((s['stem'] for s in first if s['state'] == 'needs-logo'), None)
+        if needs_logo is None:
+            sys.exit('no needs-logo cart in the fixture to check the shell preview on')
+        if not page.eval(CANVAS_HIDDEN % json.dumps(needs_logo)):
+            sys.exit(f'{needs_logo} shows a canvas before a shell is chosen')
+        page.eval(OPEN_SHELL % json.dumps(needs_logo))
+        page.eval("document.querySelectorAll('#shell-presets button')[5].click()")
+        page.eval("document.getElementById('shell').close()")
+        if page.eval(CANVAS_HIDDEN % json.dumps(needs_logo)):
+            sys.exit(f'{needs_logo} still shows no canvas after a shell was chosen')
+        print(f'asserted: {needs_logo} (needs-logo) shows no canvas until a shell is chosen, '
+              'then shows the generated label')
+        # Left as found: back to Automatic, so it does not show up as a shell change below.
+        page.eval(OPEN_SHELL % json.dumps(needs_logo))
+        page.eval("document.getElementById('shell-reset').click()")
+        page.eval("document.getElementById('shell').close()")
+        if not page.eval(CANVAS_HIDDEN % json.dumps(needs_logo)):
+            sys.exit(f'{needs_logo} still shows a canvas after resetting to Automatic')
 
         page.width(1280)
         # Headless Chrome ignores the browser-level Browser.setDownloadBehavior for this target;
