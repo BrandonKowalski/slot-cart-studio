@@ -702,19 +702,22 @@ async function writeLabels() {
       for (const c of carts) {
         if (fatal) return;
         let face = null;
+        let png = null;
         try {
-          const [png, drawn] = withCartLabel(c, (label) => [
+          [png, face] = withCartLabel(c, (label) => [
             label.png(),
             label.face(c.platform, c.code, c.head, c.shell, c.stem),
           ]);
-          face = drawn;
           c.result = await s.source.write(c.platform, c.stem, png);
         } catch (e) {
           if (trapped(e)) return;
           console.error(c.stem, e);
           c.result = 'failed';
         }
-        if (c.result === 'written') c.existing = face;
+        if (c.result === 'written') {
+          c.existing = face;
+          c.existingPng = png;
+        }
         count[c.result]++;
         paint(c);
       }
