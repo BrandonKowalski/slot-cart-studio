@@ -80,10 +80,35 @@ export async function fromDirectory(root) {
   } catch {
     // No Labels folder yet: every cart needs a label.
   }
+
+  const shells = async () => {
+    let dir;
+    try {
+      dir = await root.getDirectoryHandle('System');
+      return await (await (await dir.getFileHandle('cart_shell.ini')).getFile()).text();
+    } catch (e) {
+      if (e.name === 'NotFoundError') return '';
+      throw e;
+    }
+  };
+
   return {
     carts: carts.sort(byCart),
     labels,
     direct: true,
+    shells,
+    async writeShells(text) {
+      const dir = await root.getDirectoryHandle('System', { create: true });
+      const file = await dir.getFileHandle('cart_shell.ini', { create: true });
+      const out = await file.createWritable();
+      try {
+        await out.write(text);
+        await out.close();
+      } catch (e) {
+        await out.abort().catch(() => {});
+        throw e;
+      }
+    },
     async write(platform, stem, bytes) {
       const root_dir = await root.getDirectoryHandle('Labels', { create: true });
       const dir = await root_dir.getDirectoryHandle(platform, { create: true });
@@ -118,6 +143,7 @@ export function fromFiles(files) {
   const labels = new Map();
   let sawPlatform = false;
   let loose = false;
+  let shellFile = null;
   for (const file of files) {
     // The picked folder, then Games or Labels, then the platform, then the file. Anything
     // shallower is the layout slot swept away; anything deeper is not slot's.
@@ -125,6 +151,7 @@ export function fromFiles(files) {
     if (parts.length === 3) {
       const [, dir, name] = parts;
       if (dir.toLowerCase() === 'games' && isRom(name)) loose = true;
+      if (dir.toLowerCase() === 'system' && name.toLowerCase() === 'cart_shell.ini') shellFile = file;
       continue;
     }
     if (parts.length !== 4) continue;
@@ -139,7 +166,7 @@ export function fromFiles(files) {
     }
   }
   if (!sawPlatform) throw new Error(loose ? OLD_LAYOUT : NO_GAMES);
-  return { carts: carts.sort(byCart), labels, direct: false, write: null };
+  return { carts: carts.sort(byCart), labels, direct: false, write: null, shells: async () => (shellFile ? shellFile.text() : '') };
 }
 
 export { labelKey };
