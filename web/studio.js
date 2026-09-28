@@ -120,8 +120,8 @@ const readyCarts = () =>
   session ? session.carts.filter((c) => stateOf(c) === 'ready' && c.result !== 'skipped') : [];
 
 const shellChanges = () => (session ? session.carts.filter((c) => c.shell !== c.shellOnCard) : []);
-const mergedShells = (s, carts) =>
-  merge_cart_shells(s.shellText ?? '', carts.map((c) => c.stem), carts.map((c) => c.shell));
+const mergedShells = (s, carts, values) =>
+  merge_cart_shells(s.shellText ?? '', carts.map((c) => c.stem), values);
 
 // A Label holds its 1280x640 composition in WASM memory, which never shrinks and stops at 4 GiB.
 // One kept per cart runs a big card out of it, so a Label lives only for the call that needs it.
@@ -525,6 +525,7 @@ async function identify(s) {
     text = await s.source.shells();
   } catch (e) {
     console.error('cart_shell.ini', e);
+    s.shellReadFailed = true;
     banner('The card’s System/cart_shell.ini couldn’t be read, so shells chosen before don’t show.');
   }
   if (s !== session || fatal) return;
@@ -733,22 +734,30 @@ async function writeLabels() {
       }
       let shellNote = '';
       if (shells.length) {
-        try {
-          const text = mergedShells(s, shells);
-          await s.source.writeShells(text);
-          s.shellText = text;
-          for (const c of shells) c.shellOnCard = c.shell;
-          shellNote = ` ${shells.length} ${shells.length === 1 ? 'shell' : 'shells'} written.`;
-        } catch (e) {
-          if (trapped(e)) return;
-          console.error('cart_shell.ini', e);
-          shellNote = ' Writing the shells failed.';
+        if (s.shellReadFailed) {
+          shellNote = 'Shells not written: the card’s cart_shell.ini could not be read.';
+        } else {
+          // Captured before the write's await, so a change made during it is not marked written.
+          const values = shells.map((c) => c.shell);
+          try {
+            const text = mergedShells(s, shells, values);
+            await s.source.writeShells(text);
+            s.shellText = text;
+            shells.forEach((c, i) => (c.shellOnCard = values[i]));
+            shellNote = `${shells.length} ${shells.length === 1 ? 'shell' : 'shells'} written.`;
+          } catch (e) {
+            if (trapped(e)) return;
+            console.error('cart_shell.ini', e);
+            shellNote = 'Writing the shells failed.';
+          }
         }
       }
       // A card opened while this one was writing has its own summary, which this must not replace.
       if (s === session) {
-        $('summary').textContent =
-          `${count.written} written, ${count.skipped} skipped, ${count.failed} failed.${shellNote}`;
+        const labelNote = carts.length
+          ? `${count.written} written, ${count.skipped} skipped, ${count.failed} failed.`
+          : '';
+        $('summary').textContent = [labelNote, shellNote].filter(Boolean).join(' ');
       }
     } else {
       const zip = new Zip();
@@ -771,20 +780,35 @@ async function writeLabels() {
           if (fatal || s !== session) return;
         }
       }
+      let shellNote = '';
+      let shellsHeld = false;
       if (shells.length) {
-        zip.add('System/cart_shell.ini', new TextEncoder().encode(mergedShells(s, shells)));
-        parts.push(zip.take());
+        if (s.shellReadFailed) {
+          shellNote = 'Shells not written: the card’s cart_shell.ini could not be read.';
+        } else {
+          try {
+            const text = mergedShells(s, shells, shells.map((c) => c.shell));
+            zip.add('System/cart_shell.ini', new TextEncoder().encode(text));
+            parts.push(zip.take());
+            shellsHeld = true;
+          } catch (e) {
+            if (trapped(e)) return;
+            console.error('cart_shell.ini', e);
+            shellNote = 'Writing the shells failed.';
+          }
+        }
       }
       parts.push(zip.finish());
       download(new Blob(parts, { type: 'application/zip' }), 'labels.zip');
       if (s === session) {
         const held = [
           carts.length && `${carts.length} ${carts.length === 1 ? 'label' : 'labels'}`,
-          shells.length && 'the shells',
+          shellsHeld && 'the shells',
         ]
           .filter(Boolean)
           .join(' and ');
-        $('summary').textContent = `${held} in labels.zip. Unzip it at the top of your card.`;
+        const zipNote = held ? `${held} in labels.zip. Unzip it at the top of your card.` : '';
+        $('summary').textContent = [zipNote, shellNote].filter(Boolean).join(' ');
       }
     }
   } catch (e) {
