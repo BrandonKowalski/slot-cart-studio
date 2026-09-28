@@ -228,14 +228,17 @@ SOURCE = {'label': 'support-2D'}
 
 # Most of ScreenScraper's cart scans are one template per console, square on and the same size, so
 # the label sits in the same place in every one. Measured by overlaying scans of different games:
-# the label is the only part that changes.
+# the label is the only part that changes. Each box stops short of every pixel that stays the same
+# across 400 harvested labels, which is where plastic showed at the edges and in the rounded
+# corners of the well.
 LABEL_BOX = {
-    (600, 678): (86, 204, 509, 577),  # Game Boy pak
-    (600, 355): (86, 84, 520, 307),  # GBA cart
+    (600, 678): (91, 209, 504, 572),  # Game Boy pak
+    (600, 355): (88, 86, 515, 302),  # GBA cart
+    (600, 701): (97, 254, 519, 631),  # Game Boy Color pak, photographed
 }
 # Any other scan is a photograph. The Game Boy box, as fractions of the template's 600 by 665 cart,
 # is applied to the photographed cart's own outline instead.
-LABEL_FRAC = (86 / 600, 204 / 665, 509 / 600, 577 / 665)
+LABEL_FRAC = (91 / 600, 209 / 665, 504 / 600, 572 / 665)
 
 
 def crop_label(data):
