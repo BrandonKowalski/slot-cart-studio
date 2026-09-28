@@ -146,3 +146,10 @@ label.btn:focus-within{outline:2px solid var(--ink);outline-offset:3px}
 .swatches{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
 .swatch{width:30px;height:30px;border-radius:7px;border:1px solid var(--rule);padding:0;cursor:pointer}
 .swatch[aria-pressed="true"]{outline:2px solid var(--ink);outline-offset:2px}
+/* The shell dialog keeps the cart in view beside its controls, with the page dimmed behind it. */
+.shell-dialog{width:min(760px,94vw)}
+.shell-dialog::backdrop{background:rgb(5 5 8 / .86)}
+.shell-body{display:grid;grid-template-columns:260px 1fr;gap:22px;align-items:start}
+.shell-face{display:block;width:100%;height:auto}
+.shell-controls>:first-child:not([hidden]),.shell-controls>[hidden]+*{margin-top:0}
+@media (max-width:620px){.shell-body{grid-template-columns:1fr}.shell-face{max-width:240px;margin:0 auto}}

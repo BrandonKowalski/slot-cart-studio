@@ -347,7 +347,16 @@ def main():
         before = page.eval(CART_CANVAS % json.dumps(chosen))
         page.eval(OPEN_SHELL % json.dumps(chosen))
         page.eval("document.querySelectorAll('#shell-presets button')[5].click()")
+        in_dialog = page.eval("document.getElementById('shell-face').toDataURL()")
+        on_card = page.eval(CART_CANVAS % json.dumps(chosen))
+        page.eval('window.scrollTo(0, 0)')
+        page.shot(1280, OUT / 'studio-shell-1280.png')
+        page.shot(400, OUT / 'studio-shell-400.png')
+        page.width(1280)
         page.eval("document.getElementById('shell').close()")
+        if in_dialog != on_card:
+            sys.exit(f'the shell dialog does not show {chosen} as its card does')
+        print(f'asserted: the shell dialog shows {chosen} as its card does, while choosing')
         if page.eval(CART_CANVAS % json.dumps(chosen)) == before:
             sys.exit(f'choosing a shell did not redraw {chosen}')
         print(f'asserted: choosing a shell redrew {chosen}')

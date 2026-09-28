@@ -273,6 +273,25 @@ function schedulePaint(c) {
   });
 }
 
+// The face a cart shows. A needs-logo cart has none of its own; with a shell chosen, or when `always`
+// asks for one, slot's generated-label face stands in, as it does on the shelf.
+function faceOf(c, state, always = false) {
+  if (state === 'has-label') return c.existing;
+  if (state === 'ready') {
+    return withCartLabel(c, (label) => label.face(c.platform, c.code, c.head, c.shell, c.stem));
+  }
+  if (state === 'needs-logo' && (c.shell || always)) {
+    return existing_face(new Uint8Array(0), c.platform, c.code, c.head, c.shell, c.stem);
+  }
+  return null;
+}
+
+function drawFace(canvas, face, platform) {
+  const pixels = new Uint8ClampedArray(face.buffer, face.byteOffset, face.byteLength);
+  const [boxW, boxH] = boxOf(platform);
+  canvas.getContext('2d').putImageData(new ImageData(pixels, boxW, boxH), 0, 0);
+}
+
 function paint(c) {
   if (fatal) return;
   const state = stateOf(c);
@@ -282,32 +301,15 @@ function paint(c) {
   // house numbers live in src/label.rs alone. The pale corner is derived from it in Rust when the
   // label is composed, so there is nothing to work out here.
   const deep = c.deep ?? Array.from(stopsOf(c)).slice(0, 3);
-  let face = null;
-  if (state === 'has-label') face = c.existing;
-  if (state === 'ready') {
-    try {
-      face = withCartLabel(c, (label) => label.face(c.platform, c.code, c.head, c.shell, c.stem));
-    } catch (e) {
-      if (trapped(e)) return;
-      throw e;
-    }
-  }
-  // A needs-logo cart has no label to preview, but a shell chosen for it still belongs on the
-  // shelf: draw slot's own generated-label face, the same one a cart nobody has dressed gets.
-  if (state === 'needs-logo' && c.shell) {
-    try {
-      face = existing_face(new Uint8Array(0), c.platform, c.code, c.head, c.shell, c.stem);
-    } catch (e) {
-      if (trapped(e)) return;
-      throw e;
-    }
+  let face;
+  try {
+    face = faceOf(c, state);
+  } catch (e) {
+    if (trapped(e)) return;
+    throw e;
   }
   canvas.hidden = !face;
-  if (face) {
-    const pixels = new Uint8ClampedArray(face.buffer, face.byteOffset, face.byteLength);
-    const [boxW, boxH] = boxOf(c.platform);
-    canvas.getContext('2d').putImageData(new ImageData(pixels, boxW, boxH), 0, 0);
-  }
+  if (face) drawFace(canvas, face, c.platform);
   drop.hidden = state !== 'needs-logo';
   hueRow.hidden = state !== 'ready';
   hue.value = hex(deep);
@@ -428,12 +430,22 @@ function renderShell() {
     b.setAttribute('aria-pressed', String(colour === now.colour && finish === now.finish));
   }
   $('shell-colour').value = `#${now.colour}`;
+  let face;
+  try {
+    face = faceOf(c, stateOf(c), true);
+  } catch (e) {
+    if (trapped(e)) return;
+    throw e;
+  }
+  $('shell-face').hidden = !face;
+  if (face) drawFace($('shell-face'), face, c.platform);
 }
 
 function openShell(c) {
   shelling = c;
   $('shell-cart').textContent = clean_label(c.stem);
   $('shell-outline').hidden = c.platform === 'GBA';
+  [$('shell-face').width, $('shell-face').height] = boxOf(c.platform);
   renderShell();
   $('shell').showModal();
 }

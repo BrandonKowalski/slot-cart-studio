@@ -56,27 +56,32 @@
     </div>
   </dialog>
 
-  <dialog id="shell" class="finder">
+  <dialog id="shell" class="finder shell-dialog">
     <form method="dialog" class="finder-head">
       <h2 id="shell-cart"></h2>
       <button class="btn ghost" value="close" type="submit">Close</button>
     </form>
-    <div class="choice-row" id="shell-outline" role="group" aria-label="Outline">
-      <button class="btn ghost" type="button" data-outline="auto">Automatic</button>
-      <button class="btn ghost" type="button" data-outline="notched">Notched</button>
-      <button class="btn ghost" type="button" data-outline="rounded">Rounded</button>
-    </div>
-    <div class="swatches" id="shell-presets" role="group" aria-label="Plastics"></div>
-    <div class="choice-row">
-      <span class="well btn ghost">Custom Color<input id="shell-colour" type="color" aria-label="Shell Color"></span>
-    </div>
-    <div class="choice-row" id="shell-finish" role="group" aria-label="Finish">
-      <button class="btn ghost" type="button" data-finish="solid">Solid</button>
-      <button class="btn ghost" type="button" data-finish="clear">Clear</button>
-      <button class="btn ghost" type="button" data-finish="glitter">Glitter</button>
-    </div>
-    <div class="choice-row">
-      <button class="btn ghost" type="button" id="shell-reset">Reset to Automatic</button>
+    <div class="shell-body">
+      <canvas id="shell-face" class="shell-face" aria-label="The cart in its shell"></canvas>
+      <div class="shell-controls">
+        <div class="choice-row" id="shell-outline" role="group" aria-label="Outline">
+          <button class="btn ghost" type="button" data-outline="auto">Automatic</button>
+          <button class="btn ghost" type="button" data-outline="notched">Notched</button>
+          <button class="btn ghost" type="button" data-outline="rounded">Rounded</button>
+        </div>
+        <div class="swatches" id="shell-presets" role="group" aria-label="Plastics"></div>
+        <div class="choice-row">
+          <span class="well btn ghost">Custom Color<input id="shell-colour" type="color" aria-label="Shell Color"></span>
+        </div>
+        <div class="choice-row" id="shell-finish" role="group" aria-label="Finish">
+          <button class="btn ghost" type="button" data-finish="solid">Solid</button>
+          <button class="btn ghost" type="button" data-finish="clear">Clear</button>
+          <button class="btn ghost" type="button" data-finish="glitter">Glitter</button>
+        </div>
+        <div class="choice-row">
+          <button class="btn ghost" type="button" id="shell-reset">Reset to Automatic</button>
+        </div>
+      </div>
     </div>
   </dialog>
 
