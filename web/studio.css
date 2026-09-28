@@ -108,7 +108,6 @@ label.btn:focus-within{outline:2px solid var(--ink);outline-offset:3px}
 /* Every cart's shell is a click away, whatever else the card is showing. */
 .shell-open{position:absolute;top:8px;right:8px;width:32px;height:32px;padding:0;display:grid;place-items:center;border:1px solid var(--rule);border-radius:8px;background:var(--housing);color:var(--ink);cursor:pointer}
 .shell-open:hover,.shell-open:focus-visible{background:var(--ink);color:var(--opening);outline:none}
-.shell-open[hidden]{display:none}
 .cart-actions{display:flex;justify-content:center}
 .cart-actions .btn{padding:7px 12px;font-size:14px}
 /* A row holding only a hidden button, and a status with nothing to say, took height anyway. */
@@ -147,6 +146,9 @@ label.btn:focus-within{outline:2px solid var(--ink);outline-offset:3px}
 .choice-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
 .choice-row .btn{padding:8px 14px;font-size:14px}
 .choice-row .btn[aria-pressed="true"]{background:var(--ink);color:var(--opening);border-color:var(--ink)}
+/* A cart with a printed label in the art set chooses between it and one made from its logo. */
+.label-kind{justify-content:center;margin-top:2px;gap:6px}
+.label-kind .btn{padding:6px 12px;font-size:13px}
 .swatches{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
 .swatch{width:30px;height:30px;border-radius:7px;border:1px solid var(--rule);padding:0;cursor:pointer}
 .swatch[aria-pressed="true"]{outline:2px solid var(--ink);outline-offset:2px}

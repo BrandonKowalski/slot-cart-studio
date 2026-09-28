@@ -25,6 +25,7 @@ import unicodedata
 import urllib.parse
 import urllib.request
 import zipfile
+import zlib
 from pathlib import Path
 
 import websocket
@@ -65,6 +66,14 @@ CART_CANVAS = """
 (stem => document.querySelectorAll('#grid > .cart')[
   window.__studio.states().findIndex(s => s.stem === stem)].querySelector('canvas').toDataURL())(%s)
 """
+# Click one cart's Printed or Custom switch, by stem.
+PICK_KIND = """
+(([stem, kind]) => document.querySelectorAll('#grid > .cart')[
+  window.__studio.states().findIndex(s => s.stem === stem)
+].querySelector(`.label-kind [data-kind="${kind}"]`).click())([%s, %s])
+"""
+# A cart the harvested art set has a printed label for.
+PRINTED = 'Mario Kart - Super Circuit (USA)'
 OPEN_SHELL = """
 (stem => document.querySelectorAll('#grid > .cart')[
   window.__studio.states().findIndex(s => s.stem === stem)].querySelector('.shell-open').click())(%s)
@@ -295,6 +304,15 @@ def main():
         # Headless Chrome ignores the browser-level Browser.setDownloadBehavior for this target;
         # only the page-level form of the command takes effect.
         page.send('Page.setDownloadBehavior', behavior='allow', downloadPath=str(downloads))
+        # The printed label is worn by default, and its switch goes to the logo-built one and back.
+        if art:
+            printed_face = page.eval(CART_CANVAS % json.dumps(PRINTED))
+            page.eval(PICK_KIND % (json.dumps(PRINTED), json.dumps('custom')))
+            custom_face = page.eval(CART_CANVAS % json.dumps(PRINTED))
+            page.eval(PICK_KIND % (json.dumps(PRINTED), json.dumps('printed')))
+            if custom_face == printed_face or page.eval(CART_CANVAS % json.dumps(PRINTED)) != printed_face:
+                sys.exit(f'the Printed / Custom switch does not change {PRINTED} and back')
+            print(f'asserted: {PRINTED} wears its printed label, and Custom switches it to the logo-built one')
         page.eval("document.getElementById('write').click()")
         # click() returns at the loop's first yield, and this round trip lands a few carts later
         # still: on ten carts it reads "8 of 10". What keeps that honest is the packing left to
@@ -319,6 +337,15 @@ def main():
         with zipfile.ZipFile(OUT / 'labels.zip') as z:
             z.extractall(card)
         print('labels unzipped into', card)
+        # With an art set, a cart it has a printed label for writes that label byte for byte.
+        if art:
+            crc = f"{zlib.crc32((SLOT_GAMES / 'GBA' / f'{PRINTED}.gba').read_bytes()) & 0xffffffff:08X}"
+            base = art.rstrip('/') + '/'
+            index = json.load(urllib.request.urlopen(base + 'index.json'))
+            want = urllib.request.urlopen(base + index[crc]['label']).read()
+            if (card / 'Labels' / 'GBA' / f'{PRINTED}.png').read_bytes() != want:
+                sys.exit(f'{PRINTED} did not write the printed label from the art set')
+            print(f'asserted: {PRINTED} wrote its printed label byte for byte')
 
         print('second pass: a card that already has labels for', ', '.join([*KEPT, PROBE]))
         kept = {nfc(stem) for stem in [*KEPT, PROBE]}
