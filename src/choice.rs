@@ -1,6 +1,7 @@
 //! A cart's shell choice as the page holds it: the `cart_shell.ini` value, empty for Automatic.
 
 use slot_store::{Cart, Outline, Platform, ShellChoice, ShellFinish};
+use unicode_normalization::UnicodeNormalization;
 
 use crate::shell::{self, Finish, Shell};
 
@@ -49,7 +50,9 @@ pub fn cart_shells(text: &str) -> Vec<String> {
         .collect()
 }
 
-/// `text` with each stem set to its value, or removed where the value is empty.
+/// `text` with each stem set to its value, or removed where the value is empty. A key that is the
+/// stem under a different Unicode normalisation (macOS lists exFAT names decomposed) is treated as
+/// the same cart: it is dropped first, so the stem never ends up on two lines.
 pub fn merge_cart_shells(
     text: &str,
     stems: &[String],
@@ -57,6 +60,12 @@ pub fn merge_cart_shells(
 ) -> std::io::Result<String> {
     let mut out = text.to_string();
     for (stem, value) in stems.iter().zip(values) {
+        let nfc_stem: String = stem.nfc().collect();
+        for key in slot_store::ini::parse(&out).into_keys() {
+            if key != *stem && key.nfc().collect::<String>() == nfc_stem {
+                out = slot_store::ini::set(&out, &key, None)?;
+            }
+        }
         out = slot_store::ini::set(&out, stem, (!value.is_empty()).then_some(value.as_str()))?;
     }
     Ok(out)

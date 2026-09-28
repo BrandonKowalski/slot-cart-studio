@@ -29,6 +29,24 @@ fn merging_gives_what_slot_writes() {
 }
 
 #[test]
+fn nfc_mismatched_stems_are_still_the_same_cart() {
+    let start = "Poke\u{301}mon Probe = auto 000000 solid\n";
+    let stem = "Pok\u{e9}mon Probe";
+    let set = choice::merge_cart_shells(
+        start,
+        &[stem.to_string()],
+        &["rounded 86b9bf glitter".to_string()],
+    )
+    .unwrap();
+    assert_eq!(set.matches(" = ").count(), 1, "{set:?}");
+    assert!(set.contains("rounded 86b9bf glitter"), "{set:?}");
+
+    let removed =
+        choice::merge_cart_shells(&set, &[stem.to_string()], &["".to_string()]).unwrap();
+    assert_eq!(removed, "");
+}
+
+#[test]
 fn only_lines_that_parse_are_choices() {
     let got = choice::cart_shells(
         "# c\nA = rounded 86B9BF glitter\nB = rounded\nC = auto 000000 solid\n",
