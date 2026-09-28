@@ -70,10 +70,6 @@ function newCart({ platform, stem, file }) {
     game: null,
     // Logos stay PNG bytes, which are small. The label made from one is not kept: see withLabel.
     logoBytes: null,
-    // The label printed on the cart, cut from a scan in the art set. Worn in place of a label made
-    // from the logo unless Custom is chosen or a logo is dropped by hand.
-    printedBytes: null,
-    usePrinted: true,
     droppedBytes: null,
     rejected: false,
     snapshot: null,
@@ -92,13 +88,12 @@ function newCart({ platform, stem, file }) {
 }
 
 const activeLogo = (c) => c.droppedBytes ?? (c.rejected ? null : c.logoBytes);
-const wearsPrinted = (c) => !c.droppedBytes && !c.rejected && c.usePrinted && !!c.printedBytes;
 
 function stateOf(c) {
   if (c.error) return 'error';
   if (c.existing) return 'has-label';
   if (c.looking) return 'looking';
-  return wearsPrinted(c) || activeLogo(c) ? 'ready' : 'needs-logo';
+  return activeLogo(c) ? 'ready' : 'needs-logo';
 }
 
 // The box art belongs to the matched game, so its hue only stands while the match does.
@@ -218,7 +213,6 @@ function buildCard(c) {
     status: q('.status'),
     hue: q('.hue'),
     hueRow: q('.hue-row'),
-    kind: q('.label-kind'),
     reject: q('.reject'),
     shellOpen: q('.shell-open'),
     drop: q('.drop'),
@@ -248,12 +242,6 @@ function buildCard(c) {
     schedulePaint(c);
   });
   c.el.reject.addEventListener('click', () => (c.rejected ? restore(c) : openFinder(c)));
-  c.el.kind.addEventListener('click', (e) => {
-    const kind = e.target.closest('button')?.dataset.kind;
-    if (!kind) return;
-    c.usePrinted = kind === 'printed';
-    paint(c);
-  });
   c.el.shellOpen.addEventListener('click', () => openShell(c));
   c.el.drop.addEventListener('dragover', (e) => {
     e.preventDefault();
@@ -290,7 +278,6 @@ function schedulePaint(c) {
 function faceOf(c, state, always = false) {
   if (state === 'has-label') return c.existing;
   if (state === 'ready') {
-    if (wearsPrinted(c)) return existing_face(c.printedBytes, c.platform, c.code, c.head, c.shell, c.stem);
     return withCartLabel(c, (label) => label.face(c.platform, c.code, c.head, c.shell, c.stem));
   }
   if (state === 'needs-logo' && (c.shell || always)) {
@@ -324,13 +311,7 @@ function paint(c) {
   canvas.hidden = !face;
   if (face) drawFace(canvas, face, c.platform);
   drop.hidden = state !== 'needs-logo';
-  hueRow.hidden = state !== 'ready' || wearsPrinted(c);
-  // Printed or Custom is only a choice for a cart the art set has a printed label for, and a logo
-  // dropped by hand settles it.
-  c.el.kind.hidden = !c.printedBytes || !!c.droppedBytes || c.rejected || !['ready', 'needs-logo'].includes(state);
-  for (const b of c.el.kind.querySelectorAll('button')) {
-    b.setAttribute('aria-pressed', String((b.dataset.kind === 'printed') === c.usePrinted));
-  }
+  hueRow.hidden = state !== 'ready';
   hue.value = hex(deep);
   // A cart with no match needs the finder more than a wrongly matched one, not less: searching by
   // name is how a cart libretro keeps under a name its filename does not use gets found at all.
@@ -694,11 +675,6 @@ async function dress(s, c) {
   // The ground's colour is read off the box art either way, so that request starts now and is
   // waited on after the logo, whichever source the logo turns out to come from.
   const boxJob = thumb('Named_Boxarts');
-  if (!c.printedBytes) {
-    const printed = await ours('label');
-    if (s !== session || fatal) return;
-    c.printedBytes = printed && readable(printed) ? printed : null;
-  }
   if (!c.logoBytes) {
     const logo = (await ours('wheel')) ?? (await thumb('Named_Logos'));
     if (s !== session || fatal) return;
@@ -781,12 +757,10 @@ async function writeLabels() {
         let face = null;
         let png = null;
         try {
-          [png, face] = wearsPrinted(c)
-            ? [c.printedBytes, existing_face(c.printedBytes, c.platform, c.code, c.head, c.shell, c.stem)]
-            : withCartLabel(c, (label) => [
-                label.png(),
-                label.face(c.platform, c.code, c.head, c.shell, c.stem),
-              ]);
+          [png, face] = withCartLabel(c, (label) => [
+            label.png(),
+            label.face(c.platform, c.code, c.head, c.shell, c.stem),
+          ]);
           c.result = await s.source.write(c.platform, c.stem, png);
         } catch (e) {
           if (trapped(e)) return;
@@ -837,7 +811,7 @@ async function writeLabels() {
         progress(i, total, c.stem, 'Packing');
         zip.add(
           `Labels/${c.platform}/${c.stem}.png`,
-          wearsPrinted(c) ? c.printedBytes : withCartLabel(c, (label) => label.png()),
+          withCartLabel(c, (label) => label.png()),
         );
         parts.push(zip.take());
         // Packing a few hundred carts is seconds of synchronous work with nothing on screen, so
