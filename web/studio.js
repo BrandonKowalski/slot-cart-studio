@@ -6,7 +6,9 @@ import init, {
   Dat,
   Label,
   Zip,
+  auto_shell,
   box_hue,
+  cart_shells,
   cart_size,
   clean_label,
   existing_face,
@@ -14,6 +16,9 @@ import init, {
   header_code,
   label_tags,
   logo_luma,
+  merge_cart_shells,
+  shell_key_ok,
+  shell_presets,
   stop_colours,
   stub_target,
   thumbnail_name,
@@ -58,6 +63,9 @@ function newCart({ platform, stem, file }) {
     code: '',
     // A Game Boy pak's header, which picks its shell and plastic. Empty on a GBA cart.
     head: new Uint8Array(0),
+    shell: '',
+    shellOnCard: '',
+    existingPng: null,
     crc: null,
     game: null,
     // Logos stay PNG bytes, which are small. The label made from one is not kept: see withLabel.
@@ -202,6 +210,7 @@ function buildCard(c) {
     hue: q('.hue'),
     hueRow: q('.hue-row'),
     reject: q('.reject'),
+    shellOpen: q('.shell-open'),
     drop: q('.drop'),
     pickLogo: q('.drop input'),
   };
@@ -229,6 +238,7 @@ function buildCard(c) {
     schedulePaint(c);
   });
   c.el.reject.addEventListener('click', () => (c.rejected ? restore(c) : openFinder(c)));
+  c.el.shellOpen.addEventListener('click', () => openShell(c));
   c.el.drop.addEventListener('dragover', (e) => {
     e.preventDefault();
     c.el.drop.classList.add('over');
@@ -272,7 +282,7 @@ function paint(c) {
   if (state === 'has-label') face = c.existing;
   if (state === 'ready') {
     try {
-      face = withCartLabel(c, (label) => label.face(c.platform, c.code, c.head, '', c.stem));
+      face = withCartLabel(c, (label) => label.face(c.platform, c.code, c.head, c.shell, c.stem));
     } catch (e) {
       if (trapped(e)) return;
       throw e;
@@ -291,6 +301,7 @@ function paint(c) {
   // name is how a cart libretro keeps under a name its filename does not use gets found at all.
   reject.hidden = !['ready', 'needs-logo'].includes(state);
   reject.textContent = c.rejected ? 'Restore the Match' : c.game ? 'Wrong Game' : 'Find Game';
+  c.el.shellOpen.hidden = !['ready', 'has-label'].includes(state) || !shell_key_ok(c.stem);
   game.textContent = describe(c, state);
   status.textContent = statusText(c);
   updateWriteBar();
@@ -370,6 +381,47 @@ function reject(c) {
 function restore(c) {
   Object.assign(c, c.snapshot, { rejected: false, snapshot: null });
   schedulePaint(c);
+}
+
+// The shell dialog edits one cart's choice in place; the cart repaints as it changes.
+let shelling = null;
+
+const choiceOf = (c) => {
+  const [outline, colour, finish] = (c.shell || auto_shell(c.platform, c.code, c.head)).split(' ');
+  return { outline, colour, finish };
+};
+
+function setShell(c, next) {
+  c.shell = next ? `${next.outline} ${next.colour} ${next.finish}` : '';
+  if (c.existingPng) {
+    c.existing = existing_face(c.existingPng, c.platform, c.code, c.head, c.shell, c.stem);
+  }
+  paint(c);
+  renderShell();
+}
+
+function renderShell() {
+  const c = shelling;
+  if (!c) return;
+  const now = choiceOf(c);
+  const press = (group, key, value) => {
+    for (const b of $(group).querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset[key] === value));
+  };
+  press('shell-outline', 'outline', now.outline);
+  press('shell-finish', 'finish', now.finish);
+  for (const b of $('shell-presets').querySelectorAll('button')) {
+    const [, colour, finish] = b.dataset.value.split(' ');
+    b.setAttribute('aria-pressed', String(colour === now.colour && finish === now.finish));
+  }
+  $('shell-colour').value = `#${now.colour}`;
+}
+
+function openShell(c) {
+  shelling = c;
+  $('shell-cart').textContent = clean_label(c.stem);
+  $('shell-outline').hidden = c.platform === 'GBA';
+  renderShell();
+  $('shell').showModal();
 }
 
 async function takeLogo(c, file) {
@@ -454,6 +506,20 @@ async function crcOf(file) {
 }
 
 async function identify(s) {
+  let text = '';
+  try {
+    text = await s.source.shells();
+  } catch (e) {
+    console.error('cart_shell.ini', e);
+    banner('The card’s System/cart_shell.ini couldn’t be read, so shells chosen before don’t show.');
+  }
+  if (s !== session || fatal) return;
+  s.shellText = text;
+  const pairs = cart_shells(text);
+  const chosen = new Map();
+  for (let i = 0; i < pairs.length; i += 2) chosen.set(pairs[i].normalize('NFC'), pairs[i + 1]);
+  for (const c of s.carts) c.shell = c.shellOnCard = chosen.get(c.stem.normalize('NFC')) ?? '';
+
   const total = s.carts.length;
   for (const [i, c] of s.carts.entries()) {
     if (s !== session || fatal) return;
@@ -468,7 +534,8 @@ async function identify(s) {
       const label = s.source.labels.get(labelKey(c.platform, c.stem));
       if (label) {
         const bytes = new Uint8Array(await (await label()).arrayBuffer());
-        c.existing = existing_face(bytes, c.platform, c.code, c.head, '', c.stem);
+        c.existingPng = bytes;
+        c.existing = existing_face(bytes, c.platform, c.code, c.head, c.shell, c.stem);
       } else {
         c.crc = await crcOf(file);
       }
@@ -631,7 +698,7 @@ async function writeLabels() {
         try {
           const [png, drawn] = withCartLabel(c, (label) => [
             label.png(),
-            label.face(c.platform, c.code, c.head, '', c.stem),
+            label.face(c.platform, c.code, c.head, c.shell, c.stem),
           ]);
           face = drawn;
           c.result = await s.source.write(c.platform, c.stem, png);
@@ -691,6 +758,33 @@ async function writeLabels() {
 
 async function start() {
   await init();
+  $('shell-presets').replaceChildren(
+    ...shell_presets().map((entry) => {
+      const [name, value] = entry.split('\t');
+      const b = Object.assign(document.createElement('button'), { type: 'button', className: 'swatch', title: name });
+      b.setAttribute('aria-label', name);
+      b.dataset.value = value;
+      b.style.background = `#${value.split(' ')[1]}`;
+      b.addEventListener('click', () => {
+        const [, colour, finish] = value.split(' ');
+        setShell(shelling, { ...choiceOf(shelling), colour, finish });
+      });
+      return b;
+    }),
+  );
+  $('shell-outline').addEventListener('click', (e) => {
+    const outline = e.target.closest('button')?.dataset.outline;
+    if (outline && shelling) setShell(shelling, { ...choiceOf(shelling), outline });
+  });
+  $('shell-finish').addEventListener('click', (e) => {
+    const finish = e.target.closest('button')?.dataset.finish;
+    if (finish && shelling) setShell(shelling, { ...choiceOf(shelling), finish });
+  });
+  $('shell-colour').addEventListener('input', () => {
+    if (shelling) setShell(shelling, { ...choiceOf(shelling), colour: $('shell-colour').value.slice(1) });
+  });
+  $('shell-reset').addEventListener('click', () => shelling && setShell(shelling, null));
+  $('shell').addEventListener('close', () => (shelling = null));
   for (const platform of PLATFORMS) faceBox.set(platform, Array.from(cart_size(platform)));
   // A set of our own, if the address named one. Not having it is not a failure: every cart falls
   // back to libretro, which is all the page had before there was a set to point at.
@@ -781,6 +875,8 @@ async function start() {
               deep: hex(c.deep ?? baseDeep(c)),
             }))
           : [],
+      shells: () => (session ? session.carts.map((c) => ({ stem: c.stem, shell: c.shell })) : []),
+      shellPresets: () => shell_presets(),
     };
   }
   document.body.dataset.ready = 'true';

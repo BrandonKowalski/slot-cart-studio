@@ -139,3 +139,10 @@ label.btn:focus-within{outline:2px solid var(--ink);outline-offset:3px}
 .tabs .btn[aria-pressed="true"]{background:var(--ink);color:var(--opening);border-color:var(--ink)}
 
 .credits{margin-top:48px;color:var(--muted);font-size:14px;text-align:center}
+
+.choice-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.choice-row .btn{padding:8px 14px;font-size:14px}
+.choice-row .btn[aria-pressed="true"]{background:var(--ink);color:var(--opening);border-color:var(--ink)}
+.swatches{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.swatch{width:30px;height:30px;border-radius:7px;border:1px solid var(--rule);padding:0;cursor:pointer}
+.swatch[aria-pressed="true"]{outline:2px solid var(--ink);outline-offset:2px}

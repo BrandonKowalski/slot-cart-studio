@@ -56,6 +56,30 @@
     </div>
   </dialog>
 
+  <dialog id="shell" class="finder">
+    <form method="dialog" class="finder-head">
+      <h2 id="shell-cart"></h2>
+      <button class="btn ghost" value="close" type="submit">Close</button>
+    </form>
+    <div class="choice-row" id="shell-outline" role="group" aria-label="Outline">
+      <button class="btn ghost" type="button" data-outline="auto">Automatic</button>
+      <button class="btn ghost" type="button" data-outline="notched">Notched</button>
+      <button class="btn ghost" type="button" data-outline="rounded">Rounded</button>
+    </div>
+    <div class="swatches" id="shell-presets" role="group" aria-label="Plastics"></div>
+    <div class="choice-row">
+      <span class="well btn ghost">Custom Color<input id="shell-colour" type="color" aria-label="Shell Color"></span>
+    </div>
+    <div class="choice-row" id="shell-finish" role="group" aria-label="Finish">
+      <button class="btn ghost" type="button" data-finish="solid">Solid</button>
+      <button class="btn ghost" type="button" data-finish="clear">Clear</button>
+      <button class="btn ghost" type="button" data-finish="glitter">Glitter</button>
+    </div>
+    <div class="choice-row">
+      <button class="btn ghost" type="button" id="shell-reset">Reset to Automatic</button>
+    </div>
+  </dialog>
+
   <footer class="credits">
     <p>Game names from <a href="https://github.com/libretro/libretro-database">libretro-database</a>, logos and box art from <a href="https://github.com/libretro-thumbnails/Nintendo_-_Game_Boy_Advance">libretro-thumbnails</a>.<br />Made for <a href="https://slot.kowalski.io">slot</a>, a GBA frontend for the Anbernic RG SP.</p>
   </footer>
@@ -78,6 +102,7 @@
     </div>
     <div class="cart-actions">
       <button class="btn ghost reject" type="button" hidden></button>
+      <button class="btn ghost shell-open" type="button" hidden>Shell</button>
     </div>
     <p class="status"></p>
   </article>
