@@ -292,6 +292,16 @@ function paint(c) {
       throw e;
     }
   }
+  // A needs-logo cart has no label to preview, but a shell chosen for it still belongs on the
+  // shelf: draw slot's own generated-label face, the same one a cart nobody has dressed gets.
+  if (state === 'needs-logo' && c.shell) {
+    try {
+      face = existing_face(new Uint8Array(0), c.platform, c.code, c.head, c.shell, c.stem);
+    } catch (e) {
+      if (trapped(e)) return;
+      throw e;
+    }
+  }
   canvas.hidden = !face;
   if (face) {
     const pixels = new Uint8ClampedArray(face.buffer, face.byteOffset, face.byteLength);
@@ -305,7 +315,7 @@ function paint(c) {
   // name is how a cart libretro keeps under a name its filename does not use gets found at all.
   reject.hidden = !['ready', 'needs-logo'].includes(state);
   reject.textContent = c.rejected ? 'Restore the Match' : c.game ? 'Wrong Game' : 'Find Game';
-  c.el.shellOpen.hidden = !['ready', 'has-label'].includes(state) || !shell_key_ok(c.stem);
+  c.el.shellOpen.hidden = !['ready', 'has-label', 'needs-logo'].includes(state) || !shell_key_ok(c.stem);
   game.textContent = describe(c, state);
   status.textContent = statusText(c);
   updateWriteBar();

@@ -44,6 +44,7 @@ pub fn cart_size(platform: &str) -> Vec<u32> {
 /// A label the card already has, on its cart. `platform` is the card folder the rom sits in,
 /// `GBA`, `GB` or `GBC`, which is how the page names a platform either side of the wasm boundary.
 /// `head` is a Game Boy rom's first 0x150 bytes, which pick its pak; a GBA cart passes none.
+/// `shell` is the cart's `cart_shell.ini` value, empty for Automatic.
 #[wasm_bindgen]
 pub fn existing_face(
     png: &[u8],
