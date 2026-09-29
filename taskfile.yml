@@ -26,7 +26,7 @@ tasks:
     desc: Native tests, the faces against slot's included
     cmds:
       - cargo test
-      - node --test web/history.test.mjs
+      - node --test web/history.test.mjs web/smallprint.test.mjs web/colourway.test.mjs
 
   check:
     desc: Formatting, clippy for both targets, and the tests
@@ -35,7 +35,7 @@ tasks:
       - cargo clippy --all-targets -- -D warnings
       - cargo clippy --lib --target wasm32-unknown-unknown -- -D warnings
       - cargo test
-      - node --test web/history.test.mjs
+      - node --test web/history.test.mjs web/smallprint.test.mjs web/colourway.test.mjs
 
   slot:pin-check:
     desc: Say whether ../slot's cart face still matches the commit in slot.ref

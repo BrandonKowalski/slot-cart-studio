@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>slot cart studio</title>
+<title>Cart Studio · slot</title>
 <meta name="description" content="Cart labels for a slot SD card, made from libretro's logos and checked on the cart before they are written.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,13 +12,27 @@
 <script type="module" src="studio.js"></script>
 </head>
 <body>
+<header class="mast">
+  <a class="mast-mark" href="https://slot.kowalski.io/">slot.</a>
+  <button class="menu-btn" type="button" id="menu-btn" aria-expanded="false" aria-controls="mast-links" aria-label="Sections">
+    <span class="menu-bars" aria-hidden="true"></span>
+  </button>
+  <nav class="mast-links" id="mast-links" aria-label="slot">
+    <a href="https://slot.kowalski.io/#install">Installing</a>
+    <a href="https://slot.kowalski.io/#guide">Guide</a>
+    <a href="https://slot.kowalski.io/#buttons">Buttons</a>
+    <a href="https://slot.kowalski.io/#questions">Questions</a>
+    <a href="https://slot.kowalski.io/#credits">Credits</a>
+    <a href="https://slot.kowalski.io/#disclosure">AI</a>
+    <a href="./" aria-current="page">Cart Studio</a>
+  </nav>
+</header>
 <main class="wrap">
   <header class="intro">
-    <h1 class="wordmark">slot <span>cart studio</span></h1>
-    <p class="lede">Choose your slot SD card and this tool will create a cart label using the logo from the libretro thumbnail database.</p>
+    <h1 class="title">Cart Studio</h1>
     <div class="actions">
-      <button class="btn" id="pick" type="button" hidden>Choose SD card</button>
-      <label class="btn" id="pick-files-label" hidden>Choose SD card<input id="pick-files" class="visually-hidden" type="file" webkitdirectory></label>
+      <button class="key" id="pick" type="button" hidden>Choose SD card</button>
+      <label class="key" id="pick-files-label" hidden>Choose SD card<input id="pick-files" class="visually-hidden" type="file" webkitdirectory></label>
     </div>
     <p class="mode" id="mode"></p>
   </header>
@@ -31,25 +45,29 @@
   </div>
 
   <div class="write-bar" id="write-bar" hidden>
-    <button class="btn" id="write" type="button" disabled>Write labels</button>
-    <span id="summary" aria-live="polite"></span>
+    <button class="key" id="write" type="button" disabled>Write to card</button>
+    <span class="count" id="count"></span>
+    <span class="summary" id="summary" aria-live="polite"></span>
   </div>
 
-  <nav class="tabs" id="tabs" aria-label="Platforms" hidden></nav>
+  <nav class="shelf-tabs" id="tabs" aria-label="Platforms" hidden></nav>
 
   <section class="grid" id="grid" aria-label="Carts"></section>
 
   <footer class="credits">
-    <p>Game names from <a href="https://github.com/libretro/libretro-database">libretro-database</a>, logos and box art from <a href="https://github.com/libretro-thumbnails/Nintendo_-_Game_Boy_Advance">libretro-thumbnails</a>.<br />Made for <a href="https://slot.kowalski.io">slot</a>, a GBA frontend for the Anbernic RG SP.</p>
+    <p>Game names come from <a href="https://www.no-intro.org/">No-Intro</a> by way of <a href="https://github.com/libretro/libretro-database">libretro-database</a>, under <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>. Logos and box art come from <a href="https://github.com/libretro-thumbnails">libretro-thumbnails</a>; the images belong to their publishers, and the collection publishes no licence of its own.</p>
+    <p id="credit-ss" hidden>This art set’s logos and label colours come from <a href="https://www.screenscraper.fr/">ScreenScraper</a>, under <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-SA 4.0</a>, for non-commercial use.</p>
+    <p>Type is <a href="https://github.com/googlefonts/opensans">Open Sans</a>, under the <a href="https://openfontlicense.org/">SIL Open Font License</a>.</p>
+    <p>Nintendo, Game Boy, Game Boy Color and Game Boy Advance are trademarks of Nintendo. Cart Studio is not affiliated with or endorsed by Nintendo. Made for <a href="https://slot.kowalski.io/">slot</a>, a Game Boy-centric frontend for the Anbernic RG SP.</p>
   </footer>
 </main>
 
 <aside id="editor" class="editor" aria-label="Cart editor" tabindex="-1" hidden>
   <div class="ed-head">
-    <button class="btn ghost ed-icon" id="ed-prev" type="button" aria-label="Previous cart">◀</button>
+    <button class="key dark ed-icon" id="ed-prev" type="button" aria-label="Previous cart">◀</button>
     <h2 id="ed-name"></h2>
-    <button class="btn ghost ed-icon" id="ed-next" type="button" aria-label="Next cart">▶</button>
-    <button class="btn ghost ed-icon" id="ed-close" type="button" aria-label="Close">✕</button>
+    <button class="key dark ed-icon" id="ed-next" type="button" aria-label="Next cart">▶</button>
+    <button class="key dark ed-icon" id="ed-close" type="button" aria-label="Close">✕</button>
   </div>
   <canvas id="ed-face" class="ed-face" aria-label="The cart"></canvas>
   <div class="props">
@@ -81,8 +99,8 @@
         <div class="pop" id="ed-bg-pal" hidden>
           <div class="pal-grid" id="ed-bg-presets" role="group" aria-label="Colours"></div>
           <div class="pal-foot">
-            <button class="btn ghost" id="ed-bg-auto" type="button">Automatic</button>
-            <span class="btn ghost well">Custom…<input id="ed-bg-custom" type="color" aria-label="Custom background"></span>
+            <button class="key dark" id="ed-bg-auto" type="button">Automatic</button>
+            <span class="key dark pick">Custom…<input id="ed-bg-custom" type="color" aria-label="Custom background"></span>
           </div>
         </div>
       </div>
@@ -95,8 +113,8 @@
         <div class="pop" id="ed-shell-pal" hidden>
           <div class="pal-grid" id="ed-shell-presets" role="group" aria-label="Plastics"></div>
           <div class="pal-foot">
-            <button class="btn ghost" id="ed-shell-auto" type="button">Automatic</button>
-            <span class="btn ghost well">Custom…<input id="ed-shell-custom" type="color" aria-label="Custom shell"></span>
+            <button class="key dark" id="ed-shell-auto" type="button">Automatic</button>
+            <span class="key dark pick">Custom…<input id="ed-shell-custom" type="color" aria-label="Custom shell"></span>
           </div>
         </div>
       </div>
@@ -124,10 +142,10 @@
   </div>
   <div class="ed-foot">
     <div class="ed-history">
-      <button class="btn ghost" id="ed-undo" type="button" title="Undo (⌘Z)">Undo</button>
-      <button class="btn ghost" id="ed-redo" type="button" title="Redo (⇧⌘Z)">Redo</button>
+      <button class="key dark" id="ed-undo" type="button" title="Undo (⌘Z)">Undo</button>
+      <button class="key dark" id="ed-redo" type="button" title="Redo (⇧⌘Z)">Redo</button>
     </div>
-    <button class="btn ghost" id="ed-revert" type="button">Revert</button>
+    <button class="key dark" id="ed-revert" type="button">Revert</button>
   </div>
 </aside>
 <div id="ed-tip" class="tip" role="tooltip" hidden></div>
@@ -141,7 +159,7 @@
       </button>
     </div>
     <h2 class="stem"></h2>
-    <p class="tags"></p>
+    <p class="print"></p>
     <p class="game"></p>
   </article>
 </template>

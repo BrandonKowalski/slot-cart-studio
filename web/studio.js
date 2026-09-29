@@ -27,8 +27,11 @@ import { fromDirectory, fromFiles, labelKey, PLATFORMS } from './card.js';
 import { fetchArt, fetchDat, fetchIndex, fetchThumb, limiter } from './libretro.js';
 import { createEditor } from './editor.js';
 import { commit } from './history.js';
+import { pickShell, wear } from './colourway.js';
+import { smallPrint } from './smallprint.js';
 
 const $ = (id) => document.getElementById(id);
+wear(pickShell(location.search));
 const limit = limiter(4);
 // The GBA game code sits at 0xAC and the Game Boy header ends at 0x150; nothing past that is read.
 const HEAD = 0x150;
@@ -202,23 +205,19 @@ function describe(c, state) {
 function buildCard(c) {
   const root = $('card-tpl').content.firstElementChild.cloneNode(true);
   const q = (selector) => root.querySelector(selector);
-  c.el = { root, canvas: q('canvas'), face: q('.face'), stem: q('.stem'), tags: q('.tags'), game: q('.game') };
+  c.el = { root, canvas: q('canvas'), face: q('.face'), stem: q('.stem'), print: q('.print'), game: q('.game') };
   const [boxW, boxH] = boxOf(c.platform);
   c.el.canvas.width = boxW;
   c.el.canvas.height = boxH;
-  // The device's own title, with the file it came from on hover, and the bracketed groups it
-  // dropped shown as chips rather than left in the name.
+  // The device's own title, with the file it came from on hover.
   c.el.stem.textContent = clean_label(c.stem);
   c.el.stem.title = c.stem;
-  // A pill each: slot keeps `(USA, Europe)` as one tag so it never claims two releases, but as
-  // chips they read as the regions covered.
-  const tags = label_tags(c.stem)
+  // slot keeps `(USA, Europe)` as one tag so it never claims two releases; the small print reads
+  // each region on its own.
+  c.tags = label_tags(c.stem)
     .flatMap((group) => group.split(','))
     .map((tag) => tag.trim())
     .filter(Boolean);
-  c.el.tags.replaceChildren(
-    ...tags.map((tag) => Object.assign(document.createElement('span'), { className: 'chip', textContent: tag })),
-  );
   q('.edit-open').addEventListener('click', () => editor.open(c));
   root.addEventListener('click', () => {
     if (editor.current()) editor.open(c);
@@ -280,6 +279,8 @@ function paint(c) {
   canvas.hidden = !face;
   if (face) drawFace(canvas, face, c.platform);
   game.textContent = describe(c, state);
+  // The game code is read with the ROM, after the card is built.
+  c.el.print.textContent = smallPrint(c.platform, c.code, c.tags);
   updateWriteBar();
   if (editor.current() === c) editor.refresh();
 }
@@ -360,7 +361,7 @@ function banner(text, retry) {
   if (retry) {
     const button = Object.assign(document.createElement('button'), {
       type: 'button',
-      className: 'btn ghost',
+      className: 'key dark',
       textContent: 'Retry',
     });
     button.addEventListener('click', retry);
@@ -551,6 +552,8 @@ const platformsOf = (s) => PLATFORMS.filter((p) => s.carts.some((c) => c.platfor
 
 // A tab per platform on the card, with what it holds. One platform is no choice at all, so a
 // card of nothing but GBA carts shows no switcher and reads exactly as it did before.
+const PLATFORM_NAMES = { GBA: 'Game Boy Advance', GB: 'Game Boy', GBC: 'Game Boy Color' };
+
 function renderTabs() {
   const s = session;
   const present = platformsOf(s);
@@ -558,11 +561,9 @@ function renderTabs() {
   $('tabs').replaceChildren(
     ...present.map((p) => {
       const n = s.carts.filter((c) => c.platform === p).length;
-      const tab = Object.assign(document.createElement('button'), {
-        type: 'button',
-        className: 'btn ghost',
-        textContent: `${p} (${n})`,
-      });
+      const tab = Object.assign(document.createElement('button'), { type: 'button', className: 'shelf-tab' });
+      tab.dataset.platform = p;
+      tab.append(PLATFORM_NAMES[p] ?? p, Object.assign(document.createElement('span'), { className: 'n', textContent: n }));
       tab.setAttribute('aria-pressed', String(p === s.platform));
       tab.addEventListener('click', () => showPlatform(p));
       return tab;
@@ -586,11 +587,12 @@ function updateWriteBar() {
   const parts = [];
   if (n) parts.push(`${n} ${n === 1 ? 'label' : 'labels'}`);
   if (m) parts.push(`${m} ${m === 1 ? 'shell' : 'shells'}`);
-  const what = parts.join(' and ') || '0 labels';
+  const what = parts.join(', ') || '0 labels';
   // Nothing to write means no bar at all, except while a finished run's summary is still on it.
   $('write-bar').hidden = n + m === 0 && !$('summary').textContent;
   $('write').disabled = n + m === 0 || writing || fatal;
-  $('write').textContent = session.source.direct ? `Write ${what} to the card` : `Download ${what} as a zip`;
+  $('write').textContent = session.source.direct ? 'Write to card' : 'Download zip';
+  $('count').textContent = what;
 }
 
 function download(blob, name) {
@@ -818,6 +820,7 @@ async function start() {
   if (ART_BASE) {
     try {
       artIndex = await fetchIndex(ART_BASE);
+      $('credit-ss').hidden = false;
       console.info(`art set: ${Object.keys(artIndex).length} checksums from ${ART_BASE}`);
     } catch (e) {
       banner(`The art set at ${ART_BASE} didn’t load (${e.message}). Logos come from libretro alone.`);
@@ -859,6 +862,19 @@ async function start() {
     }
   });
   $('write').addEventListener('click', () => track(writeLabels()));
+
+  // slot's masthead: a row side by side, a list behind a button on a phone.
+  const menu = (open) => {
+    $('mast-links').classList.toggle('is-open', open);
+    $('menu-btn').setAttribute('aria-expanded', String(open));
+  };
+  $('menu-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    menu(!$('mast-links').classList.contains('is-open'));
+  });
+  document.addEventListener('click', (e) => {
+    if (!$('menu-btn').contains(e.target)) menu(false);
+  });
 
 
   // For tools/verify.py, which has no native picker to click. Never set on the published site.

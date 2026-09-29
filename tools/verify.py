@@ -306,10 +306,73 @@ def main():
         if art:
             page_url += '?art=' + urllib.parse.quote(art, safe='')
             print('art set:', art)
+        # Pinned, the way slot's own site takes ?shell=, so the colourway checks below know what to expect.
+        page_url += ('&' if '?' in page_url else '?') + 'shell=pink'
         page.send('Page.navigate', url=page_url)
         wait(lambda: page.eval("document.body && document.body.dataset.ready === 'true'"), 60, 'the studio to start')
 
         first = open_card(page, 'card', ['Games/' + g for g in games])
+
+        # slot's own masthead, with the studio as its current page.
+        mast = page.eval("[...document.querySelectorAll('.mast a')]"
+                         ".map(a => [a.textContent.trim(), a.getAttribute('href'), a.getAttribute('aria-current')])")
+        site = 'https://slot.kowalski.io/'
+        want_mast = [['slot.', site, None]] + [[name, f'{site}#{anchor}', None] for name, anchor in (
+            ('Installing', 'install'), ('Guide', 'guide'), ('Buttons', 'buttons'), ('Questions', 'questions'),
+            ('Credits', 'credits'), ('AI', 'disclosure'))] + [['Cart Studio', './', 'page']]
+        if mast != want_mast:
+            sys.exit(f'the masthead is {mast}, not slot\'s {want_mast}')
+        print('asserted: the masthead is slot\'s, with Cart Studio as the current page')
+
+        # The visit's colourway, pinned to pink above, is the plastic the keys are moulded in.
+        base = page.eval("getComputedStyle(document.documentElement).getPropertyValue('--shell-base').trim()")
+        key = page.eval("getComputedStyle(document.getElementById('write')).backgroundImage")
+        if base != '#e6a6b8' or 'rgb(230, 166, 184)' not in key:
+            sys.exit(f'?shell=pink gave --shell-base {base!r} and a write key of {key!r}')
+        print('asserted: the page takes slot\'s colourway, and the keys are moulded in it')
+
+        # The fine print a real label carries, instead of region pills.
+        prints = {nfc(s['stem']): (s['platform'], p) for s, p in zip(
+            page.eval('window.__studio.states()'),
+            page.eval("[...document.querySelectorAll('#grid > .cart')].map(c => c.querySelector('.print').textContent)"))}
+        family = {'GBA': 'AGB', 'GB': 'DMG', 'GBC': 'CGB'}
+        wrong = {stem: p for stem, (platform, p) in prints.items() if not p.startswith(family[platform])}
+        if wrong or prints.get('Advance Wars', (None, None))[1] != 'AGB-AWRE-USA':
+            sys.exit(f'the small print is wrong: {wrong or prints.get("Advance Wars")}')
+        print(f'asserted: every card carries its small print, e.g. Advance Wars {prints["Advance Wars"][1]}')
+
+        # No pills and no spaced-out capitals anywhere on the page, the editor included.
+        page.eval(EDIT % json.dumps(first[0]['stem']))
+        page.eval("document.getElementById('ed-shell').click()")
+        generic = page.eval("""[...document.querySelectorAll('body *')].filter(e => e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden')
+          .flatMap(e => {
+            const s = getComputedStyle(e), r = e.getBoundingClientRect(), rad = parseFloat(s.borderTopLeftRadius) || 0;
+            const name = e.tagName.toLowerCase() + (e.id ? '#' + e.id : '') + (e.className && typeof e.className === 'string' ? '.' + e.className.split(' ')[0] : '');
+            const out = [];
+            if (s.textTransform === 'uppercase') out.push('uppercase ' + name);
+            if (parseFloat(s.letterSpacing) > 1) out.push('tracked ' + name);
+            if (r.height > 4 && rad >= r.height / 2 - 1 && r.width > r.height * 1.5) out.push('pill ' + name);
+            return out;
+          })""")
+        page.eval("document.getElementById('ed-shell').click()")
+        page.eval("document.getElementById('ed-close').click()")
+        if generic:
+            sys.exit(f'these still read as generic: {sorted(set(generic))}')
+        print('asserted: no pills and no spaced capitals on the page or in the editor')
+
+        # Credits name every source and its terms; ScreenScraper's only when its art is in use.
+        links = page.eval("[...document.querySelectorAll('.credits a')].filter(a => a.getClientRects().length).map(a => a.href)")
+        need = ['https://github.com/libretro/libretro-database', 'https://creativecommons.org/licenses/by-sa/4.0/',
+                'https://github.com/libretro-thumbnails', 'https://openfontlicense.org/', 'https://slot.kowalski.io/']
+        if art:
+            need += ['https://www.screenscraper.fr/', 'https://creativecommons.org/licenses/by-nc-sa/4.0/']
+        missing = [u for u in need if not any(l.startswith(u) for l in links)]
+        shows_ss = any('screenscraper' in l for l in links)
+        if missing or shows_ss != bool(art):
+            sys.exit(f'the credits are missing {missing}, or show ScreenScraper ({shows_ss}) without its art set')
+        if 'not affiliated with' not in page.eval("document.querySelector('.credits').textContent"):
+            sys.exit('the credits carry no Nintendo non-affiliation line')
+        print('asserted: the credits name every source and its terms' + (', ScreenScraper included' if art else ''))
 
         # Settled again before the shots: open_card's wait ends when every cart has resolved once,
         # and a shot taken while anything is still being dressed photographs a spinner.

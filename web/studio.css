@@ -1,4 +1,5 @@
-/* slot's site palette and buttons, from slot's site/style.css, so the studio reads as part of it. */
+/* slot's palette and masthead, from slot's site/style.css, so the studio reads as one of its pages.
+   The --shell-* tones are the visit's RG SP colourway, set by colourway.js; silver until then. */
 :root{
   --housing:#242429;
   --recess:#1a1a1d;
@@ -8,10 +9,19 @@
   --ink:#f4f5f9;
   --muted:#bcbdc9;
   --rule:#3a3a46;
+  --shell-light:#e2e5e9;
+  --shell-base:#b8bcc2;
+  --shell-shade:#7e838b;
+  --shell-etch:rgba(0,0,0,.46);
+  --shell-accent:#b8bcc2;
+  --shell-ink:#2b2e33;
+  --mast-h:60px;
+  --panel:380px;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
 }
 
 *{box-sizing:border-box}
-/* .btn sets display, which would otherwise beat the hidden attribute. */
+/* A key sets display, which would otherwise beat the hidden attribute. */
 [hidden]{display:none !important}
 html{-webkit-text-size-adjust:100%}
 body{
@@ -22,126 +32,245 @@ body{
   -webkit-font-smoothing:antialiased;
 }
 a{color:var(--ink)}
-.wrap{max-width:1180px;margin:0 auto;padding:clamp(28px,6vh,64px) 24px}
+.visually-hidden{position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 
-.wordmark{font-size:clamp(40px,7vw,64px);font-weight:700;letter-spacing:-.045em;line-height:1.1;margin:0}
-.wordmark span{color:var(--muted);font-weight:600;letter-spacing:-.03em}
-.lede{max-width:60ch;color:var(--muted);margin:14px 0 0}
-.mode{color:var(--muted);font-size:15px;margin:14px 0 0}
+/* ------------------------------------------------------------ masthead --- */
 
-.actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:26px}
-.btn{
+.mast{
+  position:sticky;
+  top:0;
+  z-index:40;
+  display:grid;
+  grid-template-columns:1fr minmax(0,auto) 1fr;
+  align-items:center;
+  gap:clamp(12px,3vw,32px);
+  min-height:var(--mast-h);
+  padding:0 clamp(16px,3vw,32px);
+  background:color-mix(in srgb,var(--page) 88%,transparent);
+  backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--rule);
+}
+.mast-mark{font-weight:700;font-size:22px;color:var(--ink);text-decoration:none;letter-spacing:-.02em;justify-self:start}
+.mast-links{display:flex;gap:2px;justify-content:center}
+.mast-links a{padding:9px 14px;font-size:16px;font-weight:600;color:var(--muted);text-decoration:none;white-space:nowrap;border-radius:8px;transition:color .2s ease,background .2s ease}
+.mast-links a:hover{color:var(--ink)}
+.mast-links a[aria-current="page"]{color:var(--ink);background:var(--rule);box-shadow:inset 0 -2px 0 var(--shell-accent)}
+.mast-links a:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.menu-btn{display:none;appearance:none;background:none;border:1px solid var(--rule);border-radius:8px;width:40px;height:36px;place-items:center;color:var(--ink);cursor:pointer;justify-self:end}
+.menu-btn:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.menu-bars,.menu-bars::before,.menu-bars::after{display:block;width:17px;height:2px;border-radius:2px;background:currentColor}
+.menu-bars{position:relative}
+.menu-bars::before,.menu-bars::after{content:"";position:absolute;left:0}
+.menu-bars::before{top:-6px}
+.menu-bars::after{top:6px}
+/* Seven links need more room than slot's six, so the list folds away a little sooner. */
+@media (max-width:980px){
+  .mast{padding:0 14px;gap:12px;grid-template-columns:1fr auto}
+  .mast-mark{font-size:19px}
+  .menu-btn{display:grid}
+  .mast-links{position:absolute;top:100%;left:0;right:0;display:none;flex-direction:column;gap:2px;padding:8px;background:var(--page);border-bottom:1px solid var(--rule);box-shadow:0 18px 34px rgba(0,0,0,.55)}
+  .mast-links.is-open{display:flex}
+  .mast-links a{padding:13px 14px}
+}
+
+/* ----------------------------------------------------------------- keys --- */
+
+/* Every button is a key moulded in plastic: lit along the top, shaded beneath, its word etched in.
+   The page's own actions are in the visit's colourway; everything else is in dark housing. */
+.key{
   display:inline-block;
-  padding:13px 22px;
-  border-radius:8px;
-  font-family:inherit;
-  font-weight:600;
+  padding:11px 20px 12px;
+  border:0;
+  border-radius:5px;
+  font:inherit;
+  font-weight:700;
   font-size:16px;
   line-height:1.2;
   text-decoration:none;
-  background:var(--ink);
-  color:var(--opening);
-  border:1px solid var(--ink);
+  color:var(--shell-ink);
+  text-shadow:0 1px 0 color-mix(in srgb,var(--shell-light) 40%,transparent);
+  background:linear-gradient(180deg,var(--shell-light),var(--shell-base) 55%,var(--shell-shade));
+  box-shadow:0 2px 0 var(--shell-shade),0 3px 8px rgba(0,0,0,.5);
   cursor:pointer;
-  transition:transform .12s ease,background .12s ease;
+  transition:transform .08s ease,box-shadow .08s ease;
 }
-.btn:hover{transform:translateY(-1px)}
-.btn:disabled{opacity:.45;cursor:default;transform:none}
-.btn.ghost{background:transparent;color:var(--ink);border-color:var(--rule)}
-.btn.ghost:hover{border-color:var(--edge)}
-/* The file inputs are out of sight but stay in the tab order, so their .btn label shows focus. */
-.visually-hidden{position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
-label.btn:focus-within{outline:2px solid var(--ink);outline-offset:3px}
+.key:active,.key[aria-pressed="true"]{transform:translateY(2px);box-shadow:0 0 0 var(--shell-shade),inset 0 2px 4px rgba(0,0,0,.35)}
+.key:disabled{opacity:.45;cursor:default;transform:none}
+.key:focus-visible,label.key:focus-within{outline:2px solid var(--ink);outline-offset:3px}
+.key.dark{
+  padding:8px 14px 9px;
+  font-weight:600;
+  font-size:14px;
+  color:var(--ink);
+  text-shadow:0 -1px 0 rgba(0,0,0,.6);
+  background:linear-gradient(180deg,#3d3d45,#2c2c32);
+  box-shadow:0 2px 0 #131316,inset 0 1px 0 #4b4b54;
+}
+.key.dark:active,.key.dark[aria-pressed="true"]{background:#1d1d22;color:var(--shell-accent);box-shadow:inset 0 2px 4px rgba(0,0,0,.75)}
 
-.banner{margin:24px 0 0;padding:14px 16px;border:1px solid var(--edge);border-radius:8px;background:var(--recess)}
-.banner .btn{padding:6px 12px;font-size:14px;margin-left:8px}
+/* ---------------------------------------------------------------- page --- */
 
+.wrap{max-width:1180px;margin:0 auto;padding:clamp(28px,5vh,48px) 24px}
+.title{font-size:clamp(40px,7vw,64px);font-weight:700;letter-spacing:-.045em;line-height:1.05;margin:0}
+.actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:22px}
+.mode{color:var(--muted);font-size:15px;margin:14px 0 0}
+.banner{margin:24px 0 0;padding:14px 16px;border-radius:6px;background:var(--recess);box-shadow:inset 0 1px 3px rgba(0,0,0,.7)}
+.banner .key{margin-left:8px}
 .progress{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:24px 0 0;color:var(--muted);font-size:15px}
-.progress progress{width:min(320px,100%);accent-color:var(--ink)}
+.progress progress{width:min(320px,100%);accent-color:var(--shell-accent)}
+/* Under the masthead and pinned there: the key belongs with the choice you just made, and the
+   carts scroll under it. */
+.write-bar{position:sticky;top:var(--mast-h);z-index:10;display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-top:24px;padding:14px 0;background:var(--page);border-bottom:1px solid var(--rule)}
+.count{font-weight:600}
+.summary{color:var(--muted);font-size:15px}
+.summary:empty{display:none}
+
+/* One tab per platform on the card, each the top of its own cart: a GBA cart's rounded shoulders,
+   a Game Pak's clipped corner. They stand on the shelf's edge. */
+.shelf-tabs{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px;align-items:flex-end;border-bottom:3px solid var(--housing)}
+.shelf-tab{
+  padding:11px 18px 8px;
+  border:0;
+  border-radius:9px 9px 0 0;
+  font:inherit;
+  font-size:15px;
+  font-weight:600;
+  color:var(--muted);
+  background:linear-gradient(180deg,#34343c,var(--housing));
+  box-shadow:inset 0 1px 0 #45454e;
+  cursor:pointer;
+}
+.shelf-tab[data-platform="GB"],.shelf-tab[data-platform="GBC"]{border-radius:6px 0 0 0;clip-path:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,0 100%)}
+.shelf-tab .n{margin-left:8px;font-weight:400;opacity:.7}
+.shelf-tab:hover{color:var(--ink)}
+.shelf-tab[aria-pressed="true"]{color:var(--shell-ink);background:linear-gradient(180deg,var(--shell-light),var(--shell-base));text-shadow:0 1px 0 color-mix(in srgb,var(--shell-light) 55%,transparent)}
+.shelf-tab:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+
+/* ---------------------------------------------------------------- shelf --- */
 
 /* One slot pixel is one CSS pixel, at every width and never a fraction: a cart is the size the
    SP draws it, 240x135 of the 720x480 the device composites, and a blurred cart is no judge. */
 /* Every card the same height, whatever its title runs to, so the grid reads as rows of carts
-   rather than a ragged edge. A short-titled card carries the difference as space at its foot. */
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,268px),1fr));grid-auto-rows:1fr;gap:18px;margin-top:28px}
-.cart{background:var(--housing);border:1px solid var(--rule);border-radius:12px;padding:12px 12px 14px;display:flex;flex-direction:column;gap:6px;min-width:0}
+   rather than a ragged edge. */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,268px),1fr));grid-auto-rows:1fr;gap:18px;margin-top:22px}
+/* Each cart sits in a bay moulded into the housing. */
+.cart{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  min-width:0;
+  padding:12px 12px 14px;
+  border-radius:10px;
+  background:var(--housing);
+  box-shadow:inset 0 1px 0 #34343c,inset 0 -1px 0 #121216,0 1px 2px rgba(0,0,0,.4);
+}
 .cart[data-state="has-label"]{opacity:.72}
-.face{display:grid;place-items:center;background:var(--recess);border-radius:8px;padding:8px 0;position:relative;min-height:151px}
-.face.over{outline:2px dashed var(--ink);outline-offset:-4px}
+.face{display:grid;place-items:center;position:relative;min-height:151px;padding:8px 0;border-radius:6px;background:var(--recess);box-shadow:inset 0 2px 7px rgba(0,0,0,.8),inset 0 -1px 0 #2a2a31}
+.face.over{outline:2px dashed var(--shell-accent);outline-offset:-4px}
 /* Every cart is 240 wide, whatever it is: a Game Boy Game Pak is the same width as a GBA cart and
    taller, so the height follows the canvas rather than being pinned to the GBA one. */
 .face canvas{width:240px;height:auto;image-rendering:pixelated}
-/* One line, centred under the cart, with the filename on hover: a wrapped dump name outweighed
-   the thing it names. */
-.stem{font-size:15px;font-weight:600;line-height:1.35;margin:6px 0 0;text-align:center;text-wrap:balance;overflow-wrap:anywhere}
-.tags{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin:0}
-.tags:empty{display:none}
-.chip{background:var(--recess);border:1px solid var(--rule);border-radius:999px;padding:2px 8px;font-size:11px;color:var(--muted);white-space:nowrap}
+.stem{font-size:15px;font-weight:600;line-height:1.35;margin:8px 0 0;text-align:center;text-wrap:balance;overflow-wrap:anywhere}
+/* The fine print under a real label: product code and region. */
+.print{margin:0;text-align:center;font:12px/1.3 var(--mono);color:var(--muted)}
 /* Only while a cart has no face to show: being read, being looked up, or an error. */
 .game{margin:0;color:var(--muted);font-size:13px;text-align:center;overflow-wrap:anywhere}
 .game:empty{display:none}
-.edit-open{position:absolute;top:8px;right:8px;width:32px;height:32px;padding:0;display:grid;place-items:center;border:1px solid var(--rule);border-radius:8px;background:var(--housing);color:var(--ink);cursor:pointer}
-.edit-open:hover,.edit-open:focus-visible{background:var(--ink);color:var(--opening);outline:none}
+/* One of the SP's round face buttons. */
+.edit-open{
+  position:absolute;
+  top:8px;
+  right:8px;
+  width:30px;
+  height:30px;
+  padding:0;
+  display:grid;
+  place-items:center;
+  border:0;
+  border-radius:50%;
+  color:var(--muted);
+  background:radial-gradient(circle at 35% 30%,#4a4a53,#2a2a30 70%);
+  box-shadow:0 2px 0 #111114,inset 0 1px 0 #5a5a63;
+  cursor:pointer;
+}
+.edit-open:hover,.edit-open:focus-visible{color:var(--ink);outline:none;box-shadow:0 2px 0 #111114,inset 0 1px 0 #5a5a63,0 0 0 2px var(--shell-accent)}
+.edit-open:active{transform:translateY(2px);box-shadow:inset 0 2px 3px rgba(0,0,0,.7)}
 
-/* Above the carts and pinned there: the button belongs with the choice you just made, and the
-   carts scroll under it. */
-.write-bar{position:sticky;top:0;z-index:1;display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-top:24px;padding:14px 0;background:var(--page);border-bottom:1px solid var(--rule)}
-/* One per platform the card holds, shown only when it holds more than one. The pressed tab is
-   filled the way the primary button is, so which shelf you are on reads at a glance. */
-.tabs{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
-.tabs .btn{padding:8px 16px;font-size:15px}
-.tabs .btn[aria-pressed="true"]{background:var(--ink);color:var(--opening);border-color:var(--ink)}
+.credits{max-width:72ch;margin:56px auto 0;padding-top:20px;border-top:1px solid var(--rule);color:var(--muted);font-size:14px;line-height:1.6}
+.credits p{margin:0 0 10px}
+.credits a{color:var(--muted)}
+.credits a:hover{color:var(--ink)}
 
-.credits{margin-top:48px;color:var(--muted);font-size:14px;text-align:center}
+/* --------------------------------------------------------------- editor --- */
 
-/* The editor sits beside the shelf, which stays in view, dimmed, with the cart being edited outlined. */
-:root{--panel:380px}
+/* The editor sits beside the shelf, under the masthead, with the shelf dimmed and the cart being
+   edited outlined in the visit's plastic. */
 body.editing{padding-right:var(--panel)}
+/* The masthead is the site's, not the shelf's, so it keeps the full width. */
+body.editing .mast{margin-right:calc(-1 * var(--panel))}
 body.editing .cart{cursor:pointer}
 body.editing .cart:not(.current){opacity:.45}
-.cart.current{opacity:1;outline:2px solid var(--ink);outline-offset:2px}
-.editor{position:fixed;top:0;right:0;bottom:0;z-index:2;width:var(--panel);overflow:auto;padding:18px;display:flex;flex-direction:column;gap:16px;background:var(--housing);border-left:1px solid var(--rule)}
+.cart.current{opacity:1;outline:2px solid var(--shell-accent);outline-offset:2px}
+.editor{
+  position:fixed;
+  top:var(--mast-h);
+  right:0;
+  bottom:0;
+  z-index:30;
+  width:var(--panel);
+  overflow:auto;
+  padding:18px;
+  display:flex;
+  flex-direction:column;
+  gap:16px;
+  background:linear-gradient(90deg,#27272d,var(--housing));
+  box-shadow:inset 1px 0 0 #3c3c45,-10px 0 28px rgba(0,0,0,.35);
+}
 .editor:focus{outline:none}
 .ed-head{display:flex;align-items:center;gap:8px}
 .ed-head h2{flex:1;min-width:0;margin:0;font-size:16px;font-weight:600;line-height:1.3;text-align:center;overflow-wrap:anywhere}
-.ed-icon{width:36px;height:36px;padding:0;display:grid;place-items:center;font-size:14px;flex:none}
-.ed-face{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;image-rendering:pixelated}
+.ed-icon{width:36px;height:36px;padding:0;display:grid;place-items:center;flex:none}
+/* The large cart sits in a deeper bay, like the SP's own cart slot. */
+.ed-face{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;padding:10px;border-radius:8px;background:var(--recess);box-shadow:inset 0 3px 9px rgba(0,0,0,.85),inset 0 -1px 0 #2d2d34;image-rendering:pixelated}
 .props{display:flex;flex-direction:column;gap:12px}
-.props hr{width:100%;margin:2px 0;border:0;border-top:1px solid var(--rule)}
+.props hr{width:100%;margin:2px 0;border:0;border-top:1px solid #1a1a1e;box-shadow:0 1px 0 #34343c}
 .prop{display:grid;grid-template-columns:96px 1fr;align-items:center;column-gap:12px}
 .prop>.k{color:var(--muted);font-size:14px}
 .prop>.v{min-width:0}
-.field{width:100%;display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--rule);border-radius:8px;background:transparent;color:var(--ink);font:inherit;font-size:14px;text-align:left;cursor:pointer}
+/* Fields are wells set into the housing, the way the SP's screen is. */
+.field{width:100%;display:flex;align-items:center;gap:8px;padding:7px 10px;border:0;border-radius:5px;background:var(--recess);box-shadow:inset 0 1px 3px rgba(0,0,0,.85),inset 0 -1px 0 #2d2d34;color:var(--ink);font:inherit;font-size:14px;text-align:left;cursor:pointer}
 .field>span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.field>i{flex:none;width:22px;height:22px;border-radius:5px;border:1px solid var(--rule)}
+.field>i{flex:none;width:20px;height:20px;border-radius:4px;box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 1px 0 rgba(0,0,0,.6)}
 .field::after{content:"▾";color:var(--muted)}
+.field:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .field:disabled,.seg button:disabled{opacity:.45;cursor:default}
-.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--rule);border-radius:8px;overflow:hidden}
-.seg button{padding:7px 12px;border:0;border-left:1px solid var(--rule);background:transparent;color:var(--ink);font:inherit;font-size:14px;cursor:pointer}
-.seg button:first-child{border-left:0}
-.seg button[aria-pressed="true"]{background:var(--ink);color:var(--opening)}
-.pop{margin-top:8px;padding:10px;border:1px solid var(--rule);border-radius:8px;background:var(--recess)}
-.pop input[type="search"]{width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--rule);background:var(--opening);color:var(--ink);font:inherit;font-size:14px}
+/* A switch is a row of keys; the chosen one stays pressed in. */
+.seg{display:flex;flex-wrap:wrap;gap:5px}
+.seg button{padding:7px 12px 8px;border:0;border-radius:4px;font:inherit;font-size:14px;font-weight:600;color:var(--ink);text-shadow:0 -1px 0 rgba(0,0,0,.6);background:linear-gradient(180deg,#3d3d45,#2c2c32);box-shadow:0 2px 0 #131316,inset 0 1px 0 #4b4b54;cursor:pointer}
+.seg button[aria-pressed="true"]{transform:translateY(2px);background:#1d1d22;color:var(--shell-accent);box-shadow:inset 0 2px 4px rgba(0,0,0,.75)}
+.seg button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.pop{margin-top:8px;padding:10px;border-radius:6px;background:var(--recess);box-shadow:inset 0 1px 4px rgba(0,0,0,.8)}
+.pop input[type="search"]{width:100%;padding:8px 10px;border:0;border-radius:4px;background:var(--opening);box-shadow:inset 0 1px 3px rgba(0,0,0,.9);color:var(--ink);font:inherit;font-size:14px}
 .hits{list-style:none;margin:8px 0 0;padding:0;max-height:240px;overflow:auto}
 .hits:empty{display:none}
-.hits button{display:block;width:100%;padding:7px 9px;border:0;border-radius:6px;background:transparent;color:var(--ink);font:inherit;font-size:14px;text-align:left;cursor:pointer;overflow-wrap:anywhere}
+.hits button{display:block;width:100%;padding:7px 9px;border:0;border-radius:4px;background:transparent;color:var(--ink);font:inherit;font-size:14px;text-align:left;cursor:pointer;overflow-wrap:anywhere}
 .hits button:hover,.hits button:focus-visible{background:var(--housing);outline:none}
 .hits .none{color:var(--muted)}
+/* Swatches are chips of the plastic itself. */
 .pal-grid{display:grid;grid-template-columns:repeat(auto-fill,26px);gap:7px}
-.pal-grid button{width:26px;height:26px;padding:0;border:1px solid var(--rule);border-radius:6px;cursor:pointer}
-.pal-grid button[aria-pressed="true"]{outline:2px solid var(--ink);outline-offset:2px}
+.pal-grid button{width:26px;height:26px;padding:0;border:0;border-radius:5px;box-shadow:inset 0 1px 0 rgba(255,255,255,.35),inset 0 -1px 0 rgba(0,0,0,.35),0 1px 2px rgba(0,0,0,.6);cursor:pointer}
+.pal-grid button[aria-pressed="true"]{outline:2px solid var(--shell-accent);outline-offset:2px}
+.pal-grid button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .pal-grid+.pal-foot{margin-top:10px}
 .pal-foot{display:flex;flex-wrap:wrap;gap:8px}
-.pal-foot .btn{padding:6px 12px;font-size:14px}
-.pal-foot .btn[aria-pressed="true"]{background:var(--ink);color:var(--opening);border-color:var(--ink)}
-.pal-foot .well{position:relative}
-.pal-foot .well input[type="color"]{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;border:0;opacity:0;cursor:pointer;-webkit-appearance:none;appearance:none}
-.pal-foot .well:focus-within{outline:2px solid var(--ink);outline-offset:3px}
-.ed-foot{display:flex;justify-content:space-between;gap:8px;margin-top:auto;padding-top:14px;border-top:1px solid var(--rule)}
+.pick{position:relative}
+.pick input[type="color"]{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;border:0;opacity:0;cursor:pointer;-webkit-appearance:none;appearance:none}
+.pick:focus-within{outline:2px solid var(--ink);outline-offset:3px}
+.ed-foot{display:flex;justify-content:space-between;gap:8px;margin-top:auto;padding-top:14px;border-top:1px solid #1a1a1e;box-shadow:inset 0 1px 0 #34343c}
 .ed-history{display:flex;gap:8px}
-.ed-foot .btn{padding:8px 16px;font-size:14px}
-.tip{position:fixed;z-index:3;padding:4px 8px;border-radius:6px;background:var(--ink);color:var(--opening);font-size:13px;font-weight:600;white-space:nowrap;pointer-events:none}
+.tip{position:fixed;z-index:50;padding:4px 8px;border-radius:4px;background:var(--ink);color:var(--opening);font-size:13px;font-weight:600;white-space:nowrap;pointer-events:none;box-shadow:0 2px 6px rgba(0,0,0,.5)}
 @media (max-width:720px){
   body.editing{padding-right:0}
-  .editor{left:0;width:auto;border-left:0}
+  body.editing .mast{margin-right:0}
+  .editor{left:0;width:auto;box-shadow:none}
 }
