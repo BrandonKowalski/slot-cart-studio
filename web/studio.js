@@ -497,13 +497,23 @@ async function art(s, c) {
   paint(c);
 }
 
+// Where the set files this cart's art: under its own checksum while its game is the one that
+// checksum names, else under the first dump of the game chosen for it that the set has.
+function artKey(c) {
+  const own = c.crc === null ? null : crcHex(c.crc);
+  const db = dats.get(c.platform);
+  if (!c.game || !db || (c.crc !== null && db.game_for(c.crc) === c.game)) return own;
+  return Array.from(db.crcs_for(c.game), crcHex).find((k) => artIndex?.[k]) ?? null;
+}
+
 // Fetch what `c.game` names and let it decide the cart's hue. The Game row re-runs this for a game
 // chosen by hand, so a chosen match is dressed exactly the way a matched one is.
 async function dress(s, c) {
   // A set of our own is found by checksum, so a cart no database has a name for can still be
   // dressed from it. libretro is found by name, so those requests only happen when there is one.
   const name = c.game ? thumbnail_name(c.game) : null;
-  c.look = parseLook(c.crc === null ? null : artIndex?.[crcHex(c.crc)]?.look);
+  const key = artKey(c);
+  c.look = parseLook(key && artIndex?.[key]?.look);
   // The queue is shared, so a card replaced while its jobs wait gives up their turns without
   // a request instead of making the new card wait behind its downloads.
   const thumb = (folder) =>
@@ -514,7 +524,7 @@ async function dress(s, c) {
         ).catch(noImage);
   // Our own set first, by checksum: it carries logos for platforms libretro has none for at all.
   const ours = (media) => {
-    const path = c.crc === null ? null : artIndex?.[crcHex(c.crc)]?.[media];
+    const path = key && artIndex?.[key]?.[media];
     if (!path) return Promise.resolve(null);
     return limit(async () =>
       s === session && !fatal ? fetchArt(ART_BASE, path) : null,
@@ -717,11 +727,18 @@ async function writeLabels() {
 
 const canLabel = (c) => ['ready', 'needs-logo'].includes(stateOf(c));
 
+const SMALL = new Set(['in', 'of', 'the', 'and']);
+const titled = (name) =>
+  name
+    .split(' ')
+    .map((w, i) => (i > 0 && SMALL.has(w) ? w : w.charAt(0).toUpperCase() + w.slice(1)))
+    .join(' ');
+
 let presetList = null;
 const presets = () =>
   (presetList ??= shell_presets().map((entry) => {
     const [name, value] = entry.split('\t');
-    return { name, value };
+    return { name: titled(name), value };
   }));
 
 function shellOf(c) {
@@ -859,6 +876,7 @@ async function start() {
               game: c.game,
               deep: hex(c.deep ?? baseDeep(c)),
               band: !!bandOf(c),
+              logo: activeLogo(c)?.length ?? 0,
             }))
           : [],
       shells: () => (session ? session.carts.map((c) => ({ stem: c.stem, shell: c.shell })) : []),

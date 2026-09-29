@@ -91,6 +91,10 @@ impl JsDat {
         self.0.game_for(crc).map(str::to_string)
     }
 
+    pub fn crcs_for(&self, name: &str) -> Vec<u32> {
+        self.0.crcs_for(name)
+    }
+
     /// Games whose name contains `query`, for the finder a cart opens when its match is wrong.
     pub fn search(&self, query: &str, limit: usize) -> Vec<String> {
         self.0.search(query, limit)

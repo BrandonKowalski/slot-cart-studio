@@ -37,6 +37,19 @@ impl Dat {
         self.by_crc.get(&crc).map(String::as_str)
     }
 
+    /// Every dump filed under `name`, lowest CRC first, so a game chosen by name can be found in
+    /// a set keyed by checksum.
+    pub fn crcs_for(&self, name: &str) -> Vec<u32> {
+        let mut crcs: Vec<u32> = self
+            .by_crc
+            .iter()
+            .filter(|(_, n)| n.as_str() == name)
+            .map(|(crc, _)| *crc)
+            .collect();
+        crcs.sort_unstable();
+        crcs
+    }
+
     /// Games whose name contains `query`, ignoring case, for a cart whose CRC matched the wrong
     /// game or nothing at all. Names starting with the query come first — someone typing "zelda"
     /// wants the Zelda games before the ones that merely mention it — and the rest sort
@@ -119,6 +132,19 @@ mod tests {
         assert_eq!(dat.search("e", 2).len(), 2);
         assert!(dat.search("   ", 10).is_empty());
         assert!(dat.search("kirby", 10).is_empty());
+    }
+
+    #[test]
+    fn a_name_finds_every_dump_it_has_in_order() {
+        let two = "game (\n name \"Tetris (World)\"\n rom ( name \"a\" crc 0000000B )\n)\n\
+                   game (\n name \"Tetris (World)\"\n rom ( name \"b\" crc 0000000A )\n)\n";
+        let dat = Dat::parse(two);
+        assert_eq!(dat.crcs_for("Tetris (World)"), vec![0xA, 0xB]);
+        assert_eq!(
+            Dat::parse(EXCERPT).crcs_for("Metroid Fusion (USA)"),
+            vec![0x6C75_479C]
+        );
+        assert!(dat.crcs_for("Kirby").is_empty());
     }
 
     #[test]

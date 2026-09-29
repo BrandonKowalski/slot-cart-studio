@@ -361,6 +361,27 @@ def main():
                 sys.exit(f'Undo gave {banded} its logo back but not its band')
             page.eval("document.getElementById('ed-close').click()")
             print(f'asserted: a logo picked for {banded} takes no colour or band from its look, and Undo gives them back')
+
+            # A game chosen by hand wears that game's art, not the art filed under the cart's own checksum.
+            by_stem = {nfc(s['stem']): s for s in page.eval('window.__studio.states()')}
+            donor = next((s for stem, s in by_stem.items() if stem in wheels and stem != banded and s['game']
+                          and s['platform'] == by_stem[banded]['platform'] and s['logo']
+                          and s['logo'] != by_stem[banded]['logo']), None)
+            if donor is None:
+                sys.exit(f'no other cart with art on {banded}\'s platform to choose as its game')
+            page.eval(EDIT % json.dumps(banded))
+            page.eval("document.getElementById('ed-game').click()")
+            page.eval(PICK_HIT % json.dumps(donor['game']))
+            wait(lambda: page.eval('window.__studio.idle()'), 60, 'the chosen game to be dressed')
+            now = state_of(page, banded)
+            if (now['game'], now['logo']) != (donor['game'], donor['logo']):
+                sys.exit(f'choosing {donor["game"]} for {banded} gave it {now["game"]!r} with a '
+                         f'{now["logo"]}-byte logo, not the {donor["logo"]}-byte one')
+            page.eval("document.getElementById('ed-undo').click()")
+            if state_of(page, banded)['logo'] != by_stem[banded]['logo']:
+                sys.exit('Undo did not give back the logo the chosen game replaced')
+            page.eval("document.getElementById('ed-close').click()")
+            print(f'asserted: choosing {donor["game"]} for {banded} brings that game\'s logo, and Undo takes it back')
         # The editor: ◀ ▶ step through the shelf, and a click on another card moves it there.
         shelf = page.eval(SHELF)
         if len(shelf) < 3:
@@ -447,6 +468,43 @@ def main():
         if look() != was:
             sys.exit(f'Undo did not take back a drag made after an Undo: {look()}')
         print('asserted: ⌘Z still works after a pick hides the focused swatch, and a drag after Undo is its own step')
+        # Background and Shell are the same control: the same swatches, then Automatic and Custom….
+        palettes = page.eval(
+            "['ed-bg-pal', 'ed-shell-pal'].map(id => [...document.getElementById(id).querySelectorAll('button, input')]"
+            ".map(b => b.tagName === 'INPUT' ? 'custom' : b.id ? b.textContent : b.style.background))"
+        )
+        if palettes[0] != palettes[1]:
+            sys.exit(f'the Background palette {palettes[0]} is not the Shell one {palettes[1]}')
+        swatch = page.eval("(b => ({ name: b.getAttribute('aria-label'), colour: b.dataset.value.split(' ')[1] }))"
+                           "(document.querySelectorAll('#ed-bg-pal .pal-grid button')[5])")
+        page.eval("document.getElementById('ed-bg').click()")
+        page.eval("document.querySelectorAll('#ed-bg-pal .pal-grid button')[5].click()")
+        named = page.eval("document.querySelector('#ed-bg span').textContent")
+        if (look()[1], named) != ('#' + swatch['colour'], swatch['name']):
+            sys.exit(f'picking {swatch} for Background gave {look()[1]!r}, labelled {named!r}')
+        page.eval("document.getElementById('ed-undo').click()")
+        if look() != was:
+            sys.exit('Undo did not take back a Background swatch')
+        print('asserted: Background has the Shell palette, and a swatch sets and names the colour')
+        # Every colour name is capitalised, and hovering a swatch shows its name at once.
+        names = page.eval("[...document.querySelectorAll('#ed-shell-presets button')].map(b => b.getAttribute('aria-label'))")
+        small = {'in', 'of', 'the', 'and'}
+        lower = [n for n in names if any(w[:1].islower() and (i == 0 or w not in small) for i, w in enumerate(n.split()))]
+        if lower:
+            sys.exit(f'these colour names are not capitalised: {lower}')
+        page.eval("document.getElementById('ed-shell').click()")
+        at = page.eval("(r => [r.left + r.width / 2, r.top + r.height / 2])"
+                       "(document.querySelectorAll('#ed-shell-presets button')[0].getBoundingClientRect())")
+        page.send('Input.dispatchMouseEvent', type='mouseMoved', x=at[0], y=at[1])
+        tip = page.eval("(t => t.hidden ? null : [t.textContent, (r => r.left >= 0 && r.right <= innerWidth)"
+                        "(t.getBoundingClientRect())])(document.getElementById('ed-tip'))")
+        if tip != [names[0], True]:
+            sys.exit(f'hovering the first swatch showed {tip!r}, not {names[0]!r} inside the window')
+        page.send('Input.dispatchMouseEvent', type='mouseMoved', x=5, y=5)
+        if not page.eval("document.getElementById('ed-tip').hidden"):
+            sys.exit('the colour name stayed up after the pointer left')
+        page.eval("document.getElementById('ed-shell').click()")
+        print(f'asserted: colour names are capitalised, and hovering a swatch shows its name ({names[0]})')
         page.eval("document.getElementById('ed-close').click()")
         if page.eval('window.__studio.editing()') is not None or page.eval("!!document.querySelector('.cart.current')"):
             sys.exit('✕ left the editor open or a card outlined')

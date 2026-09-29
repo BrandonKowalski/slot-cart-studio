@@ -140,6 +140,7 @@ body.editing .cart:not(.current){opacity:.45}
 .ed-foot{display:flex;justify-content:space-between;gap:8px;margin-top:auto;padding-top:14px;border-top:1px solid var(--rule)}
 .ed-history{display:flex;gap:8px}
 .ed-foot .btn{padding:8px 16px;font-size:14px}
+.tip{position:fixed;z-index:3;padding:4px 8px;border-radius:6px;background:var(--ink);color:var(--opening);font-size:13px;font-weight:600;white-space:nowrap;pointer-events:none}
 @media (max-width:720px){
   body.editing{padding-right:0}
   .editor{left:0;width:auto;border-left:0}

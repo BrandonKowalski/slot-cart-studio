@@ -79,6 +79,7 @@
       <div class="v">
         <button class="field" id="ed-bg" type="button" aria-expanded="false"><i></i><span></span></button>
         <div class="pop" id="ed-bg-pal" hidden>
+          <div class="pal-grid" id="ed-bg-presets" role="group" aria-label="Colours"></div>
           <div class="pal-foot">
             <button class="btn ghost" id="ed-bg-auto" type="button">Automatic</button>
             <span class="btn ghost well">Custom…<input id="ed-bg-custom" type="color" aria-label="Custom background"></span>
@@ -129,6 +130,7 @@
     <button class="btn ghost" id="ed-revert" type="button">Revert</button>
   </div>
 </aside>
+<div id="ed-tip" class="tip" role="tooltip" hidden></div>
 
 <template id="card-tpl">
   <article class="cart">

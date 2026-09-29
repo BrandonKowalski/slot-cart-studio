@@ -44,6 +44,7 @@ export function createEditor(api) {
 
   function closePops() {
     dragging = false;
+    $('ed-tip').hidden = true;
     for (const [pop, opener] of Object.entries(OPENERS)) {
       const had = $(pop).contains(document.activeElement);
       $(pop).hidden = true;
@@ -67,19 +68,24 @@ export function createEditor(api) {
     for (const b of $(group).querySelectorAll('button')) b.disabled = !on;
   };
 
+  // Background and Shell share one palette: the real plastics, by colour.
   function build() {
     if (built) return;
     built = true;
-    $('ed-shell-presets').replaceChildren(
-      ...api.presets().map(({ name, value }) => {
-        const b = Object.assign(document.createElement('button'), { type: 'button', title: name });
-        b.setAttribute('aria-label', name);
-        b.dataset.value = value;
-        b.style.background = `#${value.split(' ')[1]}`;
-        return b;
-      }),
-    );
+    for (const id of ['ed-bg-presets', 'ed-shell-presets']) {
+      $(id).replaceChildren(
+        ...api.presets().map(({ name, value }) => {
+          const b = Object.assign(document.createElement('button'), { type: 'button' });
+          b.setAttribute('aria-label', name);
+          b.dataset.value = value;
+          b.style.background = `#${value.split(' ')[1]}`;
+          return b;
+        }),
+      );
+    }
   }
+
+  const presetNamed = (hex) => api.presets().find(({ value }) => `#${value.split(' ')[1]}` === hex)?.name ?? hex;
 
   function showGames() {
     const c = cart;
@@ -123,7 +129,10 @@ export function createEditor(api) {
     const bg = api.background(c);
     $('ed-bg').disabled = !api.canBackground(c);
     $('ed-bg').querySelector('i').style.background = api.hex(bg.rgb);
-    $('ed-bg').querySelector('span').textContent = bg.auto ? 'Automatic' : api.hex(bg.rgb);
+    $('ed-bg').querySelector('span').textContent = bg.auto ? 'Automatic' : presetNamed(api.hex(bg.rgb));
+    for (const b of $('ed-bg-presets').querySelectorAll('button')) {
+      b.setAttribute('aria-pressed', String(!bg.auto && `#${b.dataset.value.split(' ')[1]}` === api.hex(bg.rgb)));
+    }
     $('ed-bg-auto').setAttribute('aria-pressed', String(bg.auto));
     $('ed-bg-custom').value = api.hex(bg.rgb);
 
@@ -184,6 +193,28 @@ export function createEditor(api) {
     next.el.root.scrollIntoView({ block: 'nearest' });
   }
 
+  // A swatch's name, at once and kept inside the window; the browser's own tooltip is slow to come.
+  function tip(b) {
+    const t = $('ed-tip');
+    if (!b) {
+      t.hidden = true;
+      return;
+    }
+    t.textContent = b.getAttribute('aria-label');
+    t.hidden = false;
+    const r = b.getBoundingClientRect();
+    const left = Math.min(Math.max(8, r.left + r.width / 2 - t.offsetWidth / 2), innerWidth - t.offsetWidth - 8);
+    t.style.left = `${left}px`;
+    t.style.top = `${Math.max(8, r.top - t.offsetHeight - 6)}px`;
+  }
+  const swatch = (e) => e.target.closest?.('.pal-grid button') ?? null;
+  for (const id of ['ed-bg-presets', 'ed-shell-presets']) {
+    $(id).addEventListener('pointerover', (e) => tip(swatch(e)));
+    $(id).addEventListener('pointerout', () => tip(null));
+    $(id).addEventListener('focusin', (e) => tip(swatch(e)));
+    $(id).addEventListener('focusout', () => tip(null));
+  }
+
   $('ed-close').addEventListener('click', close);
   $('ed-prev').addEventListener('click', () => move(-1));
   $('ed-next').addEventListener('click', () => move(1));
@@ -210,6 +241,12 @@ export function createEditor(api) {
   });
 
   $('ed-bg').addEventListener('click', () => toggle('ed-bg-pal'));
+  $('ed-bg-presets').addEventListener('click', (e) => {
+    const value = e.target.closest('button')?.dataset.value;
+    if (!value) return;
+    closePops();
+    change((c) => api.setBackground(c, api.fromHex(`#${value.split(' ')[1]}`)));
+  });
   $('ed-bg-auto').addEventListener('click', () => {
     closePops();
     change((c) => api.setBackground(c, null));
