@@ -45,7 +45,12 @@ def _label(data):
     if game_boy:
         cut = round(px.shape[1] * SIDE_STRIP)
         px = px[:, cut:px.shape[1] - cut]
-    return px
+    return px, game_boy
+
+
+def _paper(colour):
+    """Whether a colour is the pale, near-grey paper a Game Boy label's side strips are printed on."""
+    return colour.min() >= 200 and colour.max() - colour.min() <= 30
 
 
 def _from(px, edge):
@@ -104,12 +109,16 @@ def _hex(colour):
 
 def measure_look(data):
     """The look of the label in a cart scan, or None when the scan is not a known template."""
-    px = _label(data)
-    if px is None:
+    label = _label(data)
+    if label is None:
         return None
+    px, game_boy = label
     h, w = px.shape[:2]
 
     candidates = [c for c in (_candidate(px, e) for e in EDGES) if c]
+    # A scan that sits off centre leaves some of a side strip past the fixed cut.
+    if game_boy:
+        candidates = [c for c in candidates if not (c['edge'] in ('left', 'right') and _paper(c['colour']))]
     strong = [c for c in candidates if c['apart'] >= BAND_APART]
     band = max(strong, key=lambda c: c['score']) if strong else None
     borderline = any(abs(c['apart'] - BAND_APART) <= BAND_APART * BORDERLINE for c in candidates)

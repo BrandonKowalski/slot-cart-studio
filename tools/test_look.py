@@ -76,6 +76,15 @@ class MeasureLook(unittest.TestCase):
         self.assertIsNone(got['band'])
         self.assertTrue(near(rgb(got['ground']), BLUE))
 
+    def test_an_off_centre_game_boy_scan_does_not_turn_a_side_strip_into_a_band(self):
+        # The label sits 20 px off in the scan: 14% of paper down the left, 6% down the right.
+        im, (l, t, r, b) = scan((600, 678))
+        w = r - l
+        im.paste(WHITE, (l, t, l + round(w * 0.14), b))
+        im.paste(WHITE, (r - round(w * 0.06), t, r, b))
+        got = look.measure_look(png(im))
+        self.assertFalse(got['band'] is not None and got['sure'], got)
+
     def test_a_faint_strip_is_not_a_band_and_is_still_sure(self):
         im, (l, t, r, b) = scan((600, 355))
         im.paste((30, 80, 170), (l, t, r, t + round((b - t) * 0.16)))  # 30 away from the ground
