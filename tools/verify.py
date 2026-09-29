@@ -306,30 +306,33 @@ def main():
         if art:
             page_url += '?art=' + urllib.parse.quote(art, safe='')
             print('art set:', art)
-        # Pinned, the way slot's own site takes ?shell=, so the colourway checks below know what to expect.
-        page_url += ('&' if '?' in page_url else '?') + 'shell=pink'
         page.send('Page.navigate', url=page_url)
         wait(lambda: page.eval("document.body && document.body.dataset.ready === 'true'"), 60, 'the studio to start')
 
         first = open_card(page, 'card', ['Games/' + g for g in games])
 
-        # slot's own masthead, with the studio as its current page.
+        # slot's own masthead, exactly: its mark and its six sections.
         mast = page.eval("[...document.querySelectorAll('.mast a')]"
                          ".map(a => [a.textContent.trim(), a.getAttribute('href'), a.getAttribute('aria-current')])")
         site = 'https://slot.kowalski.io/'
         want_mast = [['slot.', site, None]] + [[name, f'{site}#{anchor}', None] for name, anchor in (
             ('Installing', 'install'), ('Guide', 'guide'), ('Buttons', 'buttons'), ('Questions', 'questions'),
-            ('Credits', 'credits'), ('AI', 'disclosure'))] + [['Cart Studio', './', 'page']]
+            ('Credits', 'credits'), ('AI', 'disclosure'))]
         if mast != want_mast:
             sys.exit(f'the masthead is {mast}, not slot\'s {want_mast}')
-        print('asserted: the masthead is slot\'s, with Cart Studio as the current page')
+        print('asserted: the masthead is slot\'s, link for link')
 
-        # The visit's colourway, pinned to pink above, is the plastic the keys are moulded in.
-        base = page.eval("getComputedStyle(document.documentElement).getPropertyValue('--shell-base').trim()")
+        # Every platform tab is the same key, whichever platform it names.
+        shapes = page.eval("[...document.querySelectorAll('#tabs button')].map(b => (s => [s.borderRadius, s.clipPath, s.paddingLeft])(getComputedStyle(b)))")
+        if len({json.dumps(x) for x in shapes}) > 1:
+            sys.exit(f'the platform tabs are not all the same shape: {shapes}')
+        print(f'asserted: all {len(shapes)} platform tabs are the same shape')
+
+        # One plastic for the whole page, silver, whatever the address asks for.
         key = page.eval("getComputedStyle(document.getElementById('write')).backgroundImage")
-        if base != '#e6a6b8' or 'rgb(230, 166, 184)' not in key:
-            sys.exit(f'?shell=pink gave --shell-base {base!r} and a write key of {key!r}')
-        print('asserted: the page takes slot\'s colourway, and the keys are moulded in it')
+        if 'rgb(184, 188, 194)' not in key:
+            sys.exit(f'the write key is not moulded in silver: {key!r}')
+        print('asserted: the keys are moulded in silver')
 
         # The fine print a real label carries, instead of region pills.
         prints = {nfc(s['stem']): (s['platform'], p) for s, p in zip(
@@ -368,10 +371,16 @@ def main():
             need += ['https://www.screenscraper.fr/', 'https://creativecommons.org/licenses/by-nc-sa/4.0/']
         missing = [u for u in need if not any(l.startswith(u) for l in links)]
         shows_ss = any('screenscraper' in l for l in links)
+        claims = page.eval("document.getElementById(document.getElementById('credit-ss').hidden ? 'credit-lr' : 'credit-ss').textContent")
+        if art and not claims.startswith('Logos and label colours from ScreenScraper'):
+            sys.exit(f'with an art set the credits still say {claims!r}')
         if missing or shows_ss != bool(art):
             sys.exit(f'the credits are missing {missing}, or show ScreenScraper ({shows_ss}) without its art set')
-        if 'not affiliated with' not in page.eval("document.querySelector('.credits').textContent"):
+        credits = ' '.join(page.eval("document.querySelector('.credits').innerText").split())
+        if 'not affiliated with nintendo' not in credits.lower():
             sys.exit('the credits carry no Nintendo non-affiliation line')
+        if len(credits.split()) > 45:
+            sys.exit(f'the credits run to {len(credits.split())} words: {credits}')
         print('asserted: the credits name every source and its terms' + (', ScreenScraper included' if art else ''))
 
         # Settled again before the shots: open_card's wait ends when every cart has resolved once,

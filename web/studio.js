@@ -27,11 +27,9 @@ import { fromDirectory, fromFiles, labelKey, PLATFORMS } from './card.js';
 import { fetchArt, fetchDat, fetchIndex, fetchThumb, limiter } from './libretro.js';
 import { createEditor } from './editor.js';
 import { commit } from './history.js';
-import { pickShell, wear } from './colourway.js';
 import { smallPrint } from './smallprint.js';
 
 const $ = (id) => document.getElementById(id);
-wear(pickShell(location.search));
 const limit = limiter(4);
 // The GBA game code sits at 0xAC and the Game Boy header ends at 0x150; nothing past that is read.
 const HEAD = 0x150;
@@ -562,7 +560,6 @@ function renderTabs() {
     ...present.map((p) => {
       const n = s.carts.filter((c) => c.platform === p).length;
       const tab = Object.assign(document.createElement('button'), { type: 'button', className: 'shelf-tab' });
-      tab.dataset.platform = p;
       tab.append(PLATFORM_NAMES[p] ?? p, Object.assign(document.createElement('span'), { className: 'n', textContent: n }));
       tab.setAttribute('aria-pressed', String(p === s.platform));
       tab.addEventListener('click', () => showPlatform(p));
@@ -820,7 +817,9 @@ async function start() {
   if (ART_BASE) {
     try {
       artIndex = await fetchIndex(ART_BASE);
+      // The set's logos and looks come first, so the credit says so rather than adding a line.
       $('credit-ss').hidden = false;
+      $('credit-lr').hidden = true;
       console.info(`art set: ${Object.keys(artIndex).length} checksums from ${ART_BASE}`);
     } catch (e) {
       banner(`The art set at ${ART_BASE} didn’t load (${e.message}). Logos come from libretro alone.`);
