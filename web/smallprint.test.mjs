@@ -17,12 +17,12 @@ test('a GBA cart with no real code falls back to its regions', () => {
   assert.equal(smallPrint('GBA', '\u0000\u0000ab', ['World']), 'AGB · World');
 });
 
-test('Game Boy carts carry no code, so they print their family and regions', () => {
-  assert.equal(smallPrint('GB', '', ['USA', 'Europe']), 'DMG · USA, EUR');
-  assert.equal(smallPrint('GBC', '', ['Japan']), 'CGB · JPN');
+test('Game Boy and Game Boy Color carts print nothing', () => {
+  assert.equal(smallPrint('GB', '', ['USA', 'Europe']), '');
+  assert.equal(smallPrint('GBC', '', ['Japan']), '');
 });
 
 test('languages, revisions and repeats are not regions', () => {
-  assert.equal(smallPrint('GBC', '', ['USA', 'En', 'Fr', 'Rev 1', 'USA']), 'CGB · USA');
-  assert.equal(smallPrint('GB', '', ['Proto']), 'DMG');
+  assert.equal(smallPrint('GBA', '', ['USA', 'En', 'Fr', 'Rev 1', 'USA']), 'AGB · USA');
+  assert.equal(smallPrint('GBA', '', ['Proto']), 'AGB');
 });

@@ -545,7 +545,7 @@ async function dress(s, c) {
   if (!c.userHue) c.deep = null;
 }
 
-// The platforms this card actually holds, in the order slot switches shelves through.
+// The platforms this card actually holds, in the studio's shelf order.
 const platformsOf = (s) => PLATFORMS.filter((p) => s.carts.some((c) => c.platform === p));
 
 // A tab per platform on the card, with what it holds. One platform is no choice at all, so a

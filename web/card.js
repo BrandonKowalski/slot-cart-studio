@@ -4,7 +4,8 @@
 
 // slot files a cart under the folder its platform names, in Games/, Labels/, Saves/ and States/
 // alike, and the folder is what decides the platform: the rom is never opened to ask.
-export const PLATFORMS = ['GBA', 'GB', 'GBC'];
+// Listed newest first, which is the order the studio's shelves and tabs run in.
+export const PLATFORMS = ['GBA', 'GBC', 'GB'];
 
 // slot's own rule, from slot-store's platform.rs. A .gba under GB/ is not a Game Boy cart and is
 // passed over in silence, the way slot passes over it.

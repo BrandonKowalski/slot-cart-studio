@@ -327,6 +327,10 @@ def main():
         if len({json.dumps(x) for x in shapes}) > 1:
             sys.exit(f'the platform tabs are not all the same shape: {shapes}')
         print(f'asserted: all {len(shapes)} platform tabs are the same shape')
+        order = page.eval("[...document.querySelectorAll('#tabs button')].map(b => b.firstChild.textContent)")
+        if order != ['Game Boy Advance', 'Game Boy Color', 'Game Boy']:
+            sys.exit(f'the platform tabs run {order}, not Game Boy Advance, Game Boy Color, Game Boy')
+        print('asserted: the tabs run Game Boy Advance, Game Boy Color, Game Boy')
 
         # One plastic for the whole page, silver, whatever the address asks for.
         key = page.eval("getComputedStyle(document.getElementById('write')).backgroundImage")
@@ -334,12 +338,11 @@ def main():
             sys.exit(f'the write key is not moulded in silver: {key!r}')
         print('asserted: the keys are moulded in silver')
 
-        # The fine print a real label carries, instead of region pills.
+        # The fine print a real GBA label carries, instead of region pills; Game Boy carts carry none.
         prints = {nfc(s['stem']): (s['platform'], p) for s, p in zip(
             page.eval('window.__studio.states()'),
             page.eval("[...document.querySelectorAll('#grid > .cart')].map(c => c.querySelector('.print').textContent)"))}
-        family = {'GBA': 'AGB', 'GB': 'DMG', 'GBC': 'CGB'}
-        wrong = {stem: p for stem, (platform, p) in prints.items() if not p.startswith(family[platform])}
+        wrong = {stem: p for stem, (platform, p) in prints.items() if (platform == 'GBA') != p.startswith('AGB')}
         if wrong or prints.get('Advance Wars', (None, None))[1] != 'AGB-AWRE-USA':
             sys.exit(f'the small print is wrong: {wrong or prints.get("Advance Wars")}')
         print(f'asserted: every card carries its small print, e.g. Advance Wars {prints["Advance Wars"][1]}')
@@ -372,7 +375,7 @@ def main():
         missing = [u for u in need if not any(l.startswith(u) for l in links)]
         shows_ss = any('screenscraper' in l for l in links)
         claims = page.eval("document.getElementById(document.getElementById('credit-ss').hidden ? 'credit-lr' : 'credit-ss').textContent")
-        if art and not claims.startswith('Logos and label colours from ScreenScraper'):
+        if art and not claims.startswith('Logos and cart scans from ScreenScraper'):
             sys.exit(f'with an art set the credits still say {claims!r}')
         if missing or shows_ss != bool(art):
             sys.exit(f'the credits are missing {missing}, or show ScreenScraper ({shows_ss}) without its art set')
