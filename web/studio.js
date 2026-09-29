@@ -107,7 +107,7 @@ const baseHueOf = (c) =>
 // produces depends on the logo going over it: dark logos get a pale ground, bright ones a deep
 // one. stop_colours is that rule, so the page never restates the house numbers itself.
 const stopsOf = (c) => stop_colours(baseHueOf(c), c.logoLuma ?? 255);
-const baseDeep = (c) => c.look?.ground ?? Array.from(stopsOf(c)).slice(0, 3);
+const baseDeep = (c) => lookOf(c)?.ground ?? Array.from(stopsOf(c)).slice(0, 3);
 
 const hex = (rgb) => `#${[...rgb].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
 // A checksum as the set names its files: eight upper case hex digits.
@@ -130,7 +130,10 @@ function parseLook(raw) {
   const ok = ['top', 'bottom', 'left', 'right'].includes(edge) && typeof size === 'number' && size > 0 && size < 0.5;
   return ok && colour ? { ground, band: { edge, size, colour } } : null;
 }
-const bandOf = (c) => (c.bandOn && c.look?.band) || null;
+// A logo dropped by hand, or a match rejected, is the person's own label: the look is the matched
+// cart's, so it does not apply.
+const lookOf = (c) => (c.droppedBytes || c.rejected ? null : c.look);
+const bandOf = (c) => (c.bandOn && lookOf(c)?.band) || null;
 
 const readyCarts = () =>
   session ? session.carts.filter((c) => stateOf(c) === 'ready' && c.result !== 'skipped') : [];
@@ -335,7 +338,7 @@ function paint(c) {
   if (face) drawFace(canvas, face, c.platform);
   drop.hidden = state !== 'needs-logo';
   hueRow.hidden = state !== 'ready';
-  c.el.band.hidden = state !== 'ready' || !c.look?.band;
+  c.el.band.hidden = state !== 'ready' || !lookOf(c)?.band;
   c.el.band.querySelector('button').setAttribute('aria-pressed', String(c.bandOn));
   hue.value = hex(deep);
   // A cart with no match needs the finder more than a wrongly matched one, not less: searching by

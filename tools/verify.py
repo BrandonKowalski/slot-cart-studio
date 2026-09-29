@@ -62,6 +62,20 @@ OPEN_FILES = """
 """
 
 # The data URL of one cart's preview, and a click on its Shell button, by stem.
+# Drop a PNG from `url` onto one cart as its logo, the way a person would, by stem.
+DROP_LOGO = """
+(async ([stem, url]) => {
+  const card = document.querySelectorAll('#grid > .cart')[
+    window.__studio.states().findIndex(s => s.stem === stem)];
+  const blob = await (await fetch(url)).blob();
+  const files = new DataTransfer();
+  files.items.add(new File([blob], 'logo.png', { type: 'image/png' }));
+  const input = card.querySelector('.drop input');
+  input.files = files.files;
+  input.dispatchEvent(new Event('change'));
+  return true;
+})(%s)
+"""
 # Click one cart's Band switch, by stem.
 BAND_SWITCH = """
 (stem => document.querySelectorAll('#grid > .cart')[
@@ -242,11 +256,13 @@ def main():
         if art:
             base = art.rstrip('/') + '/'
             index = json.load(urllib.request.urlopen(base + 'index.json'))
-            looks = {}
+            looks, wheels = {}, {}
             for g in games:
                 crc = f'{zlib.crc32((SLOT_GAMES / g).read_bytes()) & 0xffffffff:08X}'
                 if 'look' in index.get(crc, {}):
                     looks[nfc(Path(g).stem)] = index[crc]['look']
+                if 'wheel' in index.get(crc, {}):
+                    wheels[nfc(Path(g).stem)] = base + index[crc]['wheel']
             states = {nfc(s['stem']): s for s in page.eval('window.__studio.states()')}
             ready = {stem: lk for stem, lk in looks.items() if states.get(stem, {}).get('state') == 'ready'}
             for stem, lk in ready.items():
@@ -266,6 +282,15 @@ def main():
             if off == on or page.eval(CART_CANVAS % json.dumps(banded)) != on:
                 sys.exit(f'the Band switch does not take {banded}\'s band off and put it back')
             print(f'asserted: {banded} wears its band, and the Band switch takes it off and back')
+
+            # A logo dropped by hand is the person's own label: no measured colour or band on it.
+            other = next(url for stem, url in wheels.items() if stem != banded)
+            page.eval(DROP_LOGO % json.dumps([banded, other]))
+            wait(lambda: page.eval(CART_CANVAS % json.dumps(banded)) != on, 20, 'the dropped logo to show')
+            dropped = next(s for s in page.eval('window.__studio.states()') if nfc(s['stem']) == banded)
+            if dropped['band'] or dropped['deep'].lstrip('#') == looks[banded]['ground']:
+                sys.exit(f'{banded} still wears its look after a logo was dropped on it: {dropped}')
+            print(f'asserted: a logo dropped on {banded} takes no colour or band from its look')
         page.shot(1280, OUT / 'studio-1280.png')
         page.shot(400, OUT / 'studio-400.png')
         overflow = page.eval('document.documentElement.scrollWidth')
