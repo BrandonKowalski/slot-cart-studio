@@ -39,23 +39,6 @@
 
   <section class="grid" id="grid" aria-label="Carts"></section>
 
-  <dialog id="finder" class="finder">
-    <form method="dialog" class="finder-head">
-      <h2 id="finder-cart"></h2>
-      <button class="btn ghost" value="close" type="submit">Close</button>
-    </form>
-    <label class="finder-search">
-      <span class="visually-hidden">Search the game database</span>
-      <input id="finder-query" type="search" placeholder="Search by game name" autocomplete="off">
-    </label>
-    <ul id="finder-results" class="finder-results"></ul>
-    <p id="finder-note" class="finder-note"></p>
-    <div class="drop" id="finder-drop">
-      <p>Or drop a logo PNG here to label it by hand</p>
-      <label class="btn ghost">Choose a file<input id="finder-file" class="visually-hidden" type="file" accept="image/png,.png"></label>
-    </div>
-  </dialog>
-
   <footer class="credits">
     <p>Game names from <a href="https://github.com/libretro/libretro-database">libretro-database</a>, logos and box art from <a href="https://github.com/libretro-thumbnails/Nintendo_-_Game_Boy_Advance">libretro-thumbnails</a>.<br />Made for <a href="https://slot.kowalski.io">slot</a>, a GBA frontend for the Anbernic RG SP.</p>
   </footer>
@@ -154,24 +137,10 @@
       <button class="edit-open" type="button" aria-label="Edit" title="Edit">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
       </button>
-      <div class="drop" hidden>
-        <p>Drop a logo PNG here</p>
-        <label class="btn ghost">Choose a file<input class="visually-hidden" type="file" accept="image/png,.png"></label>
-      </div>
     </div>
     <h2 class="stem"></h2>
     <p class="tags"></p>
     <p class="game"></p>
-    <div class="band-row choice-row" hidden>
-      <button class="btn ghost" type="button" aria-pressed="true">Band</button>
-    </div>
-    <div class="hue-row" hidden>
-      <span class="well btn ghost">Label Color<input class="hue" type="color" aria-label="Label Color"></span>
-    </div>
-    <div class="cart-actions">
-      <button class="btn ghost reject" type="button" hidden></button>
-    </div>
-    <p class="status"></p>
   </article>
 </template>
 </body>

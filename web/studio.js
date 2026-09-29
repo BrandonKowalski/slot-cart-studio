@@ -26,6 +26,7 @@ import init, {
 import { fromDirectory, fromFiles, labelKey, PLATFORMS } from './card.js';
 import { fetchArt, fetchDat, fetchIndex, fetchThumb, limiter } from './libretro.js';
 import { createEditor } from './editor.js';
+import { commit } from './history.js';
 
 const $ = (id) => document.getElementById(id);
 const limit = limiter(4);
@@ -73,10 +74,8 @@ function newCart({ platform, stem, file }) {
     logoBytes: null,
     // The real label's ground and band, measured from its scan: sure looks only.
     look: null,
-    bandOn: true,
     droppedBytes: null,
     rejected: false,
-    snapshot: null,
     boxHue: null,
     // How bright the logo is decides which way the ground goes, so it is read once with the logo
     // and kept. 255 until there is a logo: nothing is drawn before then anyway.
@@ -134,7 +133,7 @@ function parseLook(raw) {
 // A logo dropped by hand, or a match rejected, is the person's own label: the look is the matched
 // cart's, so it does not apply.
 const lookOf = (c) => (c.droppedBytes || c.rejected ? null : c.look);
-const bandOf = (c) => (c.bandOn && lookOf(c)?.band) || null;
+const bandOf = (c) => lookOf(c)?.band ?? null;
 
 const readyCarts = () =>
   session ? session.carts.filter((c) => stateOf(c) === 'ready' && c.result !== 'skipped') : [];
@@ -195,52 +194,15 @@ const noImage = (e) => {
 };
 
 function describe(c, state) {
-  switch (state) {
-    case 'looking':
-      return c.crc === null ? 'Reading the ROM…' : 'Looking it up…';
-    case 'error':
-      return c.error;
-    case 'has-label':
-      // The label is on the cart above, so saying it has one says nothing. A write is worth saying.
-      return c.result === 'written' ? 'Label written to the card' : '';
-    default:
-      if (c.rejected) return `Not ${c.game}`;
-      if (!c.game) {
-        return dats.has(c.platform)
-          ? 'Not in the No-Intro database'
-          : 'The game database has not loaded';
-      }
-      if (!c.logoBytes && !c.droppedBytes) return `${c.game}: libretro has no logo for it`;
-      // The title above already says the game, so this line speaks only when the CRC disagrees
-      // with the name on the card — the renamed-ROM case worth catching before it is written.
-      return clean_label(c.game) === clean_label(c.stem) ? '' : `Matched ${c.game}`;
-  }
+  if (state === 'error') return c.error;
+  if (state === 'looking') return c.crc === null ? 'Reading the ROM…' : 'Looking it up…';
+  return '';
 }
-
-const statusText = (c) =>
-  ({
-    skipped: 'Skipped: a label turned up on the card in the meantime',
-    failed: 'Writing this label failed',
-  })[c.result] ?? '';
 
 function buildCard(c) {
   const root = $('card-tpl').content.firstElementChild.cloneNode(true);
   const q = (selector) => root.querySelector(selector);
-  c.el = {
-    root,
-    canvas: q('canvas'),
-    stem: q('.stem'),
-    tags: q('.tags'),
-    game: q('.game'),
-    status: q('.status'),
-    hue: q('.hue'),
-    hueRow: q('.hue-row'),
-    band: q('.band-row'),
-    reject: q('.reject'),
-    edit: q('.edit-open'),
-    drop: q('.drop'),
-    pickLogo: q('.drop input'),
-  };
+  c.el = { root, canvas: q('canvas'), face: q('.face'), stem: q('.stem'), tags: q('.tags'), game: q('.game') };
   const [boxW, boxH] = boxOf(c.platform);
   c.el.canvas.width = boxW;
   c.el.canvas.height = boxH;
@@ -257,37 +219,20 @@ function buildCard(c) {
   c.el.tags.replaceChildren(
     ...tags.map((tag) => Object.assign(document.createElement('span'), { className: 'chip', textContent: tag })),
   );
-  c.el.hue.addEventListener('input', () => {
-    // The well gives back "#rrggbb"; that colour is the label's deep corner, and the pale one is
-    // derived from it, so one pick describes the whole ground.
-    c.deep = fromHex(c.el.hue.value);
-    c.userHue = true;
-    schedulePaint(c);
-  });
-  c.el.reject.addEventListener('click', () => (c.rejected ? restore(c) : openFinder(c)));
-  c.el.band.addEventListener('click', () => {
-    c.bandOn = !c.bandOn;
-    paint(c);
-  });
-  c.el.edit.addEventListener('click', () => editor.open(c));
+  q('.edit-open').addEventListener('click', () => editor.open(c));
   root.addEventListener('click', () => {
     if (editor.current()) editor.open(c);
   });
-  c.el.drop.addEventListener('dragover', (e) => {
+  // Always taken, so a file dropped on a cart that can't use it doesn't navigate the page away.
+  c.el.face.addEventListener('dragover', (e) => {
     e.preventDefault();
-    c.el.drop.classList.add('over');
+    c.el.face.classList.toggle('over', canLabel(c));
   });
-  c.el.drop.addEventListener('dragleave', () => c.el.drop.classList.remove('over'));
-  c.el.drop.addEventListener('drop', (e) => {
+  c.el.face.addEventListener('dragleave', () => c.el.face.classList.remove('over'));
+  c.el.face.addEventListener('drop', (e) => {
     e.preventDefault();
-    c.el.drop.classList.remove('over');
-    takeLogo(c, e.dataTransfer.files[0]);
-  });
-  c.el.pickLogo.addEventListener('change', () => {
-    const file = c.el.pickLogo.files[0];
-    // An input fires no change when handed the file it already holds, so it lets go of it here.
-    c.el.pickLogo.value = '';
-    takeLogo(c, file);
+    c.el.face.classList.remove('over');
+    if (canLabel(c)) track(takeLogo(c, e.dataTransfer.files[0]));
   });
   return root;
 }
@@ -303,16 +248,14 @@ function schedulePaint(c) {
   });
 }
 
-// The face a cart shows. A needs-logo cart has none of its own; with a shell chosen, or when `always`
-// asks for one, slot's generated-label face stands in, as it does on the shelf.
-function faceOf(c, state, always = false) {
+// The face a cart shows. A needs-logo cart has none of its own, so slot's generated label stands
+// in, as it does on the device.
+function faceOf(c, state) {
   if (state === 'has-label') return c.existing;
   if (state === 'ready') {
     return withCartLabel(c, (label) => label.face(c.platform, c.code, c.head, c.shell, c.stem));
   }
-  if (state === 'needs-logo' && (c.shell || always)) {
-    return existing_face(new Uint8Array(0), c.platform, c.code, c.head, c.shell, c.stem);
-  }
+  if (state === 'needs-logo') return existing_face(new Uint8Array(0), c.platform, c.code, c.head, c.shell, c.stem);
   return null;
 }
 
@@ -325,12 +268,8 @@ function drawFace(canvas, face, platform) {
 function paint(c) {
   if (fatal) return;
   const state = stateOf(c);
-  const { root, canvas, game, status, hue, hueRow, reject, drop } = c.el;
+  const { root, canvas, game } = c.el;
   root.dataset.state = state;
-  // The button opens the picker on the label's deep corner, which comes from stop_colours so the
-  // house numbers live in src/label.rs alone. The pale corner is derived from it in Rust when the
-  // label is composed, so there is nothing to work out here.
-  const deep = c.deep ?? baseDeep(c);
   let face;
   try {
     face = faceOf(c, state);
@@ -340,60 +279,9 @@ function paint(c) {
   }
   canvas.hidden = !face;
   if (face) drawFace(canvas, face, c.platform);
-  drop.hidden = state !== 'needs-logo';
-  hueRow.hidden = state !== 'ready';
-  c.el.band.hidden = state !== 'ready' || !lookOf(c)?.band;
-  c.el.band.querySelector('button').setAttribute('aria-pressed', String(c.bandOn));
-  hue.value = hex(deep);
-  // A cart with no match needs the finder more than a wrongly matched one, not less: searching by
-  // name is how a cart libretro keeps under a name its filename does not use gets found at all.
-  reject.hidden = !['ready', 'needs-logo'].includes(state);
-  reject.textContent = c.rejected ? 'Restore the Match' : c.game ? 'Wrong Game' : 'Find Game';
   game.textContent = describe(c, state);
-  status.textContent = statusText(c);
   updateWriteBar();
   if (editor.current() === c) editor.refresh();
-}
-
-// The finder: one dialog for both ways out of a wrong match, naming the right game or handing
-// the cart a logo yourself. It owns no state — picking dresses the cart and repaints it.
-let finding = null;
-
-function openFinder(c) {
-  finding = c;
-  $('finder-cart').textContent = clean_label(c.stem);
-  $('finder-query').value = '';
-  $('finder-results').replaceChildren();
-  $('finder-note').textContent = c.game ? `Matched ${c.game}` : 'No match in the database.';
-  $('finder').showModal();
-  $('finder-query').focus();
-}
-
-function findGames() {
-  const c = finding;
-  if (!c) return;
-  const query = $('finder-query').value;
-  const db = dats.get(c.platform);
-  if (!db) {
-    $('finder-note').textContent = `The ${c.platform} database has not loaded.`;
-    return;
-  }
-  const hits = db.search(query, 30);
-  $('finder-results').replaceChildren(
-    ...hits.map((name) => {
-      const button = Object.assign(document.createElement('button'), {
-        type: 'button',
-        textContent: name,
-      });
-      button.addEventListener('click', () => {
-        $('finder').close();
-        chooseGame(c, name);
-      });
-      return Object.assign(document.createElement('li'), {}).appendChild(button).parentElement;
-    }),
-  );
-  $('finder-note').textContent =
-    query.trim() && hits.length === 0 ? `Nothing in the database matches “${query.trim()}”.` : '';
 }
 
 // A game named by hand is dressed exactly as a matched one, so its logo, box art hue and the
@@ -402,7 +290,6 @@ function chooseGame(c, name) {
   if (c.game === name && !c.rejected) return;
   c.game = name;
   c.rejected = false;
-  c.snapshot = null;
   c.droppedBytes = null;
   c.logoBytes = null;
   c.looking = true;
@@ -419,22 +306,6 @@ async function redress(s, c) {
   if (s !== session) return;
   c.looking = false;
   paint(c);
-}
-
-// A CRC can be right about the bytes and wrong about what the user meant: a ROM renamed to
-// another game's name. Rejecting drops the match, its logo and its box art hue.
-function reject(c) {
-  c.snapshot = { deep: c.deep, userHue: c.userHue, droppedBytes: c.droppedBytes };
-  c.rejected = true;
-  c.droppedBytes = null;
-  c.userHue = false;
-  c.deep = null;
-  schedulePaint(c);
-}
-
-function restore(c) {
-  Object.assign(c, c.snapshot, { rejected: false, snapshot: null });
-  schedulePaint(c);
 }
 
 const choiceOf = (c) => {
@@ -470,11 +341,10 @@ function autoLogo(c) {
   if (!c.userHue) c.deep = null;
 }
 
+// A logo dropped on a card is Logo → Custom without opening the editor.
 async function takeLogo(c, file) {
   const bytes = await readLogo(file);
-  if (!bytes) return;
-  useLogo(c, bytes);
-  schedulePaint(c);
+  if (bytes && commit(c, () => useLogo(c, bytes))) changed(c);
 }
 
 function progress(done, total, stem, verb = 'Reading') {
@@ -627,7 +497,7 @@ async function art(s, c) {
   paint(c);
 }
 
-// Fetch what `c.game` names and let it decide the cart's hue. The finder re-runs this for a game
+// Fetch what `c.game` names and let it decide the cart's hue. The Game row re-runs this for a game
 // chosen by hand, so a chosen match is dressed exactly the way a matched one is.
 async function dress(s, c) {
   // A set of our own is found by checksum, so a cart no database has a name for can still be
@@ -897,7 +767,7 @@ const editor = createEditor({
   draw: drawFace,
   face: (c) => {
     try {
-      return faceOf(c, stateOf(c), true);
+      return faceOf(c, stateOf(c));
     } catch (e) {
       if (trapped(e)) return null;
       throw e;
@@ -973,31 +843,6 @@ async function start() {
   });
   $('write').addEventListener('click', () => track(writeLabels()));
 
-  $('finder-query').addEventListener('input', findGames);
-  $('finder').addEventListener('close', () => {
-    finding = null;
-  });
-  const takeFromFinder = (file) => {
-    const c = finding;
-    if (!c || !file) return;
-    $('finder').close();
-    track(takeLogo(c, file));
-  };
-  $('finder-file').addEventListener('change', (e) => {
-    const [file] = e.target.files;
-    e.target.value = '';
-    takeFromFinder(file);
-  });
-  $('finder-drop').addEventListener('dragover', (e) => {
-    e.preventDefault();
-    $('finder-drop').classList.add('over');
-  });
-  $('finder-drop').addEventListener('dragleave', () => $('finder-drop').classList.remove('over'));
-  $('finder-drop').addEventListener('drop', (e) => {
-    e.preventDefault();
-    $('finder-drop').classList.remove('over');
-    takeFromFinder(e.dataTransfer.files[0]);
-  });
 
   // For tools/verify.py, which has no native picker to click. Never set on the published site.
   if (['localhost', '127.0.0.1'].includes(location.hostname)) {

@@ -61,26 +61,6 @@ OPEN_FILES = """
 })(%s, %s)
 """
 
-# The data URL of one cart's preview, and a click on its Shell button, by stem.
-# Drop a PNG from `url` onto one cart as its logo, the way a person would, by stem.
-DROP_LOGO = """
-(async ([stem, url]) => {
-  const card = document.querySelectorAll('#grid > .cart')[
-    window.__studio.states().findIndex(s => s.stem === stem)];
-  const blob = await (await fetch(url)).blob();
-  const files = new DataTransfer();
-  files.items.add(new File([blob], 'logo.png', { type: 'image/png' }));
-  const input = card.querySelector('.drop input');
-  input.files = files.files;
-  input.dispatchEvent(new Event('change'));
-  return true;
-})(%s)
-"""
-# Click one cart's Band switch, by stem.
-BAND_SWITCH = """
-(stem => document.querySelectorAll('#grid > .cart')[
-  window.__studio.states().findIndex(s => s.stem === stem)].querySelector('.band-row button').click())(%s)
-"""
 CART_CANVAS = """
 (stem => document.querySelectorAll('#grid > .cart')[
   window.__studio.states().findIndex(s => s.stem === stem)].querySelector('canvas').toDataURL())(%s)
@@ -120,6 +100,33 @@ PICK_JUNK = """
 """
 UNDO_KEY = ("document.getElementById('editor').dispatchEvent("
             "new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true }))")
+# Hand the Logo row's Custom picker the PNG at `url`.
+PICK_LOGO = """
+(async url => {
+  const blob = await (await fetch(url)).blob();
+  const files = new DataTransfer();
+  files.items.add(new File([blob], 'logo.png', { type: 'image/png' }));
+  const input = document.getElementById('ed-logo-file');
+  input.files = files.files;
+  input.dispatchEvent(new Event('change'));
+  return true;
+})(%s)
+"""
+# Drop a small PNG drawn on the spot onto one cart's face, by stem.
+DROP_ON_FACE = """
+(async stem => {
+  const card = document.querySelectorAll('#grid > .cart')[window.__studio.states().findIndex(s => s.stem === stem)];
+  const canvas = Object.assign(document.createElement('canvas'), { width: 64, height: 32 });
+  const g = canvas.getContext('2d');
+  g.fillStyle = '#fff';
+  g.fillRect(8, 8, 48, 16);
+  const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+  const data = new DataTransfer();
+  data.items.add(new File([blob], 'logo.png', { type: 'image/png' }));
+  card.querySelector('.face').dispatchEvent(new DragEvent('drop', { dataTransfer: data, bubbles: true, cancelable: true }));
+  return true;
+})(%s)
+"""
 
 
 class Quiet(http.server.SimpleHTTPRequestHandler):
@@ -326,21 +333,28 @@ def main():
             if banded is None:
                 sys.exit('no cart on the card has a sure look with a band; the Classic NES Series carts should')
             on = page.eval(CART_CANVAS % json.dumps(banded))
-            page.eval(BAND_SWITCH % json.dumps(banded))
-            off = page.eval(CART_CANVAS % json.dumps(banded))
-            page.eval(BAND_SWITCH % json.dumps(banded))
-            if off == on or page.eval(CART_CANVAS % json.dumps(banded)) != on:
-                sys.exit(f'the Band switch does not take {banded}\'s band off and put it back')
-            print(f'asserted: {banded} wears its band, and the Band switch takes it off and back')
+            if not state_of(page, banded)['band']:
+                sys.exit(f'{banded} has a sure band but does not wear it')
+            print(f'asserted: {banded} wears its band')
 
-            # A logo dropped by hand is the person's own label: no measured colour or band on it.
+            # A logo picked by hand is the person's own label: no measured colour or band on it,
+            # and Undo gives the look back.
             other = next(url for stem, url in wheels.items() if stem != banded)
-            page.eval(DROP_LOGO % json.dumps([banded, other]))
-            wait(lambda: page.eval(CART_CANVAS % json.dumps(banded)) != on, 20, 'the dropped logo to show')
-            dropped = next(s for s in page.eval('window.__studio.states()') if nfc(s['stem']) == banded)
-            if dropped['band'] or dropped['deep'].lstrip('#') == looks[banded]['ground']:
-                sys.exit(f'{banded} still wears its look after a logo was dropped on it: {dropped}')
-            print(f'asserted: a logo dropped on {banded} takes no colour or band from its look')
+            page.eval(EDIT % json.dumps(banded))
+            page.eval(PICK_LOGO % json.dumps(other))
+            wait(lambda: page.eval(CART_CANVAS % json.dumps(banded)) != on, 20, 'the picked logo to show')
+            picked = state_of(page, banded)
+            if picked['band'] or picked['deep'].lstrip('#') == looks[banded]['ground']:
+                sys.exit(f'{banded} still wears its look after a logo was picked for it: {picked}')
+            custom = page.eval("document.querySelector('#ed-logo [data-value=\"custom\"]').getAttribute('aria-pressed')")
+            if custom != 'true':
+                sys.exit('the Logo row does not say Custom after a logo was picked')
+            page.eval("document.getElementById('ed-undo').click()")
+            wait(lambda: page.eval(CART_CANVAS % json.dumps(banded)) == on, 20, 'Undo to give the look back')
+            if not state_of(page, banded)['band']:
+                sys.exit(f'Undo gave {banded} its logo back but not its band')
+            page.eval("document.getElementById('ed-close').click()")
+            print(f'asserted: a logo picked for {banded} takes no colour or band from its look, and Undo gives them back')
         # The editor: ◀ ▶ step through the shelf, and a click on another card moves it there.
         shelf = page.eval(SHELF)
         if len(shelf) < 3:
@@ -461,20 +475,21 @@ def main():
 
         needs_logo = next((s['stem'] for s in first if s['state'] == 'needs-logo'), None)
         if needs_logo is None:
-            sys.exit('no needs-logo cart in the fixture to check the shell preview on')
-        if not page.eval(CANVAS_HIDDEN % json.dumps(needs_logo)):
-            sys.exit(f'{needs_logo} shows a canvas before a shell is chosen')
+            sys.exit('no needs-logo cart in the fixture to check the generated label on')
+        if page.eval(CANVAS_HIDDEN % json.dumps(needs_logo)):
+            sys.exit(f'{needs_logo} (needs-logo) does not show the generated label')
+        print(f'asserted: {needs_logo} (needs-logo) shows the generated label')
+        page.eval(DROP_ON_FACE % json.dumps(needs_logo))
+        wait(lambda: state_of(page, needs_logo)['state'] == 'ready', 10, 'the dropped logo to make it ready')
         page.eval(EDIT % json.dumps(needs_logo))
         gba = state_of(page, needs_logo)['platform'] == 'GBA'
         if page.eval("document.getElementById('ed-outline-row').hidden") != gba:
             sys.exit(f'the Outline row is wrong for {needs_logo}: it shows only on Game Boy carts')
-        pick_shell(page, 5)
-        wait(lambda: not page.eval(CANVAS_HIDDEN % json.dumps(needs_logo)), 10, 'the generated label to show')
-        page.eval("document.getElementById('ed-revert').click()")
-        wait(lambda: page.eval(CANVAS_HIDDEN % json.dumps(needs_logo)), 10, 'Revert to take the shell off')
+        page.eval("document.getElementById('ed-undo').click()")
+        if state_of(page, needs_logo)['state'] != 'needs-logo':
+            sys.exit('Undo did not take the dropped logo back off')
         page.eval("document.getElementById('ed-close').click()")
-        print(f'asserted: {needs_logo} (needs-logo) shows no canvas until a shell is chosen, '
-              'and Revert takes it back off')
+        print(f'asserted: a PNG dropped on {needs_logo} is its logo, and Undo takes it off')
 
         page.width(1280)
         # Headless Chrome ignores the browser-level Browser.setDownloadBehavior for this target;

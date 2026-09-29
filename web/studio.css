@@ -66,73 +66,25 @@ label.btn:focus-within{outline:2px solid var(--ink);outline-offset:3px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,268px),1fr));grid-auto-rows:1fr;gap:18px;margin-top:28px}
 .cart{background:var(--housing);border:1px solid var(--rule);border-radius:12px;padding:12px 12px 14px;display:flex;flex-direction:column;gap:6px;min-width:0}
 .cart[data-state="has-label"]{opacity:.72}
-.face{display:grid;place-items:center;background:var(--recess);border-radius:8px;padding:8px 0;position:relative}
+.face{display:grid;place-items:center;background:var(--recess);border-radius:8px;padding:8px 0;position:relative;min-height:151px}
+.face.over{outline:2px dashed var(--ink);outline-offset:-4px}
 /* Every cart is 240 wide, whatever it is: a Game Boy Game Pak is the same width as a GBA cart and
    taller, so the height follows the canvas rather than being pinned to the GBA one. */
 .face canvas{width:240px;height:auto;image-rendering:pixelated}
-.drop{width:240px;height:135px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;border:2px dashed var(--edge);border-radius:8px;color:var(--muted);font-size:14px;text-align:center;padding:8px}
-.drop p{margin:0}
-.drop.over{border-color:var(--ink);color:var(--ink)}
-.drop .btn{padding:7px 12px;font-size:14px}
 /* One line, centred under the cart, with the filename on hover: a wrapped dump name outweighed
    the thing it names. */
 .stem{font-size:15px;font-weight:600;line-height:1.35;margin:6px 0 0;text-align:center;text-wrap:balance;overflow-wrap:anywhere}
 .tags{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin:0}
 .tags:empty{display:none}
 .chip{background:var(--recess);border:1px solid var(--rule);border-radius:999px;padding:2px 8px;font-size:11px;color:var(--muted);white-space:nowrap}
-/* Only carries what the cart cannot show: a match that disagrees with the name, or a refusal. */
+/* Only while a cart has no face to show: being read, being looked up, or an error. */
 .game{margin:0;color:var(--muted);font-size:13px;text-align:center;overflow-wrap:anywhere}
 .game:empty{display:none}
-/* A plain button that opens the picker, centred with the row below it. No swatch of our own:
-   Safari draws one for a colour input anyway, and the cart above is already the colour at full
-   size. The real input lies transparent across the button, so there is nothing to draw twice and
-   the picker opens anchored to the button rather than to a hidden input off the side of the card. */
-.hue-row{display:flex;align-items:center;justify-content:center;gap:8px}
-.hue-row .well{position:relative;padding:7px 12px;font-size:14px}
-.hue-row input[type="color"]{
-  position:absolute;
-  inset:0;
-  width:100%;
-  height:100%;
-  margin:0;
-  padding:0;
-  border:0;
-  background:transparent;
-  opacity:0;
-  cursor:pointer;
-  -webkit-appearance:none;
-  appearance:none;
-}
-/* The ring belongs on the button you can see, not on the transparent input over it. */
-.hue-row .well:focus-within{outline:2px solid var(--ink);outline-offset:3px}
 .edit-open{position:absolute;top:8px;right:8px;width:32px;height:32px;padding:0;display:grid;place-items:center;border:1px solid var(--rule);border-radius:8px;background:var(--housing);color:var(--ink);cursor:pointer}
 .edit-open:hover,.edit-open:focus-visible{background:var(--ink);color:var(--opening);outline:none}
-.cart-actions{display:flex;justify-content:center}
-.cart-actions .btn{padding:7px 12px;font-size:14px}
-/* A row holding only a hidden button, and a status with nothing to say, took height anyway. */
-.cart-actions:not(:has(.reject:not([hidden]))){display:none}
-.status{margin:0;font-size:13px;color:var(--muted)}
-.status:empty{display:none}
 
 /* Above the carts and pinned there: the button belongs with the choice you just made, and the
    carts scroll under it. */
-/* The finder: one dialog for both ways of fixing a wrong match, searching the database or
-   handing the cart a logo yourself. */
-.finder{width:min(560px,92vw);max-height:80vh;padding:18px;border:1px solid var(--rule);border-radius:12px;background:var(--housing);color:var(--ink);overflow:auto}
-.finder::backdrop{background:rgb(5 5 8 / .72)}
-.finder-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin:0 0 12px}
-.finder-head h2{font-size:17px;font-weight:600;line-height:1.35;margin:0;overflow-wrap:anywhere}
-.finder-head .btn{padding:7px 12px;font-size:14px;flex:none}
-.finder-search input{width:100%;padding:11px 13px;border-radius:8px;border:1px solid var(--rule);background:var(--opening);color:var(--ink);font:inherit;font-size:15px}
-.finder-search input:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
-.finder-results{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:2px}
-.finder-results:empty{display:none}
-.finder-results button{display:block;width:100%;text-align:left;padding:9px 11px;border:0;border-radius:8px;background:transparent;color:var(--ink);font:inherit;font-size:14px;cursor:pointer;overflow-wrap:anywhere}
-.finder-results button:hover,.finder-results button:focus-visible{background:var(--recess);outline:none}
-.finder-note{margin:12px 0 0;color:var(--muted);font-size:13px}
-.finder-note:empty{display:none}
-#finder-drop{width:100%;height:auto;min-height:92px;margin-top:14px}
-
 .write-bar{position:sticky;top:0;z-index:1;display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-top:24px;padding:14px 0;background:var(--page);border-bottom:1px solid var(--rule)}
 /* One per platform the card holds, shown only when it holds more than one. The pressed tab is
    filled the way the primary button is, so which shelf you are on reads at a glance. */
@@ -142,12 +94,6 @@ label.btn:focus-within{outline:2px solid var(--ink);outline-offset:3px}
 
 .credits{margin-top:48px;color:var(--muted);font-size:14px;text-align:center}
 
-.choice-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
-.choice-row .btn{padding:8px 14px;font-size:14px}
-.choice-row .btn[aria-pressed="true"]{background:var(--ink);color:var(--opening);border-color:var(--ink)}
-/* A band read from the real label can be turned off per cart. */
-.band-row{justify-content:center;margin-top:2px}
-.band-row .btn{padding:6px 12px;font-size:13px}
 /* The editor sits beside the shelf, which stays in view, dimmed, with the cart being edited outlined. */
 :root{--panel:380px}
 body.editing{padding-right:var(--panel)}
