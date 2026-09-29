@@ -100,6 +100,12 @@ PICK_JUNK = """
 """
 UNDO_KEY = ("document.getElementById('editor').dispatchEvent("
             "new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true }))")
+UNDO_FOCUSED = ("(document.activeElement || document.body).dispatchEvent("
+                "new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true }))")
+# One input from the Background picker, with no change event after it: a picker still open.
+DRAG_ONLY = """
+(v => { const i = document.getElementById('ed-bg-custom'); i.value = v; i.dispatchEvent(new Event('input')); })(%s)
+"""
 # Hand the Logo row's Custom picker the PNG at `url`.
 PICK_LOGO = """
 (async url => {
@@ -424,6 +430,23 @@ def main():
         want = [both, (presets[5], was[1]), was, both, was, both, was]
         if seen != want:
             sys.exit(f'Shell then Background stepped through {seen}, not {want}')
+        # Keys go wherever focus is, and a pick hides the swatch that had it: ⌘Z must still reach the panel.
+        page.eval("document.getElementById('ed-shell').click()")
+        page.eval("(b => { b.focus(); b.click(); })(document.querySelectorAll('#ed-shell-presets button')[5])")
+        page.eval(UNDO_FOCUSED)
+        if look() != was:
+            sys.exit(f'⌘Z after picking a swatch by keyboard focus did not undo it: {look()}')
+        # A drag after an Undo is a step of its own, even when no change event came in between.
+        page.eval("document.getElementById('ed-bg').click()")
+        page.eval(DRAG_ONLY % json.dumps('#222222'))
+        page.eval("document.getElementById('ed-undo').click()")
+        page.eval(DRAG_ONLY % json.dumps('#333333'))
+        if not page.eval("document.getElementById('ed-redo').disabled"):
+            sys.exit('a drag after an Undo left the old Redo in place')
+        page.eval("document.getElementById('ed-undo').click()")
+        if look() != was:
+            sys.exit(f'Undo did not take back a drag made after an Undo: {look()}')
+        print('asserted: ⌘Z still works after a pick hides the focused swatch, and a drag after Undo is its own step')
         page.eval("document.getElementById('ed-close').click()")
         if page.eval('window.__studio.editing()') is not None or page.eval("!!document.querySelector('.cart.current')"):
             sys.exit('✕ left the editor open or a card outlined')
@@ -586,6 +609,9 @@ def main():
         overflow = page.eval('document.documentElement.scrollWidth')
         if overflow > 400:
             sys.exit(f'the editor scrolls sideways at 400 px ({overflow})')
+        inside = page.eval("(e => e.scrollWidth - e.clientWidth)(document.getElementById('editor'))")
+        if inside > 0:
+            sys.exit(f'the editor\'s own contents scroll sideways at 400 px, by {inside}')
         page.width(1280)
         page.eval("document.getElementById('ed-close').click()")
         if shell_of(page, chosen) != preset:

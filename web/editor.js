@@ -13,6 +13,7 @@ export function createEditor(api) {
   let dragging = false;
 
   function change(fn, c = cart) {
+    dragging = false;
     if (c && commit(c, () => fn(c))) api.changed(c);
   }
 
@@ -28,14 +29,26 @@ export function createEditor(api) {
   }
 
   function step(fn) {
+    dragging = false;
     const c = cart;
     if (c && fn(c)) api.changed(c);
   }
 
+  // Hiding or disabling the focused control drops focus to the page, where ⌘Z never reaches the panel.
+  function keepFocus(fallback = panel, lost = false) {
+    const at = document.activeElement;
+    if (cart && (lost || (panel.contains(at) && (at.disabled || at.closest('[hidden]'))))) {
+      (fallback.disabled ? panel : fallback).focus({ preventScroll: true });
+    }
+  }
+
   function closePops() {
+    dragging = false;
     for (const [pop, opener] of Object.entries(OPENERS)) {
+      const had = $(pop).contains(document.activeElement);
       $(pop).hidden = true;
       $(opener).setAttribute('aria-expanded', 'false');
+      if (had) keepFocus($(opener), true);
     }
   }
 
@@ -135,6 +148,7 @@ export function createEditor(api) {
     $('ed-undo').disabled = !canUndo(c);
     $('ed-redo').disabled = !canRedo(c);
     $('ed-revert').disabled = !canRevert(c);
+    keepFocus();
   }
 
   function open(c) {
