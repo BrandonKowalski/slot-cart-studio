@@ -56,54 +56,102 @@
     </div>
   </dialog>
 
-  <dialog id="shell" class="finder shell-dialog">
-    <div class="finder-head">
-      <h2 id="shell-cart"></h2>
-    </div>
-    <div class="shell-body">
-      <canvas id="shell-face" class="shell-face" aria-label="The cart in its shell"></canvas>
-      <div class="shell-controls">
-        <div class="choice-row" id="shell-outline" role="group" aria-label="Outline">
-          <button class="btn ghost" type="button" data-outline="auto">Automatic</button>
-          <button class="btn ghost" type="button" data-outline="notched">Notched</button>
-          <button class="btn ghost" type="button" data-outline="rounded">Rounded</button>
-        </div>
-        <div class="swatches" id="shell-presets" role="group" aria-label="Plastics"></div>
-        <div class="choice-row">
-          <span class="well btn ghost">Custom Color<input id="shell-colour" type="color" aria-label="Shell Color"></span>
-        </div>
-        <div class="choice-row" id="shell-finish" role="group" aria-label="Finish">
-          <button class="btn ghost" type="button" data-finish="solid">Solid</button>
-          <button class="btn ghost" type="button" data-finish="clear">Clear</button>
-          <button class="btn ghost" type="button" data-finish="glitter">Glitter</button>
-        </div>
-        <div class="choice-row">
-          <button class="btn ghost" type="button" id="shell-reset">Reset to Automatic</button>
-        </div>
-      </div>
-    </div>
-    <div class="shell-actions">
-      <div class="shell-history">
-        <button class="btn ghost" type="button" id="shell-undo" title="Undo (⌘Z)">Undo</button>
-        <button class="btn ghost" type="button" id="shell-redo" title="Redo (⇧⌘Z)">Redo</button>
-      </div>
-      <div class="shell-history">
-        <button class="btn ghost" type="button" id="shell-cancel">Cancel</button>
-        <button class="btn" type="button" id="shell-save">Save</button>
-      </div>
-    </div>
-  </dialog>
-
   <footer class="credits">
     <p>Game names from <a href="https://github.com/libretro/libretro-database">libretro-database</a>, logos and box art from <a href="https://github.com/libretro-thumbnails/Nintendo_-_Game_Boy_Advance">libretro-thumbnails</a>.<br />Made for <a href="https://slot.kowalski.io">slot</a>, a GBA frontend for the Anbernic RG SP.</p>
   </footer>
 </main>
 
+<aside id="editor" class="editor" aria-label="Cart editor" tabindex="-1" hidden>
+  <div class="ed-head">
+    <button class="btn ghost ed-icon" id="ed-prev" type="button" aria-label="Previous cart">◀</button>
+    <h2 id="ed-name"></h2>
+    <button class="btn ghost ed-icon" id="ed-next" type="button" aria-label="Next cart">▶</button>
+    <button class="btn ghost ed-icon" id="ed-close" type="button" aria-label="Close">✕</button>
+  </div>
+  <canvas id="ed-face" class="ed-face" aria-label="The cart"></canvas>
+  <div class="props">
+    <div class="prop">
+      <span class="k">Game</span>
+      <div class="v">
+        <button class="field" id="ed-game" type="button" aria-expanded="false"><span></span></button>
+        <div class="pop" id="ed-games" hidden>
+          <input id="ed-query" type="search" autocomplete="off" aria-label="Search the game database">
+          <ul class="hits" id="ed-hits"></ul>
+        </div>
+      </div>
+    </div>
+    <hr>
+    <div class="prop">
+      <span class="k">Logo</span>
+      <div class="v">
+        <div class="seg" id="ed-logo" role="group" aria-label="Logo">
+          <button type="button" data-value="auto">Automatic</button>
+          <button type="button" data-value="custom">Custom</button>
+        </div>
+        <input id="ed-logo-file" class="visually-hidden" type="file" accept="image/png,.png" tabindex="-1">
+      </div>
+    </div>
+    <div class="prop">
+      <span class="k">Background</span>
+      <div class="v">
+        <button class="field" id="ed-bg" type="button" aria-expanded="false"><i></i><span></span></button>
+        <div class="pop" id="ed-bg-pal" hidden>
+          <div class="pal-foot">
+            <button class="btn ghost" id="ed-bg-auto" type="button">Automatic</button>
+            <span class="btn ghost well">Custom…<input id="ed-bg-custom" type="color" aria-label="Custom background"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <hr>
+    <div class="prop">
+      <span class="k">Shell</span>
+      <div class="v">
+        <button class="field" id="ed-shell" type="button" aria-expanded="false"><i></i><span></span></button>
+        <div class="pop" id="ed-shell-pal" hidden>
+          <div class="pal-grid" id="ed-shell-presets" role="group" aria-label="Plastics"></div>
+          <div class="pal-foot">
+            <button class="btn ghost" id="ed-shell-auto" type="button">Automatic</button>
+            <span class="btn ghost well">Custom…<input id="ed-shell-custom" type="color" aria-label="Custom shell"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="prop">
+      <span class="k">Finish</span>
+      <div class="v">
+        <div class="seg" id="ed-finish" role="group" aria-label="Finish">
+          <button type="button" data-value="solid">Solid</button>
+          <button type="button" data-value="clear">Clear</button>
+          <button type="button" data-value="glitter">Glitter</button>
+        </div>
+      </div>
+    </div>
+    <div class="prop" id="ed-outline-row">
+      <span class="k">Outline</span>
+      <div class="v">
+        <div class="seg" id="ed-outline" role="group" aria-label="Outline">
+          <button type="button" data-value="auto">Auto</button>
+          <button type="button" data-value="notched">Notched</button>
+          <button type="button" data-value="rounded">Rounded</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="ed-foot">
+    <div class="ed-history">
+      <button class="btn ghost" id="ed-undo" type="button" title="Undo (⌘Z)">Undo</button>
+      <button class="btn ghost" id="ed-redo" type="button" title="Redo (⇧⌘Z)">Redo</button>
+    </div>
+    <button class="btn ghost" id="ed-revert" type="button">Revert</button>
+  </div>
+</aside>
+
 <template id="card-tpl">
   <article class="cart">
     <div class="face">
       <canvas hidden></canvas>
-      <button class="shell-open" type="button" aria-label="Choose the shell" title="Shell" hidden>
+      <button class="edit-open" type="button" aria-label="Edit" title="Edit">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
       </button>
       <div class="drop" hidden>

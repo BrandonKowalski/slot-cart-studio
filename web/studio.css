@@ -105,10 +105,8 @@ label.btn:focus-within{outline:2px solid var(--ink);outline-offset:3px}
 }
 /* The ring belongs on the button you can see, not on the transparent input over it. */
 .hue-row .well:focus-within{outline:2px solid var(--ink);outline-offset:3px}
-/* Every cart's shell is a click away, whatever else the card is showing. */
-.shell-open{position:absolute;top:8px;right:8px;width:32px;height:32px;padding:0;display:grid;place-items:center;border:1px solid var(--rule);border-radius:8px;background:var(--housing);color:var(--ink);cursor:pointer}
-.shell-open:hover,.shell-open:focus-visible{background:var(--ink);color:var(--opening);outline:none}
-.shell-open[hidden]{display:none}
+.edit-open{position:absolute;top:8px;right:8px;width:32px;height:32px;padding:0;display:grid;place-items:center;border:1px solid var(--rule);border-radius:8px;background:var(--housing);color:var(--ink);cursor:pointer}
+.edit-open:hover,.edit-open:focus-visible{background:var(--ink);color:var(--opening);outline:none}
 .cart-actions{display:flex;justify-content:center}
 .cart-actions .btn{padding:7px 12px;font-size:14px}
 /* A row holding only a hidden button, and a status with nothing to say, took height anyway. */
@@ -150,16 +148,53 @@ label.btn:focus-within{outline:2px solid var(--ink);outline-offset:3px}
 /* A band read from the real label can be turned off per cart. */
 .band-row{justify-content:center;margin-top:2px}
 .band-row .btn{padding:6px 12px;font-size:13px}
-.swatches{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
-.swatch{width:30px;height:30px;border-radius:7px;border:1px solid var(--rule);padding:0;cursor:pointer}
-.swatch[aria-pressed="true"]{outline:2px solid var(--ink);outline-offset:2px}
-/* The shell dialog keeps the cart in view beside its controls, with the page dimmed behind it. */
-.shell-dialog{width:min(760px,94vw)}
-.shell-dialog::backdrop{background:rgb(5 5 8 / .86)}
-.shell-body{display:grid;grid-template-columns:260px 1fr;gap:22px;align-items:start}
-.shell-face{display:block;width:100%;height:auto}
-.shell-controls>:first-child:not([hidden]),.shell-controls>[hidden]+*{margin-top:0}
-.shell-actions{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;margin-top:22px;padding-top:16px;border-top:1px solid var(--rule)}
-.shell-history{display:flex;gap:8px}
-.shell-actions .btn{padding:8px 16px;font-size:14px}
-@media (max-width:620px){.shell-body{grid-template-columns:1fr}.shell-face{max-width:240px;margin:0 auto}}
+/* The editor sits beside the shelf, which stays in view, dimmed, with the cart being edited outlined. */
+:root{--panel:380px}
+body.editing{padding-right:var(--panel)}
+body.editing .cart{cursor:pointer}
+body.editing .cart:not(.current){opacity:.45}
+.cart.current{opacity:1;outline:2px solid var(--ink);outline-offset:2px}
+.editor{position:fixed;top:0;right:0;bottom:0;z-index:2;width:var(--panel);overflow:auto;padding:18px;display:flex;flex-direction:column;gap:16px;background:var(--housing);border-left:1px solid var(--rule)}
+.editor:focus{outline:none}
+.ed-head{display:flex;align-items:center;gap:8px}
+.ed-head h2{flex:1;min-width:0;margin:0;font-size:16px;font-weight:600;line-height:1.3;text-align:center;overflow-wrap:anywhere}
+.ed-icon{width:36px;height:36px;padding:0;display:grid;place-items:center;font-size:14px;flex:none}
+.ed-face{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;image-rendering:pixelated}
+.props{display:flex;flex-direction:column;gap:12px}
+.props hr{width:100%;margin:2px 0;border:0;border-top:1px solid var(--rule)}
+.prop{display:grid;grid-template-columns:96px 1fr;align-items:center;column-gap:12px}
+.prop>.k{color:var(--muted);font-size:14px}
+.prop>.v{min-width:0}
+.field{width:100%;display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--rule);border-radius:8px;background:transparent;color:var(--ink);font:inherit;font-size:14px;text-align:left;cursor:pointer}
+.field>span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.field>i{flex:none;width:22px;height:22px;border-radius:5px;border:1px solid var(--rule)}
+.field::after{content:"▾";color:var(--muted)}
+.field:disabled,.seg button:disabled{opacity:.45;cursor:default}
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--rule);border-radius:8px;overflow:hidden}
+.seg button{padding:7px 12px;border:0;border-left:1px solid var(--rule);background:transparent;color:var(--ink);font:inherit;font-size:14px;cursor:pointer}
+.seg button:first-child{border-left:0}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--opening)}
+.pop{margin-top:8px;padding:10px;border:1px solid var(--rule);border-radius:8px;background:var(--recess)}
+.pop input[type="search"]{width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--rule);background:var(--opening);color:var(--ink);font:inherit;font-size:14px}
+.hits{list-style:none;margin:8px 0 0;padding:0;max-height:240px;overflow:auto}
+.hits:empty{display:none}
+.hits button{display:block;width:100%;padding:7px 9px;border:0;border-radius:6px;background:transparent;color:var(--ink);font:inherit;font-size:14px;text-align:left;cursor:pointer;overflow-wrap:anywhere}
+.hits button:hover,.hits button:focus-visible{background:var(--housing);outline:none}
+.hits .none{color:var(--muted)}
+.pal-grid{display:grid;grid-template-columns:repeat(auto-fill,26px);gap:7px}
+.pal-grid button{width:26px;height:26px;padding:0;border:1px solid var(--rule);border-radius:6px;cursor:pointer}
+.pal-grid button[aria-pressed="true"]{outline:2px solid var(--ink);outline-offset:2px}
+.pal-grid+.pal-foot{margin-top:10px}
+.pal-foot{display:flex;flex-wrap:wrap;gap:8px}
+.pal-foot .btn{padding:6px 12px;font-size:14px}
+.pal-foot .btn[aria-pressed="true"]{background:var(--ink);color:var(--opening);border-color:var(--ink)}
+.pal-foot .well{position:relative}
+.pal-foot .well input[type="color"]{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;border:0;opacity:0;cursor:pointer;-webkit-appearance:none;appearance:none}
+.pal-foot .well:focus-within{outline:2px solid var(--ink);outline-offset:3px}
+.ed-foot{display:flex;justify-content:space-between;gap:8px;margin-top:auto;padding-top:14px;border-top:1px solid var(--rule)}
+.ed-history{display:flex;gap:8px}
+.ed-foot .btn{padding:8px 16px;font-size:14px}
+@media (max-width:720px){
+  body.editing{padding-right:0}
+  .editor{left:0;width:auto;border-left:0}
+}

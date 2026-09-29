@@ -85,14 +85,41 @@ CART_CANVAS = """
 (stem => document.querySelectorAll('#grid > .cart')[
   window.__studio.states().findIndex(s => s.stem === stem)].querySelector('canvas').toDataURL())(%s)
 """
-OPEN_SHELL = """
-(stem => document.querySelectorAll('#grid > .cart')[
-  window.__studio.states().findIndex(s => s.stem === stem)].querySelector('.shell-open').click())(%s)
-"""
 CANVAS_HIDDEN = """
 (stem => document.querySelectorAll('#grid > .cart')[
   window.__studio.states().findIndex(s => s.stem === stem)].querySelector('canvas').hidden)(%s)
 """
+# One cart's card element, by stem, as a JS expression.
+CARD = "document.querySelectorAll('#grid > .cart')[window.__studio.states().findIndex(s => s.stem === %s)]"
+EDIT = '(' + CARD + ").querySelector('.edit-open').click()"
+# The stems on the shelf showing, in order.
+SHELF = ("[...document.querySelectorAll('#grid > .cart')].filter(c => !c.hidden)"
+         ".map(c => c.querySelector('.stem').title)")
+# Search the Game row for `game` and pick it.
+PICK_HIT = """
+(game => {
+  const query = document.getElementById('ed-query');
+  query.value = game;
+  query.dispatchEvent(new Event('input'));
+  const hit = [...document.querySelectorAll('#ed-hits button')].find(b => b.textContent === game);
+  if (!hit) throw new Error('no hit for ' + game);
+  hit.click();
+  return true;
+})(%s)
+"""
+# Hand the Logo row's Custom picker a file that is not a PNG.
+PICK_JUNK = """
+(() => {
+  const files = new DataTransfer();
+  files.items.add(new File(['not a png'], 'notes.png', { type: 'image/png' }));
+  const input = document.getElementById('ed-logo-file');
+  input.files = files.files;
+  input.dispatchEvent(new Event('change'));
+  return true;
+})()
+"""
+UNDO_KEY = ("document.getElementById('editor').dispatchEvent("
+            "new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true }))")
 
 
 class Quiet(http.server.SimpleHTTPRequestHandler):
@@ -166,6 +193,29 @@ def wait(check, timeout, what):
 
 def nfc(name):
     return unicodedata.normalize('NFC', name)
+
+
+def state_of(page, stem):
+    return next(s for s in page.eval('window.__studio.states()') if nfc(s['stem']) == nfc(stem))
+
+
+def shell_of(page, stem):
+    return next(s['shell'] for s in page.eval('window.__studio.shells()') if nfc(s['stem']) == nfc(stem))
+
+
+def pick_shell(page, i):
+    page.eval("document.getElementById('ed-shell').click()")
+    page.eval("document.querySelectorAll('#ed-shell-presets button')[%d].click()" % i)
+
+
+def background(page, colour):
+    """A drag through the Background picker ending on `colour`: two inputs, then the change."""
+    page.eval("""(v => {
+      document.getElementById('ed-bg').click();
+      const i = document.getElementById('ed-bg-custom');
+      for (const at of ['#111111', v]) { i.value = at; i.dispatchEvent(new Event('input')); }
+      i.dispatchEvent(new Event('change'));
+    })(%s)""" % json.dumps(colour))
 
 
 def open_card(page, card, paths):
@@ -291,6 +341,80 @@ def main():
             if dropped['band'] or dropped['deep'].lstrip('#') == looks[banded]['ground']:
                 sys.exit(f'{banded} still wears its look after a logo was dropped on it: {dropped}')
             print(f'asserted: a logo dropped on {banded} takes no colour or band from its look')
+        # The editor: ◀ ▶ step through the shelf, and a click on another card moves it there.
+        shelf = page.eval(SHELF)
+        if len(shelf) < 3:
+            sys.exit(f'the first shelf has {len(shelf)} carts; the editor checks need three')
+        page.eval(EDIT % json.dumps(shelf[0]))
+        if not page.eval("document.getElementById('ed-prev').disabled"):
+            sys.exit('◀ is enabled on the first cart of the shelf')
+        page.eval("document.getElementById('ed-next').click()")
+        after_next = page.eval('window.__studio.editing()')
+        page.eval("document.getElementById('ed-prev').click()")
+        after_prev = page.eval('window.__studio.editing()')
+        page.eval('(' + CARD % json.dumps(shelf[2]) + ').click()')
+        after_click = page.eval('window.__studio.editing()')
+        if (after_next, after_prev, after_click) != (shelf[1], shelf[0], shelf[2]):
+            sys.exit(f'the editor went to {after_next!r}, {after_prev!r}, {after_click!r}, '
+                     f'not {shelf[1]!r}, {shelf[0]!r}, {shelf[2]!r}')
+        outlined = page.eval("[...document.querySelectorAll('#grid > .cart.current')]"
+                             ".map(c => c.querySelector('.stem').title)")
+        if outlined != [shelf[2]]:
+            sys.exit(f'the outlined cards are {outlined}, not just {shelf[2]!r}')
+        print('asserted: ◀ ▶ step through the shelf, and a click on a card moves the editor there')
+
+        # Every row is a step in the cart's history. Choosing the game it already has, or a file
+        # that isn't a PNG, is none.
+        presets = [p.split('\t')[1] for p in page.eval('window.__studio.shellPresets()')]
+        chosen = next((s['stem'] for s in first if s['state'] == 'ready' and s['platform'] == 'GBA'
+                       and s['game'] and s['stem'] in shelf), None)
+        if chosen is None:
+            sys.exit('no ready, matched GBA cart on the first shelf to edit')
+        page.eval(EDIT % json.dumps(chosen))
+        if not page.eval("document.getElementById('ed-outline-row').hidden"):
+            sys.exit('a GBA cart shows the Outline row')
+        page.eval("document.getElementById('ed-game').click()")
+        page.eval(PICK_HIT % json.dumps(state_of(page, chosen)['game']))
+        if not page.eval("document.getElementById('ed-undo').disabled"):
+            sys.exit('choosing the game the cart already has made an undo step')
+        page.eval(PICK_JUNK)
+        wait(lambda: 'notes.png' in page.eval("document.getElementById('banner').textContent"), 10,
+             'the banner for a logo that is not a PNG')
+        logo = page.eval("document.querySelector('#ed-logo [data-value=\"auto\"]').getAttribute('aria-pressed')")
+        if not page.eval("document.getElementById('ed-undo').disabled") or logo != 'true':
+            sys.exit('a file that is not a PNG changed the cart')
+        page.eval("document.getElementById('banner').hidden = true")
+        print('asserted: choosing the same game, or a file that is not a PNG, changes nothing')
+
+        def look():
+            return shell_of(page, chosen), state_of(page, chosen)['deep']
+
+        was = look()
+        pick_shell(page, 5)
+        background(page, '#123456')
+        both = (presets[5], '#123456')
+        seen = [look()]
+        page.eval("document.getElementById('ed-undo').click()")
+        seen.append(look())
+        page.eval(UNDO_KEY)
+        seen.append(look())
+        page.eval("document.getElementById('ed-redo').click()")
+        page.eval("document.getElementById('ed-redo').click()")
+        seen.append(look())
+        page.eval("document.getElementById('ed-revert').click()")
+        seen.append(look())
+        page.eval("document.getElementById('ed-undo').click()")
+        seen.append(look())
+        page.eval("document.getElementById('ed-revert').click()")
+        seen.append(look())
+        want = [both, (presets[5], was[1]), was, both, was, both, was]
+        if seen != want:
+            sys.exit(f'Shell then Background stepped through {seen}, not {want}')
+        page.eval("document.getElementById('ed-close').click()")
+        if page.eval('window.__studio.editing()') is not None or page.eval("!!document.querySelector('.cart.current')"):
+            sys.exit('✕ left the editor open or a card outlined')
+        print(f'asserted: on {chosen}, Undo (button and ⌘Z), Redo and Revert step Shell then Background, '
+              'a drag is one step, and Revert is undoable')
         page.shot(1280, OUT / 'studio-1280.png')
         page.shot(400, OUT / 'studio-400.png')
         overflow = page.eval('document.documentElement.scrollWidth')
@@ -303,7 +427,11 @@ def main():
         tabs = page.eval("[...document.querySelectorAll('#tabs button')].map(b => b.textContent)")
         print('tabs:', tabs)
         if len(tabs) > 1:
+            page.eval(EDIT % json.dumps(shelf[0]))
             page.eval("document.querySelectorAll('#tabs button')[%d].click()" % (len(tabs) - 1))
+            if page.eval('window.__studio.editing()') is not None or page.eval("!!document.querySelector('.cart.current')"):
+                sys.exit('switching shelves left the editor open')
+            print('asserted: switching shelves closes the editor')
             wait(lambda: page.eval('window.__studio.idle()'), 120, 'the shelf to settle')
             print('at the shot: idle', page.eval('window.__studio.idle()'),
                   '| button', repr(page.eval("document.getElementById('write').textContent")),
@@ -336,20 +464,17 @@ def main():
             sys.exit('no needs-logo cart in the fixture to check the shell preview on')
         if not page.eval(CANVAS_HIDDEN % json.dumps(needs_logo)):
             sys.exit(f'{needs_logo} shows a canvas before a shell is chosen')
-        # One open/close cycle for both checks: the dialog's own close event is a queued task, so
-        # closing and reopening it in quick succession races that task's `shelling = null` against
-        # the reopen's `shelling = c` and can leave the reset click acting on no cart at all.
-        page.eval(OPEN_SHELL % json.dumps(needs_logo))
-        page.eval("document.querySelectorAll('#shell-presets button')[5].click()")
-        if page.eval(CANVAS_HIDDEN % json.dumps(needs_logo)):
-            sys.exit(f'{needs_logo} still shows no canvas after a shell was chosen')
+        page.eval(EDIT % json.dumps(needs_logo))
+        gba = state_of(page, needs_logo)['platform'] == 'GBA'
+        if page.eval("document.getElementById('ed-outline-row').hidden") != gba:
+            sys.exit(f'the Outline row is wrong for {needs_logo}: it shows only on Game Boy carts')
+        pick_shell(page, 5)
+        wait(lambda: not page.eval(CANVAS_HIDDEN % json.dumps(needs_logo)), 10, 'the generated label to show')
+        page.eval("document.getElementById('ed-revert').click()")
+        wait(lambda: page.eval(CANVAS_HIDDEN % json.dumps(needs_logo)), 10, 'Revert to take the shell off')
+        page.eval("document.getElementById('ed-close').click()")
         print(f'asserted: {needs_logo} (needs-logo) shows no canvas until a shell is chosen, '
-              'then shows the generated label')
-        # Left as found: back to Automatic, so it does not show up as a shell change below.
-        page.eval("document.getElementById('shell-reset').click()")
-        page.eval("document.getElementById('shell').close()")
-        if not page.eval(CANVAS_HIDDEN % json.dumps(needs_logo)):
-            sys.exit(f'{needs_logo} still shows a canvas after resetting to Automatic')
+              'and Revert takes it back off')
 
         page.width(1280)
         # Headless Chrome ignores the browser-level Browser.setDownloadBehavior for this target;
@@ -402,55 +527,57 @@ def main():
             sys.exit(f'the card\'s cart_shell.ini was not read: {shells.get("Catrap (USA)")!r}')
         print('asserted: the card\'s existing shell choice was read')
 
-        # A cart that already has its label still gets a pencil, on screen, not merely in the dom.
         no_pencil = page.eval(
-            "window.__studio.states().map((s, i) => [s, document.querySelectorAll('#grid > .cart')[i]])"
-            ".filter(([s, card]) => s.state === 'has-label' && s.platform === 'GBA'"
-            " && card.querySelector('.shell-open').offsetParent === null).map(([s]) => s.stem)"
+            "[...document.querySelectorAll('#grid > .cart')].filter(c => !c.hidden"
+            " && c.querySelector('.edit-open').offsetParent === null).map(c => c.querySelector('.stem').title)"
         )
         if no_pencil:
-            sys.exit(f'these carts with labels show no shell pencil: {no_pencil}')
-        print('asserted: carts that already have labels show the shell pencil')
+            sys.exit(f'these carts show no ✎: {no_pencil}')
+        print('asserted: every cart on the shelf shows its ✎')
 
         chosen = 'Advance Wars'
         presets = [p.split('\t')[1] for p in page.eval('window.__studio.shellPresets()')]
         preset = presets[5]
+        page.eval(EDIT % json.dumps(chosen))
+        disabled = page.eval(
+            "['ed-game', 'ed-bg', 'ed-shell'].map(id => document.getElementById(id).disabled)"
+            ".concat([[...document.querySelectorAll('#ed-logo button')].every(b => b.disabled)])"
+        )
+        if disabled != [True, True, False, True]:
+            sys.exit(f'{chosen} has its label: Game, Background and Logo should be off and Shell on, got {disabled}')
+        print(f'asserted: {chosen}, whose label is on the card, can change its shell and nothing else')
 
-        def shell_of():
-            return next(s['shell'] for s in page.eval('window.__studio.shells()') if nfc(s['stem']) == chosen)
-
-        # Undo and Redo step through this visit's choices; Cancel puts back what the cart had.
-        was = shell_of()
-        page.eval(OPEN_SHELL % json.dumps(chosen))
-        for i in (5, 7):
-            page.eval("document.querySelectorAll('#shell-presets button')[%d].click()" % i)
-        page.eval("document.getElementById('shell-undo').click()")
-        after_undo = shell_of()
-        page.eval("document.getElementById('shell-redo').click()")
-        after_redo = shell_of()
-        page.eval("document.getElementById('shell-cancel').click()")
-        wait(lambda: shell_of() == was, 10, 'Cancel to put the shell back')
-        if (after_undo, after_redo) != (presets[5], presets[7]):
-            sys.exit(f'Undo gave {after_undo!r} and Redo {after_redo!r}, not {presets[5]!r} and {presets[7]!r}')
-        print('asserted: Undo and Redo step through the choices, and Cancel puts the shell back')
+        was = shell_of(page, chosen)
+        pick_shell(page, 5)
+        pick_shell(page, 7)
+        page.eval("document.getElementById('ed-undo').click()")
+        after_undo = shell_of(page, chosen)
+        page.eval("document.getElementById('ed-redo').click()")
+        after_redo = shell_of(page, chosen)
+        page.eval("document.getElementById('ed-revert').click()")
+        after_revert = shell_of(page, chosen)
+        if (after_undo, after_redo, after_revert) != (presets[5], presets[7], was):
+            sys.exit(f'Undo, Redo, Revert gave {after_undo!r}, {after_redo!r}, {after_revert!r}')
+        print('asserted: Undo and Redo step through the shells, and Revert puts back what the cart had')
 
         before = page.eval(CART_CANVAS % json.dumps(chosen))
-        page.eval(OPEN_SHELL % json.dumps(chosen))
-        page.eval("document.querySelectorAll('#shell-presets button')[5].click()")
-        in_dialog = page.eval("document.getElementById('shell-face').toDataURL()")
+        pick_shell(page, 5)
+        wait(lambda: page.eval(CART_CANVAS % json.dumps(chosen)) != before, 10, f'{chosen} to redraw in its shell')
+        in_panel = page.eval("document.getElementById('ed-face').toDataURL()")
         on_card = page.eval(CART_CANVAS % json.dumps(chosen))
         page.eval('window.scrollTo(0, 0)')
-        page.shot(1280, OUT / 'studio-shell-1280.png')
-        page.shot(400, OUT / 'studio-shell-400.png')
+        page.shot(1280, OUT / 'studio-editor-1280.png')
+        page.shot(400, OUT / 'studio-editor-400.png')
+        overflow = page.eval('document.documentElement.scrollWidth')
+        if overflow > 400:
+            sys.exit(f'the editor scrolls sideways at 400 px ({overflow})')
         page.width(1280)
-        page.eval("document.getElementById('shell-save').click()")
-        wait(lambda: shell_of() == preset, 10, 'Save to keep the shell')
-        if in_dialog != on_card:
-            sys.exit(f'the shell dialog does not show {chosen} as its card does')
-        print(f'asserted: the shell dialog shows {chosen} as its card does, while choosing')
-        if page.eval(CART_CANVAS % json.dumps(chosen)) == before:
-            sys.exit(f'choosing a shell did not redraw {chosen}')
-        print(f'asserted: choosing a shell redrew {chosen}')
+        page.eval("document.getElementById('ed-close').click()")
+        if shell_of(page, chosen) != preset:
+            sys.exit('closing the editor lost the shell')
+        if in_panel != on_card:
+            sys.exit(f'the editor does not show {chosen} as its card does')
+        print(f'asserted: the editor shows {chosen} as its card does, and the shell stays when it closes')
 
         kept_downloads = OUT / 'downloads-labelled'
         shutil.rmtree(kept_downloads, ignore_errors=True)

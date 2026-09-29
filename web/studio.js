@@ -25,6 +25,7 @@ import init, {
 } from './pkg/slot_cart_studio.js';
 import { fromDirectory, fromFiles, labelKey, PLATFORMS } from './card.js';
 import { fetchArt, fetchDat, fetchIndex, fetchThumb, limiter } from './libretro.js';
+import { createEditor } from './editor.js';
 
 const $ = (id) => document.getElementById(id);
 const limit = limiter(4);
@@ -236,7 +237,7 @@ function buildCard(c) {
     hueRow: q('.hue-row'),
     band: q('.band-row'),
     reject: q('.reject'),
-    shellOpen: q('.shell-open'),
+    edit: q('.edit-open'),
     drop: q('.drop'),
     pickLogo: q('.drop input'),
   };
@@ -268,7 +269,10 @@ function buildCard(c) {
     c.bandOn = !c.bandOn;
     paint(c);
   });
-  c.el.shellOpen.addEventListener('click', () => openShell(c));
+  c.el.edit.addEventListener('click', () => editor.open(c));
+  root.addEventListener('click', () => {
+    if (editor.current()) editor.open(c);
+  });
   c.el.drop.addEventListener('dragover', (e) => {
     e.preventDefault();
     c.el.drop.classList.add('over');
@@ -345,10 +349,10 @@ function paint(c) {
   // name is how a cart libretro keeps under a name its filename does not use gets found at all.
   reject.hidden = !['ready', 'needs-logo'].includes(state);
   reject.textContent = c.rejected ? 'Restore the Match' : c.game ? 'Wrong Game' : 'Find Game';
-  c.el.shellOpen.hidden = !['ready', 'has-label', 'needs-logo'].includes(state) || !shell_key_ok(c.stem);
   game.textContent = describe(c, state);
   status.textContent = statusText(c);
   updateWriteBar();
+  if (editor.current() === c) editor.refresh();
 }
 
 // The finder: one dialog for both ways out of a wrong match, naming the right game or handing
@@ -381,7 +385,10 @@ function findGames() {
         type: 'button',
         textContent: name,
       });
-      button.addEventListener('click', () => track(chooseGame(c, name)));
+      button.addEventListener('click', () => {
+        $('finder').close();
+        chooseGame(c, name);
+      });
       return Object.assign(document.createElement('li'), {}).appendChild(button).parentElement;
     }),
   );
@@ -391,15 +398,18 @@ function findGames() {
 
 // A game named by hand is dressed exactly as a matched one, so its logo, box art hue and the
 // clash rule all apply. The CRC keeps whatever it said; the name is what the label follows.
-async function chooseGame(c, name) {
-  $('finder').close();
-  const s = session;
+function chooseGame(c, name) {
+  if (c.game === name && !c.rejected) return;
   c.game = name;
   c.rejected = false;
   c.snapshot = null;
   c.droppedBytes = null;
   c.logoBytes = null;
   c.looking = true;
+  track(redress(session, c));
+}
+
+async function redress(s, c) {
   paint(c);
   try {
     await dress(s, c);
@@ -427,106 +437,43 @@ function restore(c) {
   schedulePaint(c);
 }
 
-// The shell dialog edits one cart's choice in place, repainting as it goes. Save keeps it; Cancel,
-// Escape or a click away put back what the cart had when the dialog opened. Undo and Redo step
-// through this visit's changes, and a drag through the colour picker is one of them.
-let shelling = null;
-let shellWas = '';
-let undoShells = [];
-let redoShells = [];
-let pickingColour = false;
-
 const choiceOf = (c) => {
   const [outline, colour, finish] = (c.shell || auto_shell(c.platform, c.code, c.head)).split(' ');
   return { outline, colour, finish };
 };
 
-function setShell(c, next, { record = true } = {}) {
-  const value = next ? `${next.outline} ${next.colour} ${next.finish}` : '';
-  if (value === c.shell) return;
-  if (record) {
-    undoShells.push(c.shell);
-    redoShells = [];
-  }
-  applyShell(c, value);
-}
-
-function applyShell(c, value) {
-  c.shell = value;
-  if (c.existingPng) {
-    c.existing = existing_face(c.existingPng, c.platform, c.code, c.head, c.shell, c.stem);
-  }
-  paint(c);
-  renderShell();
-}
-
-function renderShell() {
-  const c = shelling;
-  if (!c) return;
-  const now = choiceOf(c);
-  const press = (group, key, value) => {
-    for (const b of $(group).querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset[key] === value));
-  };
-  press('shell-outline', 'outline', now.outline);
-  press('shell-finish', 'finish', now.finish);
-  for (const b of $('shell-presets').querySelectorAll('button')) {
-    const [, colour, finish] = b.dataset.value.split(' ');
-    b.setAttribute('aria-pressed', String(colour === now.colour && finish === now.finish));
-  }
-  $('shell-colour').value = `#${now.colour}`;
-  $('shell-undo').disabled = undoShells.length === 0;
-  $('shell-redo').disabled = redoShells.length === 0;
-  let face;
-  try {
-    face = faceOf(c, stateOf(c), true);
-  } catch (e) {
-    if (trapped(e)) return;
-    throw e;
-  }
-  $('shell-face').hidden = !face;
-  if (face) drawFace($('shell-face'), face, c.platform);
-}
-
-function stepShell(from, to) {
-  const c = shelling;
-  if (!c || from.length === 0) return;
-  to.push(c.shell);
-  applyShell(c, from.pop());
-}
-
-function openShell(c) {
-  shelling = c;
-  shellWas = c.shell;
-  undoShells = [];
-  redoShells = [];
-  pickingColour = false;
-  $('shell').returnValue = '';
-  $('shell-cart').textContent = clean_label(c.stem);
-  $('shell-outline').hidden = c.platform === 'GBA';
-  [$('shell-face').width, $('shell-face').height] = boxOf(c.platform);
-  renderShell();
-  $('shell').showModal();
-}
-
-async function takeLogo(c, file) {
-  if (!file) return;
+async function readLogo(file) {
+  if (!file) return null;
   let bytes = null;
   try {
     bytes = new Uint8Array(await file.arrayBuffer());
-    if (fatal) return;
+    if (fatal) return null;
     if (!readable(bytes)) bytes = null;
   } catch (e) {
-    if (trapped(e)) return;
+    if (trapped(e)) return null;
     bytes = null;
   }
-  if (!bytes) {
-    c.el.status.textContent = `${file.name} is not a PNG this studio can read`;
-    return;
-  }
+  if (!bytes) banner(`${file.name} is not a PNG this studio can read`);
+  return bytes;
+}
+
+// A logo of the person's own decides which way its ground goes the same way a fetched one does.
+function useLogo(c, bytes) {
   c.droppedBytes = bytes;
-  // A dropped logo decides which way its ground goes the same way a fetched one does.
   c.logoLuma = logo_luma(bytes);
   if (!c.userHue) c.deep = null;
+}
+
+function autoLogo(c) {
+  c.droppedBytes = null;
+  c.logoLuma = c.logoBytes ? logo_luma(c.logoBytes) : 255;
+  if (!c.userHue) c.deep = null;
+}
+
+async function takeLogo(c, file) {
+  const bytes = await readLogo(file);
+  if (!bytes) return;
+  useLogo(c, bytes);
   schedulePaint(c);
 }
 
@@ -557,6 +504,7 @@ async function open(source) {
     banner(FATAL);
     return;
   }
+  editor.close();
   session = { source, carts: source.carts.map(newCart) };
   $('banner').hidden = true;
   // A card opened mid-scan replaces identify()'s loop before it reaches progress(total, total, ''),
@@ -621,6 +569,7 @@ async function identify(s) {
         const bytes = new Uint8Array(await (await label()).arrayBuffer());
         c.existingPng = bytes;
         c.existing = existing_face(bytes, c.platform, c.code, c.head, c.shell, c.stem);
+        c.looking = false;
       } else {
         c.crc = await crcOf(file);
       }
@@ -744,6 +693,7 @@ function renderTabs() {
 // Switching hides the other shelves rather than rebuilding the grid: a cart keeps its canvas, its
 // chosen colour and any logo dropped on it, so coming back to a tab finds it as it was left.
 function showPlatform(p) {
+  editor.close();
   session.platform = p;
   for (const c of session.carts) c.el.root.hidden = c.platform !== p;
   renderTabs();
@@ -895,60 +845,86 @@ async function writeLabels() {
   }
 }
 
+const canLabel = (c) => ['ready', 'needs-logo'].includes(stateOf(c));
+
+let presetList = null;
+const presets = () =>
+  (presetList ??= shell_presets().map((entry) => {
+    const [name, value] = entry.split('\t');
+    return { name, value };
+  }));
+
+function shellOf(c) {
+  const { outline, colour, finish } = choiceOf(c);
+  const preset = presets().find(({ value }) => value.endsWith(` ${colour} ${finish}`));
+  return { outline, colour, finish, auto: !c.shell, name: preset?.name ?? `#${colour}` };
+}
+
+function setShell(c, next) {
+  c.shell = next ? `${next.outline} ${next.colour} ${next.finish}` : '';
+}
+
+function setBackground(c, rgb) {
+  c.deep = rgb;
+  c.userHue = !!rgb;
+}
+
+// A CRC can be right about the bytes and wrong about the game: a ROM renamed to another's name.
+function noMatch(c) {
+  c.rejected = true;
+  c.droppedBytes = null;
+  c.userHue = false;
+  c.deep = null;
+}
+
+// Painted at once, so the editor's buttons are right before the next click; only a drag's
+// follow-on inputs wait for a frame.
+function changed(c, soon = false) {
+  try {
+    if (c.existingPng) c.existing = existing_face(c.existingPng, c.platform, c.code, c.head, c.shell, c.stem);
+  } catch (e) {
+    if (trapped(e)) return;
+    throw e;
+  }
+  if (soon) schedulePaint(c);
+  else paint(c);
+}
+
+const editor = createEditor({
+  carts: () => (session ? session.carts.filter((c) => c.platform === session.platform) : []),
+  name: (c) => clean_label(c.stem),
+  box: boxOf,
+  draw: drawFace,
+  face: (c) => {
+    try {
+      return faceOf(c, stateOf(c), true);
+    } catch (e) {
+      if (trapped(e)) return null;
+      throw e;
+    }
+  },
+  hex,
+  fromHex,
+  matched: (c) => !!c.game && !c.rejected,
+  canLabel,
+  canBackground: (c) => stateOf(c) === 'ready',
+  canShell: (c) => ['ready', 'has-label', 'needs-logo'].includes(stateOf(c)) && shell_key_ok(c.stem),
+  search: (c, query) => dats.get(c.platform)?.search(query, 30) ?? null,
+  chooseGame,
+  noMatch,
+  readLogo,
+  useLogo,
+  autoLogo,
+  background: (c) => ({ rgb: c.deep ?? baseDeep(c), auto: !c.userHue }),
+  setBackground,
+  shellOf,
+  setShell,
+  presets,
+  changed,
+});
+
 async function start() {
   await init();
-  $('shell-presets').replaceChildren(
-    ...shell_presets().map((entry) => {
-      const [name, value] = entry.split('\t');
-      const b = Object.assign(document.createElement('button'), { type: 'button', className: 'swatch', title: name });
-      b.setAttribute('aria-label', name);
-      b.dataset.value = value;
-      b.style.background = `#${value.split(' ')[1]}`;
-      b.addEventListener('click', () => {
-        if (!shelling) return;
-        const [, colour, finish] = value.split(' ');
-        setShell(shelling, { ...choiceOf(shelling), colour, finish });
-      });
-      return b;
-    }),
-  );
-  $('shell-outline').addEventListener('click', (e) => {
-    const outline = e.target.closest('button')?.dataset.outline;
-    if (outline && shelling) setShell(shelling, { ...choiceOf(shelling), outline });
-  });
-  $('shell-finish').addEventListener('click', (e) => {
-    const finish = e.target.closest('button')?.dataset.finish;
-    if (finish && shelling) setShell(shelling, { ...choiceOf(shelling), finish });
-  });
-  $('shell-colour').addEventListener('input', () => {
-    if (!shelling) return;
-    const colour = $('shell-colour').value.slice(1);
-    setShell(shelling, { ...choiceOf(shelling), colour }, { record: !pickingColour });
-    pickingColour = true;
-  });
-  $('shell-colour').addEventListener('change', () => (pickingColour = false));
-  $('shell-reset').addEventListener('click', () => shelling && setShell(shelling, null));
-  $('shell-undo').addEventListener('click', () => stepShell(undoShells, redoShells));
-  $('shell-redo').addEventListener('click', () => stepShell(redoShells, undoShells));
-  $('shell-save').addEventListener('click', () => $('shell').close('save'));
-  $('shell-cancel').addEventListener('click', () => $('shell').close());
-  $('shell').addEventListener('keydown', (e) => {
-    if (!(e.metaKey || e.ctrlKey)) return;
-    const key = e.key.toLowerCase();
-    if (key === 'z' && !e.shiftKey) stepShell(undoShells, redoShells);
-    else if ((key === 'z' && e.shiftKey) || key === 'y') stepShell(redoShells, undoShells);
-    else return;
-    e.preventDefault();
-  });
-  // Clicking the dimmed page outside the dialog is a Cancel.
-  $('shell').addEventListener('click', (e) => {
-    if (e.target === $('shell')) $('shell').close();
-  });
-  $('shell').addEventListener('close', () => {
-    const c = shelling;
-    shelling = null;
-    if (c && $('shell').returnValue !== 'save' && c.shell !== shellWas) applyShell(c, shellWas);
-  });
   for (const platform of PLATFORMS) faceBox.set(platform, Array.from(cart_size(platform)));
   // A set of our own, if the address named one. Not having it is not a failure: every cart falls
   // back to libretro, which is all the page had before there was a set to point at.
@@ -1042,6 +1018,7 @@ async function start() {
           : [],
       shells: () => (session ? session.carts.map((c) => ({ stem: c.stem, shell: c.shell })) : []),
       shellPresets: () => shell_presets(),
+      editing: () => editor.current()?.stem ?? null,
     };
   }
   document.body.dataset.ready = 'true';
