@@ -182,28 +182,55 @@ impl Band {
         })
     }
 
+    /// The strip, as x0, y0, x1, y1 on a label `lw` by `lh`: from the label's edge to its
+    /// thickness inside the part slot shows, so a thin band is not lost to the crop.
+    fn strip(&self, lw: u32, lh: u32) -> (u32, u32, u32, u32) {
+        let (x0, y0, x1, y1) = shown(lw, lh);
+        let (tw, th) = (self.across(x1 - x0), self.across(y1 - y0));
+        match self.edge {
+            Edge::Top => (0, 0, lw, y0 + th),
+            Edge::Bottom => (0, y1 - th, lw, lh),
+            Edge::Left => (0, 0, x0 + tw, lh),
+            Edge::Right => (x1 - tw, 0, lw, lh),
+        }
+    }
+
+    /// What slot shows of the label beside the strip, as x, y, width, height, which the logo is
+    /// placed within.
+    fn rest(&self, lw: u32, lh: u32) -> (u32, u32, u32, u32) {
+        let (x0, y0, x1, y1) = shown(lw, lh);
+        let (tw, th) = (self.across(x1 - x0), self.across(y1 - y0));
+        match self.edge {
+            Edge::Top => (x0, y0 + th, x1 - x0, y1 - y0 - th),
+            Edge::Bottom => (x0, y0, x1 - x0, y1 - y0 - th),
+            Edge::Left => (x0 + tw, y0, x1 - x0 - tw, y1 - y0),
+            Edge::Right => (x0, y0, x1 - x0 - tw, y1 - y0),
+        }
+    }
+
     fn across(&self, n: u32) -> u32 {
         ((n as f32 * self.size).round() as u32).min(n)
     }
+}
 
-    /// The strip, as x0, y0, x1, y1 on a label `lw` by `lh`.
-    fn strip(&self, lw: u32, lh: u32) -> (u32, u32, u32, u32) {
-        match self.edge {
-            Edge::Top => (0, 0, lw, self.across(lh)),
-            Edge::Bottom => (0, lh - self.across(lh), lw, lh),
-            Edge::Left => (0, 0, self.across(lw), lh),
-            Edge::Right => (lw - self.across(lw), 0, lw, lh),
-        }
-    }
-
-    /// The rest of the label, as x, y, width, height, which the logo is placed within.
-    fn rest(&self, lw: u32, lh: u32) -> (u32, u32, u32, u32) {
-        match self.edge {
-            Edge::Top => (0, self.across(lh), lw, lh - self.across(lh)),
-            Edge::Bottom => (0, 0, lw, lh - self.across(lh)),
-            Edge::Left => (self.across(lw), 0, lw - self.across(lw), lh),
-            Edge::Right => (0, 0, lw - self.across(lw), lh),
-        }
+/// The part of a label slot shows, as x0, y0, x1, y1. slot covers its well with the label, so a
+/// label of another shape loses rows or columns: a GBA label's 2:1 loses some top and bottom to
+/// the 196 by 86 well.
+fn shown(lw: u32, lh: u32) -> (u32, u32, u32, u32) {
+    let (ww, wh) = if (lw, lh) == (W, H) {
+        (crate::cart::LABEL_W, crate::cart::LABEL_H)
+    } else {
+        (crate::cart::GB_LABEL_W, crate::cart::GB_LABEL_H)
+    };
+    let well = ww as f32 / wh as f32;
+    if lw as f32 / lh as f32 > well {
+        let vw = ((lh as f32 * well).round() as u32).min(lw);
+        let x0 = (lw - vw) / 2;
+        (x0, 0, x0 + vw, lh)
+    } else {
+        let vh = ((lw as f32 / well).round() as u32).min(lh);
+        let y0 = (lh - vh) / 2;
+        (0, y0, lw, y0 + vh)
     }
 }
 
@@ -632,5 +659,39 @@ mod tests {
         assert_eq!(Band::parse("middle", 0.2, &[1, 2, 3]), None);
         assert_eq!(Band::parse("top", 0.0, &[1, 2, 3]), None);
         assert_eq!(Band::parse("top", 0.2, &[1, 2]), None);
+    }
+
+    /// slot crops a GBA label to its well's shape, so a band thin enough to live in the cropped
+    /// rows would never be seen. The band sits in the part slot shows, and shows on the cart.
+    #[test]
+    fn a_thin_top_band_shows_on_the_cart_face() {
+        let mut logo = Vec::new();
+        {
+            let mut enc = png::Encoder::new(&mut logo, 8, 4);
+            enc.set_color(png::ColorType::Rgba);
+            enc.set_depth(png::BitDepth::Eight);
+            enc.write_header()
+                .unwrap()
+                .write_image_data(&solid(8, 4))
+                .unwrap();
+        }
+        let band = Band {
+            edge: Edge::Top,
+            size: 0.046,
+            colour: [172, 13, 0],
+        };
+        let label =
+            Label::from_png(&logo, [20, 20, 30], Platform::Gba, Some(band)).expect("decodes");
+        let face = label.face(Platform::Gba, "", &[], "", "Probe");
+        let (x, y) = (
+            crate::cart::LABEL_X + crate::cart::LABEL_W / 2,
+            crate::cart::LABEL_Y + 1,
+        );
+        let i = ((y * crate::cart::CART_W + x) * 4) as usize;
+        assert!(
+            near([face[i], face[i + 1], face[i + 2]], [172, 13, 0], 24),
+            "{:?}",
+            &face[i..i + 3]
+        );
     }
 }

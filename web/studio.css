@@ -147,6 +147,9 @@ label.btn:focus-within{outline:2px solid var(--ink);outline-offset:3px}
 .choice-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
 .choice-row .btn{padding:8px 14px;font-size:14px}
 .choice-row .btn[aria-pressed="true"]{background:var(--ink);color:var(--opening);border-color:var(--ink)}
+/* A band read from the real label can be turned off per cart. */
+.band-row{justify-content:center;margin-top:2px}
+.band-row .btn{padding:6px 12px;font-size:13px}
 .swatches{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
 .swatch{width:30px;height:30px;border-radius:7px;border:1px solid var(--rule);padding:0;cursor:pointer}
 .swatch[aria-pressed="true"]{outline:2px solid var(--ink);outline-offset:2px}

@@ -25,6 +25,7 @@ import unicodedata
 import urllib.parse
 import urllib.request
 import zipfile
+import zlib
 from pathlib import Path
 
 import websocket
@@ -61,6 +62,11 @@ OPEN_FILES = """
 """
 
 # The data URL of one cart's preview, and a click on its Shell button, by stem.
+# Click one cart's Band switch, by stem.
+BAND_SWITCH = """
+(stem => document.querySelectorAll('#grid > .cart')[
+  window.__studio.states().findIndex(s => s.stem === stem)].querySelector('.band-row button').click())(%s)
+"""
 CART_CANVAS = """
 (stem => document.querySelectorAll('#grid > .cart')[
   window.__studio.states().findIndex(s => s.stem === stem)].querySelector('canvas').toDataURL())(%s)
@@ -231,6 +237,35 @@ def main():
         # Settled again before the shots: open_card's wait ends when every cart has resolved once,
         # and a shot taken while anything is still being dressed photographs a spinner.
         wait(lambda: page.eval('window.__studio.idle()'), 120, 'the carts to settle before the shot')
+        # With an art set that has looks: a sure look's ground is the label colour, and its band
+        # can be switched off and on; an unsure look leaves the label colour alone.
+        if art:
+            base = art.rstrip('/') + '/'
+            index = json.load(urllib.request.urlopen(base + 'index.json'))
+            looks = {}
+            for g in games:
+                crc = f'{zlib.crc32((SLOT_GAMES / g).read_bytes()) & 0xffffffff:08X}'
+                if 'look' in index.get(crc, {}):
+                    looks[nfc(Path(g).stem)] = index[crc]['look']
+            states = {nfc(s['stem']): s for s in page.eval('window.__studio.states()')}
+            ready = {stem: lk for stem, lk in looks.items() if states.get(stem, {}).get('state') == 'ready'}
+            for stem, lk in ready.items():
+                deep = states[stem]['deep'].lstrip('#')
+                if lk['sure'] and deep != lk['ground']:
+                    sys.exit(f'{stem} has a sure look {lk["ground"]} but its label colour is {deep}')
+                if not lk['sure'] and deep == lk['ground']:
+                    sys.exit(f'{stem} has an unsure look but wears its ground {deep}')
+            print(f'asserted: {len(ready)} carts with looks use their ground only when sure')
+            banded = next((s for s, lk in ready.items() if lk['sure'] and lk['band']), None)
+            if banded is None:
+                sys.exit('no cart on the card has a sure look with a band; the Classic NES Series carts should')
+            on = page.eval(CART_CANVAS % json.dumps(banded))
+            page.eval(BAND_SWITCH % json.dumps(banded))
+            off = page.eval(CART_CANVAS % json.dumps(banded))
+            page.eval(BAND_SWITCH % json.dumps(banded))
+            if off == on or page.eval(CART_CANVAS % json.dumps(banded)) != on:
+                sys.exit(f'the Band switch does not take {banded}\'s band off and put it back')
+            print(f'asserted: {banded} wears its band, and the Band switch takes it off and back')
         page.shot(1280, OUT / 'studio-1280.png')
         page.shot(400, OUT / 'studio-400.png')
         overflow = page.eval('document.documentElement.scrollWidth')

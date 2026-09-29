@@ -70,6 +70,9 @@ function newCart({ platform, stem, file }) {
     game: null,
     // Logos stay PNG bytes, which are small. The label made from one is not kept: see withLabel.
     logoBytes: null,
+    // The real label's ground and band, measured from its scan: sure looks only.
+    look: null,
+    bandOn: true,
     droppedBytes: null,
     rejected: false,
     snapshot: null,
@@ -104,7 +107,7 @@ const baseHueOf = (c) =>
 // produces depends on the logo going over it: dark logos get a pale ground, bright ones a deep
 // one. stop_colours is that rule, so the page never restates the house numbers itself.
 const stopsOf = (c) => stop_colours(baseHueOf(c), c.logoLuma ?? 255);
-const baseDeep = (c) => Array.from(stopsOf(c)).slice(0, 3);
+const baseDeep = (c) => c.look?.ground ?? Array.from(stopsOf(c)).slice(0, 3);
 
 const hex = (rgb) => `#${[...rgb].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
 // A checksum as the set names its files: eight upper case hex digits.
@@ -115,6 +118,19 @@ const crcHex = (crc) => crc.toString(16).toUpperCase().padStart(8, '0');
 const ART_BASE = new URLSearchParams(location.search).get('art') ?? '';
 let artIndex = null;
 const fromHex = (value) => [1, 3, 5].map((at) => parseInt(value.slice(at, at + 2), 16));
+// A sure look from the art set, or null: anything missing, unsure or malformed counts as no look.
+const rgbOf = (h) => (typeof h === 'string' && /^[0-9a-f]{6}$/i.test(h) ? fromHex(`#${h}`) : null);
+function parseLook(raw) {
+  if (!raw || raw.sure !== true) return null;
+  const ground = rgbOf(raw.ground);
+  if (!ground) return null;
+  if (!raw.band) return { ground, band: null };
+  const { edge, size } = raw.band;
+  const colour = rgbOf(raw.band.colour);
+  const ok = ['top', 'bottom', 'left', 'right'].includes(edge) && typeof size === 'number' && size > 0 && size < 0.5;
+  return ok && colour ? { ground, band: { edge, size, colour } } : null;
+}
+const bandOf = (c) => (c.bandOn && c.look?.band) || null;
 
 const readyCarts = () =>
   session ? session.carts.filter((c) => stateOf(c) === 'ready' && c.result !== 'skipped') : [];
@@ -125,8 +141,10 @@ const mergedShells = (s, carts, values) =>
 
 // A Label holds its 1280x640 composition in WASM memory, which never shrinks and stops at 4 GiB.
 // One kept per cart runs a big card out of it, so a Label lives only for the call that needs it.
-function withLabel(bytes, deep, platform, use) {
-  const label = new Label(bytes, deep, platform, '', 0, new Uint8Array(0));
+function withLabel(bytes, deep, platform, use, band = null) {
+  const label = band
+    ? new Label(bytes, deep, platform, band.edge, band.size, new Uint8Array(band.colour))
+    : new Label(bytes, deep, platform, '', 0, new Uint8Array(0));
   try {
     return use(label);
   } finally {
@@ -137,7 +155,7 @@ function withLabel(bytes, deep, platform, use) {
 // The label this cart is wearing, for as long as the call needs it.
 function withCartLabel(c, use) {
   const logo = activeLogo(c);
-  return logo ? withLabel(logo, c.deep ?? baseDeep(c), c.platform, use) : null;
+  return logo ? withLabel(logo, c.deep ?? baseDeep(c), c.platform, use, bandOf(c)) : null;
 }
 
 // Whether slot's decoder takes a logo, asked the only way the module can be asked: by making one.
@@ -213,6 +231,7 @@ function buildCard(c) {
     status: q('.status'),
     hue: q('.hue'),
     hueRow: q('.hue-row'),
+    band: q('.band-row'),
     reject: q('.reject'),
     shellOpen: q('.shell-open'),
     drop: q('.drop'),
@@ -242,6 +261,10 @@ function buildCard(c) {
     schedulePaint(c);
   });
   c.el.reject.addEventListener('click', () => (c.rejected ? restore(c) : openFinder(c)));
+  c.el.band.addEventListener('click', () => {
+    c.bandOn = !c.bandOn;
+    paint(c);
+  });
   c.el.shellOpen.addEventListener('click', () => openShell(c));
   c.el.drop.addEventListener('dragover', (e) => {
     e.preventDefault();
@@ -300,7 +323,7 @@ function paint(c) {
   // The button opens the picker on the label's deep corner, which comes from stop_colours so the
   // house numbers live in src/label.rs alone. The pale corner is derived from it in Rust when the
   // label is composed, so there is nothing to work out here.
-  const deep = c.deep ?? Array.from(stopsOf(c)).slice(0, 3);
+  const deep = c.deep ?? baseDeep(c);
   let face;
   try {
     face = faceOf(c, state);
@@ -312,6 +335,8 @@ function paint(c) {
   if (face) drawFace(canvas, face, c.platform);
   drop.hidden = state !== 'needs-logo';
   hueRow.hidden = state !== 'ready';
+  c.el.band.hidden = state !== 'ready' || !c.look?.band;
+  c.el.band.querySelector('button').setAttribute('aria-pressed', String(c.bandOn));
   hue.value = hex(deep);
   // A cart with no match needs the finder more than a wrongly matched one, not less: searching by
   // name is how a cart libretro keeps under a name its filename does not use gets found at all.
@@ -656,6 +681,7 @@ async function dress(s, c) {
   // A set of our own is found by checksum, so a cart no database has a name for can still be
   // dressed from it. libretro is found by name, so those requests only happen when there is one.
   const name = c.game ? thumbnail_name(c.game) : null;
+  c.look = parseLook(c.crc === null ? null : artIndex?.[crcHex(c.crc)]?.look);
   // The queue is shared, so a card replaced while its jobs wait gives up their turns without
   // a request instead of making the new card wait behind its downloads.
   const thumb = (folder) =>
@@ -1008,6 +1034,7 @@ async function start() {
               state: stateOf(c),
               game: c.game,
               deep: hex(c.deep ?? baseDeep(c)),
+              band: !!bandOf(c),
             }))
           : [],
       shells: () => (session ? session.carts.map((c) => ({ stem: c.stem, shell: c.shell })) : []),
