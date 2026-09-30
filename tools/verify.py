@@ -313,6 +313,12 @@ def main():
         if page.eval('window.__studio.artBase()') != 'https://art.slot-cfw.fyi/':
             sys.exit(f'with no ?art= the studio uses {page.eval("window.__studio.artBase()")!r}, not the published set')
         print('asserted: with no ?art= the studio uses https://art.slot-cfw.fyi/')
+        widths = page.eval("[document.querySelector('.credits'), document.querySelector('main.wrap')]"
+                           ".map((e, i) => i ? e.clientWidth - parseFloat(getComputedStyle(e).paddingLeft) * 2"
+                           " : e.getBoundingClientRect().width)")
+        if abs(widths[0] - widths[1]) > 1:
+            sys.exit(f'the footer is {widths[0]:.0f} px wide inside a {widths[1]:.0f} px page')
+        print(f'asserted: the footer is as wide as the page ({widths[0]:.0f} px)')
         page_url = bare + '?art=' + urllib.parse.quote(art, safe='')
         print('art set:', art or '(none)')
         page.send('Page.navigate', url=page_url)
