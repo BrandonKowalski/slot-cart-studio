@@ -353,6 +353,11 @@ def main():
         if where_btn != [True, 0]:
             sys.exit(f'the write button is not at the right end of the tabs\' row: {where_btn}')
         print('asserted: the write button sits at the right end of the platform tabs')
+        sizes = page.eval("[document.getElementById('write'), document.querySelector('#tabs button')]"
+                          ".map(e => (r => [Math.round(r.height), Math.round(r.bottom)])(e.getBoundingClientRect()))")
+        if sizes[0] != sizes[1]:
+            sys.exit(f'the write button (height, bottom) {sizes[0]} does not match the tabs {sizes[1]}')
+        print(f'asserted: the write button is the tabs\' height and stands on the same edge ({sizes[0][0]} px)')
         beside = page.eval("[...document.getElementById('write-bar').children].map(e => e.id)")
         if beside != ['write']:
             sys.exit(f'the write button has company: {beside}')
