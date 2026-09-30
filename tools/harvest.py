@@ -227,6 +227,12 @@ def save(body, dest):
 SOURCE = {'look': 'support-2D'}
 
 
+def write_index(path, index):
+    """Compact, since the page downloads it whole; sorted, so two runs diff cleanly."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(index, separators=(',', ':'), sort_keys=True))
+
+
 def todo_for(crc, wanted, index, root, relook):
     """The media this cart still needs: files not on disk, and a look not yet recorded."""
     def needed(w):
@@ -406,8 +412,7 @@ def main():
         asked, saved, missed, skipped = n['asked'], n['saved'], n['missed'], n['skipped']
         # Written whatever happened, so an interrupted run leaves a usable index behind.
         if args.out:
-            index_path.parent.mkdir(parents=True, exist_ok=True)
-            index_path.write_text(json.dumps(index, indent=1, sort_keys=True))
+            write_index(index_path, index)
             print(f'\n{saved} files, {missed} games with none, {skipped} already there, '
                   f'{asked} api calls\nindex: {index_path} ({len(index)} crcs)')
 

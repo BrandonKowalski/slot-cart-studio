@@ -21,3 +21,13 @@ class TodoFor(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class WriteIndex(unittest.TestCase):
+    def test_the_index_is_compact_and_sorted(self):
+        path = Path(tempfile.mkdtemp()) / 'index.json'
+        harvest.write_index(path, {'BBBB1111': {'wheel': 'GB/wheel/BBBB1111.png'}, 'AAAA0000': {'look': None}})
+        self.assertEqual(
+            path.read_text(),
+            '{"AAAA0000":{"look":null},"BBBB1111":{"wheel":"GB/wheel/BBBB1111.png"}}',
+        )
