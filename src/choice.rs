@@ -43,6 +43,15 @@ pub fn presets() -> Vec<String> {
 }
 
 /// Stem, value, stem, value, for every line of `text` that parses; values normalised.
+/// Stem, value, stem, value: each cart's choice once `labels` is laid over `system`, as slot reads
+/// the card's two files.
+pub fn layered_cart_shells(system: &str, labels: &str) -> Vec<String> {
+    slot_store::cart_shell::layered(system, labels)
+        .into_iter()
+        .flat_map(|(stem, c)| [stem, c.to_value()])
+        .collect()
+}
+
 pub fn cart_shells(text: &str) -> Vec<String> {
     slot_store::cart_shell::choices(text)
         .into_iter()

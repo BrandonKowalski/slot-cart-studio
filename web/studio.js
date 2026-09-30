@@ -9,6 +9,7 @@ import init, {
   auto_shell,
   box_hue,
   cart_shells,
+  layered_cart_shells,
   cart_size,
   clean_label,
   existing_face,
@@ -140,8 +141,15 @@ const readyCarts = () =>
   session ? session.carts.filter((c) => stateOf(c) === 'ready' && c.result !== 'skipped') : [];
 
 const shellChanges = () => (session ? session.carts.filter((c) => c.shell !== c.shellOnCard) : []);
+// Into the Labels layer. A cart put back on Automatic over a choice in System's file needs a line
+// saying so, or System's choice shows through again.
 const mergedShells = (s, carts, values) =>
-  merge_cart_shells(s.shellText ?? '', carts.map((c) => c.stem), values);
+  merge_cart_shells(
+    s.shellText ?? '',
+    carts.map((c) => c.stem),
+    values.map((v, i) => v || (s.systemShells?.has(carts[i].stem.normalize('NFC')) ? 'auto' : '')),
+  );
+const SHELL_FILE = 'Labels/cart_shell.ini';
 
 // A Label holds its 1280x640 composition in WASM memory, which never shrinks and stops at 4 GiB.
 // One kept per cart runs a big card out of it, so a Label lives only for the call that needs it.
@@ -407,17 +415,19 @@ async function crcOf(file) {
 }
 
 async function identify(s) {
-  let text = '';
+  let text = { system: '', labels: '' };
   try {
     text = await s.source.shells();
   } catch (e) {
     console.error('cart_shell.ini', e);
     s.shellReadFailed = true;
-    banner('The card’s System/cart_shell.ini couldn’t be read, so shells chosen before don’t show.');
+    banner('The card’s cart_shell.ini couldn’t be read, so shells chosen before don’t show.');
   }
   if (s !== session || fatal) return;
-  s.shellText = text;
-  const pairs = cart_shells(text);
+  s.shellText = text.labels;
+  const system = cart_shells(text.system);
+  s.systemShells = new Set(system.filter((_, i) => i % 2 === 0).map((stem) => stem.normalize('NFC')));
+  const pairs = layered_cart_shells(text.system, text.labels);
   const chosen = new Map();
   for (let i = 0; i < pairs.length; i += 2) chosen.set(pairs[i].normalize('NFC'), pairs[i + 1]);
   for (const c of s.carts) c.shell = c.shellOnCard = chosen.get(c.stem.normalize('NFC')) ?? '';
@@ -644,7 +654,7 @@ async function writeLabels() {
             await s.source.writeShells(text);
             s.shellText = text;
             shells.forEach((c, i) => (c.shellOnCard = values[i]));
-            shellNote = `${shells.length} ${shells.length === 1 ? 'shell' : 'shells'} written.`;
+            shellNote = `${shells.length} ${shells.length === 1 ? 'shell' : 'shells'} written to ${SHELL_FILE}.`;
           } catch (e) {
             if (trapped(e)) return;
             console.error('cart_shell.ini', e);
@@ -688,7 +698,7 @@ async function writeLabels() {
         } else {
           try {
             const text = mergedShells(s, shells, shells.map((c) => c.shell));
-            zip.add('System/cart_shell.ini', new TextEncoder().encode(text));
+            zip.add(SHELL_FILE, new TextEncoder().encode(text));
             parts.push(zip.take());
             shellsHeld = true;
           } catch (e) {
@@ -832,7 +842,7 @@ async function start() {
   $('mode').hidden = direct;
   if (!direct) {
     $('mode').textContent =
-      'This browser can’t write back to the SD card. You will have to copy the contents of a zip file to the Labels folder.';
+      'This browser can’t write to the SD card, so you’ll get a zip: copy its Labels folder onto the card.';
   }
 
   $('pick').addEventListener('click', async () => {
@@ -880,6 +890,7 @@ async function start() {
   if (['localhost', '127.0.0.1'].includes(location.hostname)) {
     window.__studio = {
       openFiles: (files) => open(fromFiles(files)),
+      openDirectory: async (root) => open(await fromDirectory(root)),
       idle: () =>
         busy === 0 && session !== null && session.carts.every((c) => stateOf(c) !== 'looking'),
       states: () =>

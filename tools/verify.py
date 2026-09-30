@@ -45,6 +45,8 @@ PROBE_OF = 'Pokemon - Emerald Version (USA, Europe)'
 # What the labelled card already holds: a comment and another cart's choice, both of which a
 # write must leave as they are.
 SHELLS_ON_CARD = '# chosen by hand\nCatrap (USA) = rounded 112233 solid\n'
+# And the layer over it, beside the labels, which is the one the studio writes.
+LABEL_SHELLS_ON_CARD = 'Tetris Rosy Retrospection = auto 445566 clear\n'
 
 OPEN_FILES = """
 (async (card, paths) => {
@@ -260,8 +262,9 @@ def stage_labelled(card, games):
         shutil.copy(source, card / 'Labels' / name)
     (card / 'System').mkdir(parents=True, exist_ok=True)
     (card / 'System' / 'cart_shell.ini').write_text(SHELLS_ON_CARD)
+    (card / 'Labels' / 'cart_shell.ini').write_text(LABEL_SHELLS_ON_CARD)
     return ([f'Games/{g}' for g in games] + [f'Games/{probe}'] + [f'Labels/{name}' for name in labels]
-            + ['System/cart_shell.ini'])
+            + ['System/cart_shell.ini', 'Labels/cart_shell.ini'])
 
 
 def main():
@@ -647,6 +650,11 @@ def main():
         page.eval("document.getElementById('ed-close').click()")
         print(f'asserted: a PNG dropped on {needs_logo} is its logo, and Undo takes it off')
 
+        # A card with no System/cart_shell.ini of its own must still get one in the zip.
+        page.eval(EDIT % json.dumps('Drill Dozer'))
+        pick_shell(page, 5)
+        page.eval("document.getElementById('ed-close').click()")
+
         page.width(1280)
         # Headless Chrome ignores the browser-level Browser.setDownloadBehavior for this target;
         # only the page-level form of the command takes effect.
@@ -667,6 +675,11 @@ def main():
         time.sleep(1)
         shutil.copy(downloads / 'labels.zip', OUT / 'labels.zip')
         subprocess.run(['unzip', '-t', str(OUT / 'labels.zip')], check=True)
+        with zipfile.ZipFile(OUT / 'labels.zip') as z:
+            in_zip = z.read('Labels/cart_shell.ini').decode() if 'Labels/cart_shell.ini' in z.namelist() else None
+        if in_zip != f'Drill Dozer = {presets[5]}\n':
+            sys.exit(f'the zip for a card with no cart_shell.ini carries {in_zip!r}, not Drill Dozer\'s shell')
+        print('asserted: a shell chosen on a card with no cart_shell.ini is in the zip')
 
         card = OUT / 'card'
         shutil.rmtree(card, ignore_errors=True)
@@ -694,9 +707,10 @@ def main():
             sys.exit('the labelled card\'s carts are not in the states they should be')
 
         shells = {nfc(s['stem']): s['shell'] for s in page.eval('window.__studio.shells()')}
-        if shells.get('Catrap (USA)') != 'rounded 112233 solid':
-            sys.exit(f'the card\'s cart_shell.ini was not read: {shells.get("Catrap (USA)")!r}')
-        print('asserted: the card\'s existing shell choice was read')
+        if (shells.get('Catrap (USA)'), shells.get('Tetris Rosy Retrospection')) != (
+                'rounded 112233 solid', 'auto 445566 clear'):
+            sys.exit(f'the card\'s two cart_shell.ini files were not read: {shells}')
+        print('asserted: the card\'s shells were read, Labels/cart_shell.ini over System\'s')
 
         no_pencil = page.eval(
             "[...document.querySelectorAll('#grid > .cart')].filter(c => !c.hidden"
@@ -753,6 +767,12 @@ def main():
             sys.exit(f'the editor does not show {chosen} as its card does')
         print(f'asserted: the editor shows {chosen} as its card does, and the shell stays when it closes')
 
+        # Back to Automatic over a System choice: the Labels layer has to say so, or System shows through.
+        page.eval(EDIT % json.dumps('Catrap (USA)'))
+        page.eval("document.getElementById('ed-shell').click()")
+        page.eval("document.getElementById('ed-shell-auto').click()")
+        page.eval("document.getElementById('ed-close').click()")
+
         kept_downloads = OUT / 'downloads-labelled'
         shutil.rmtree(kept_downloads, ignore_errors=True)
         kept_downloads.mkdir()
@@ -771,17 +791,70 @@ def main():
             for stem, state in expected.items()
             if state == 'ready'
         }
-        if entries != ready | {'System/cart_shell.ini'}:
-            sys.exit(f'labels.zip holds {sorted(entries)}, not the ready carts and the shells')
+        if entries != ready | {'Labels/cart_shell.ini'}:
+            sys.exit(f'labels.zip holds {sorted(entries)}, not the ready carts and Labels/cart_shell.ini')
         with zipfile.ZipFile(kept_downloads / 'labels.zip') as z:
-            written = z.read('System/cart_shell.ini').decode()
-        want = f'{chosen} = auto {preset.split(" ", 1)[1]}'
-        if written != SHELLS_ON_CARD + want + '\n':
-            sys.exit(f'cart_shell.ini came out as {written!r}, not the card\'s lines plus {want!r}')
-        print(f'asserted: cart_shell.ini keeps the card\'s lines and adds {chosen}\'s shell')
+            written = z.read('Labels/cart_shell.ini').decode()
+        want = LABEL_SHELLS_ON_CARD + f'{chosen} = auto {preset.split(" ", 1)[1]}\n' + 'Catrap (USA) = auto\n'
+        if written != want:
+            sys.exit(f'Labels/cart_shell.ini came out as {written!r}, not {want!r}')
+        print(f'asserted: Labels/cart_shell.ini keeps its lines, adds {chosen}\'s shell, and masks Catrap\'s System choice with auto')
         print(f'asserted: {len(kept)} carts are has-label: {", ".join(sorted(kept))}')
         print(f'asserted: the other {len(ready)} carts are ready')
         print(f'asserted: labels.zip holds exactly those {len(ready)}, and none of the {len(kept)} with labels')
+
+        # Third pass: the way Chrome writes, straight to the card through a directory handle, on a
+        # card built in the page's private file system. Nothing else here ever writes in place.
+        direct = [g for g in games if g.startswith('GBA/')][:3]
+        if not any(nfc(Path(g).stem) == 'Advance Wars' for g in direct):
+            direct = [g for g in games if nfc(Path(g).stem) == 'Advance Wars'] + direct[:2]
+        page.eval("""(async games => {
+          const root = await navigator.storage.getDirectory();
+          for await (const name of root.keys()) await root.removeEntry(name, { recursive: true });
+          const card = await root.getDirectoryHandle('card', { create: true });
+          const into = await card.getDirectoryHandle('Games', { create: true });
+          for (const g of games) {
+            const [platform, file] = g.split('/');
+            const dir = await into.getDirectoryHandle(platform, { create: true });
+            const out = await (await dir.getFileHandle(file, { create: true })).createWritable();
+            await out.write(await (await fetch('/card/Games/' + g.split('/').map(encodeURIComponent).join('/'))).blob());
+            await out.close();
+          }
+          await window.__studio.openDirectory(card);
+          return true;
+        })(%s)""" % json.dumps(direct))
+        wait(lambda: page.eval('window.__studio.idle()'), 600, 'the directory card to be looked up')
+        page.eval(EDIT % json.dumps('Advance Wars'))
+        pick_shell(page, 5)
+        page.eval("document.getElementById('ed-close').click()")
+        page.eval("document.getElementById('write').click()")
+        wait(lambda: page.eval("document.getElementById('summary').textContent"), 60, 'the write to the card to finish')
+        summary = page.eval("document.getElementById('summary').textContent")
+        print('direct write:', summary)
+        if 'Labels/cart_shell.ini' not in summary:
+            sys.exit(f'the summary does not say where the shell went: {summary!r}')
+        on_card = page.eval("""(async () => {
+          const card = await (await navigator.storage.getDirectory()).getDirectoryHandle('card');
+          const read = async (...path) => {
+            let dir = card;
+            for (const p of path.slice(0, -1)) dir = await dir.getDirectoryHandle(p);
+            return (await (await dir.getFileHandle(path.at(-1))).getFile()).size;
+          };
+          const shells = await (async () => {
+            try {
+              const dir = await card.getDirectoryHandle('Labels');
+              return await (await (await dir.getFileHandle('cart_shell.ini')).getFile()).text();
+            } catch (e) { return 'missing: ' + e.name; }
+          })();
+          let label = 0;
+          try { label = await read('Labels', 'GBA', 'Advance Wars.png'); } catch (e) { label = -1; }
+          return { shells, label };
+        })()""")
+        want = f'Advance Wars = {presets[5]}\n'
+        if on_card['shells'] != want or on_card['label'] <= 0:
+            sys.exit(f'writing to the card gave cart_shell.ini {on_card["shells"]!r} and a label of '
+                     f'{on_card["label"]} bytes, not {want!r} and a label')
+        print('asserted: Write to card puts the label and the chosen shell on the card itself')
     finally:
         chrome.terminate()
         server.shutdown()

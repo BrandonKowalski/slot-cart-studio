@@ -262,6 +262,11 @@ pub fn shell_presets() -> Vec<String> {
 }
 
 #[wasm_bindgen]
+pub fn layered_cart_shells(system: &str, labels: &str) -> Vec<String> {
+    choice::layered_cart_shells(system, labels)
+}
+
+#[wasm_bindgen]
 pub fn cart_shells(text: &str) -> Vec<String> {
     choice::cart_shells(text)
 }

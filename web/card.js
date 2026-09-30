@@ -82,16 +82,18 @@ export async function fromDirectory(root) {
     // No Labels folder yet: every cart needs a label.
   }
 
-  const shells = async () => {
-    let dir;
+  // slot reads System's file, then lays the one beside the labels over it; the studio writes the
+  // second, so a card's own System choices stay as they were.
+  const shellFile = async (folder) => {
     try {
-      dir = await root.getDirectoryHandle('System');
+      const dir = await root.getDirectoryHandle(folder);
       return await (await (await dir.getFileHandle('cart_shell.ini')).getFile()).text();
     } catch (e) {
       if (e.name === 'NotFoundError') return '';
       throw e;
     }
   };
+  const shells = async () => ({ system: await shellFile('System'), labels: await shellFile('Labels') });
 
   return {
     carts: carts.sort(byCart),
@@ -99,7 +101,7 @@ export async function fromDirectory(root) {
     direct: true,
     shells,
     async writeShells(text) {
-      const dir = await root.getDirectoryHandle('System', { create: true });
+      const dir = await root.getDirectoryHandle('Labels', { create: true });
       const file = await dir.getFileHandle('cart_shell.ini', { create: true });
       const out = await file.createWritable();
       try {
@@ -144,7 +146,7 @@ export function fromFiles(files) {
   const labels = new Map();
   let sawPlatform = false;
   let loose = false;
-  let shellFile = null;
+  const shellFiles = {};
   for (const file of files) {
     // The picked folder, then Games or Labels, then the platform, then the file. Anything
     // shallower is the layout slot swept away; anything deeper is not slot's.
@@ -152,7 +154,9 @@ export function fromFiles(files) {
     if (parts.length === 3) {
       const [, dir, name] = parts;
       if (dir.toLowerCase() === 'games' && isRom(name)) loose = true;
-      if (dir.toLowerCase() === 'system' && name.toLowerCase() === 'cart_shell.ini') shellFile = file;
+      if (['system', 'labels'].includes(dir.toLowerCase()) && name.toLowerCase() === 'cart_shell.ini') {
+        shellFiles[dir.toLowerCase()] = file;
+      }
       continue;
     }
     if (parts.length !== 4) continue;
@@ -167,7 +171,9 @@ export function fromFiles(files) {
     }
   }
   if (!sawPlatform) throw new Error(loose ? OLD_LAYOUT : NO_GAMES);
-  return { carts: carts.sort(byCart), labels, direct: false, write: null, shells: async () => (shellFile ? shellFile.text() : '') };
+  const text = async (file) => (file ? file.text() : '');
+  const shells = async () => ({ system: await text(shellFiles.system), labels: await text(shellFiles.labels) });
+  return { carts: carts.sort(byCart), labels, direct: false, write: null, shells };
 }
 
 export { labelKey };

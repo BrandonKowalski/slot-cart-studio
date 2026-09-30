@@ -105,3 +105,24 @@ fn automatic_is_what_slot_would_draw_and_presets_are_values() {
         assert!(slot_store::ShellChoice::parse(value).is_some(), "{value}");
     }
 }
+
+#[test]
+fn the_labels_file_lies_over_system_as_slot_reads_them() {
+    let got = choice::layered_cart_shells(
+        "Both = rounded 111111 solid\nSystemOnly = notched 222222 clear\nBackToAuto = rounded 333333 glitter\n",
+        "Both = auto 444444 clear\nLabelsOnly = auto 555555 solid\nBackToAuto = auto\n",
+    );
+    let mut pairs: Vec<(String, String)> = got
+        .chunks(2)
+        .map(|p| (p[0].clone(), p[1].clone()))
+        .collect();
+    pairs.sort();
+    assert_eq!(
+        pairs,
+        [
+            ("Both".to_string(), "auto 444444 clear".to_string()),
+            ("LabelsOnly".to_string(), "auto 555555 solid".to_string()),
+            ("SystemOnly".to_string(), "notched 222222 clear".to_string()),
+        ]
+    );
+}
