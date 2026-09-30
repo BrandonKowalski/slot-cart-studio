@@ -366,7 +366,7 @@ def main():
         # slot's own masthead, exactly: its mark, its six sections, and the studio as the current page.
         mast = page.eval("[...document.querySelectorAll('.mast a')]"
                          ".map(a => [a.textContent.trim(), a.getAttribute('href'), a.getAttribute('aria-current')])")
-        site = 'https://slot.kowalski.io/'
+        site = 'https://slot-cfw.fyi/'
         want_mast = [['slot.', site, None]] + [[name, f'{site}#{anchor}', None] for name, anchor in (
             ('Installing', 'install'), ('Guide', 'guide'), ('Buttons', 'buttons'), ('Questions', 'questions'),
             ('Credits', 'credits'), ('AI', 'disclosure'))] + [['Studio', './', 'page']]
