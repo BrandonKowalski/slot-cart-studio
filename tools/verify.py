@@ -325,8 +325,8 @@ def main():
             sys.exit(f'the footer is {widths[0]:.0f} px wide inside a {widths[1]:.0f} px page')
         print(f'asserted: the footer is as wide as the page ({widths[0]:.0f} px)')
         centred = page.eval("['.intro', '.credits'].map(q => getComputedStyle(document.querySelector(q)).textAlign)"
-                            ".concat(['.actions', '.write-bar'].map(q => getComputedStyle(document.querySelector(q)).justifyContent))")
-        if centred != ['center', 'center', 'center', 'center']:
+                            ".concat(getComputedStyle(document.querySelector('.actions')).justifyContent)")
+        if centred != ['center', 'center', 'center']:
             sys.exit(f'the hero and footer are not centred: {centred}')
         print('asserted: the hero and footer are centred')
         page_url = bare + '?art=' + urllib.parse.quote(art, safe='')
@@ -342,6 +342,21 @@ def main():
         if asked:
             sys.exit(f'the page asked libretro for {len(asked)} logos, e.g. {asked[0]}')
         print('asserted: no logo is asked of libretro-thumbnails')
+
+        # The write button sits on the platform tabs' row, at its right end.
+        where_btn = page.eval("""(() => {
+          const b = document.getElementById('write').getBoundingClientRect();
+          const t = document.querySelector('#tabs button').getBoundingClientRect();
+          const g = document.getElementById('grid').getBoundingClientRect();
+          return [b.top < t.bottom && b.bottom > t.top, Math.round(g.right - b.right)];
+        })()""")
+        if where_btn != [True, 0]:
+            sys.exit(f'the write button is not at the right end of the tabs\' row: {where_btn}')
+        print('asserted: the write button sits at the right end of the platform tabs')
+        beside = page.eval("[...document.getElementById('write-bar').children].map(e => e.id)")
+        if beside != ['write']:
+            sys.exit(f'the write button has company: {beside}')
+        print('asserted: the write button stands alone, with no count or directions')
 
         # slot's own masthead, exactly: its mark, its six sections, and the studio as the current page.
         mast = page.eval("[...document.querySelectorAll('.mast a')]"
@@ -872,11 +887,9 @@ def main():
         pick_shell(page, 5)
         page.eval("document.getElementById('ed-close').click()")
         page.eval("document.getElementById('write').click()")
-        wait(lambda: page.eval("document.getElementById('summary').textContent"), 60, 'the write to the card to finish')
-        summary = page.eval("document.getElementById('summary').textContent")
-        print('direct write:', summary)
-        if 'Labels/cart_shell.ini' not in summary:
-            sys.exit(f'the summary does not say where the shell went: {summary!r}')
+        wait(lambda: page.eval('window.__studio.idle()'), 60, 'the write to the card to finish')
+        if not page.eval("document.getElementById('banner').hidden"):
+            sys.exit(f'the write raised a banner: {page.eval("document.getElementById(\'banner\').textContent")!r}')
         on_card = page.eval("""(async () => {
           const card = await (await navigator.storage.getDirectory()).getDirectoryHandle('card');
           const read = async (...path) => {
@@ -913,12 +926,10 @@ def main():
         wait(lambda: state_of(page, 'Advance Wars')['state'] == 'ready', 120, 'Advance Wars to be dressed for a new label')
         background(page, '#123456')
         page.eval("document.getElementById('ed-close').click()")
-        page.eval("document.getElementById('summary').textContent = ''")
         page.eval("document.getElementById('write').click()")
-        wait(lambda: page.eval("document.getElementById('summary').textContent"), 60, 'the replacing write to finish')
-        summary = page.eval("document.getElementById('summary').textContent")
-        if not summary.startswith('1 written') or page.eval(digest) == was:
-            sys.exit(f'Replace did not write over the label on the card: {summary!r}')
+        wait(lambda: page.eval('window.__studio.idle()'), 60, 'the replacing write to finish')
+        if page.eval(digest) == was or not page.eval("document.getElementById('banner').hidden"):
+            sys.exit('Replace did not write over the label on the card')
         if state_of(page, 'Advance Wars')['state'] != 'has-label':
             sys.exit('after the replacing write, Advance Wars is not back to showing its label on the card')
         print('asserted: Replace writes over the label on the card, and the cart shows it after')

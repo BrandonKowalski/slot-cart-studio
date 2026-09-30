@@ -389,7 +389,6 @@ async function open(source) {
   // so the old bar has to be cleared here rather than left for a call that may never come.
   $('progress').hidden = true;
   $('progress-text').textContent = '';
-  $('summary').textContent = '';
   $('grid').replaceChildren(...session.carts.map(buildCard));
   session.carts.forEach(paint);
   showPlatform(platformsOf(session)[0] ?? PLATFORMS[0]);
@@ -590,17 +589,11 @@ function showPlatform(p) {
 
 function updateWriteBar() {
   if (!session) return;
-  const n = readyCarts().length;
-  const m = shellChanges().length;
-  const parts = [];
-  if (n) parts.push(`${n} ${n === 1 ? 'label' : 'labels'}`);
-  if (m) parts.push(`${m} ${m === 1 ? 'shell' : 'shells'}`);
-  const what = parts.join(', ') || '0 labels';
-  // Nothing to write means no bar at all, except while a finished run's summary is still on it.
-  $('write-bar').hidden = n + m === 0 && !$('summary').textContent;
-  $('write').disabled = n + m === 0 || writing || fatal;
+  const n = readyCarts().length + shellChanges().length;
+  // Nothing to write means no button at all.
+  $('write-bar').hidden = n === 0;
+  $('write').disabled = n === 0 || writing || fatal;
   $('write').textContent = session.source.direct ? 'Write to card' : 'Download zip';
-  $('count').textContent = what;
 }
 
 function download(blob, name) {
@@ -656,7 +649,6 @@ async function writeLabels() {
             await s.source.writeShells(text);
             s.shellText = text;
             shells.forEach((c, i) => (c.shellOnCard = values[i]));
-            shellNote = `${shells.length} ${shells.length === 1 ? 'shell' : 'shells'} written to ${SHELL_FILE}.`;
           } catch (e) {
             if (trapped(e)) return;
             console.error('cart_shell.ini', e);
@@ -664,12 +656,16 @@ async function writeLabels() {
           }
         }
       }
-      // A card opened while this one was writing has its own summary, which this must not replace.
+      // A write that went through says nothing; one that didn't, all of it, says so. Not over a card
+      // opened while this one was writing.
       if (s === session) {
-        const labelNote = carts.length
-          ? `${count.written} written, ${count.skipped} skipped, ${count.failed} failed.`
-          : '';
-        $('summary').textContent = [labelNote, shellNote].filter(Boolean).join(' ');
+        const plural = (k, one, many) => `${k} ${k === 1 ? one : many}`;
+        const problems = [
+          count.failed && `${plural(count.failed, 'label', 'labels')} couldn’t be written.`,
+          count.skipped && `${plural(count.skipped, 'label was', 'labels were')} skipped: one turned up on the card meanwhile.`,
+          shellNote,
+        ].filter(Boolean);
+        if (problems.length) banner(problems.join(' '));
       }
     } else {
       const zip = new Zip();
@@ -693,7 +689,6 @@ async function writeLabels() {
         }
       }
       let shellNote = '';
-      let shellsHeld = false;
       if (shells.length) {
         if (s.shellReadFailed) {
           shellNote = 'Shells not written: the card’s cart_shell.ini could not be read.';
@@ -702,7 +697,6 @@ async function writeLabels() {
             const text = mergedShells(s, shells, shells.map((c) => c.shell));
             zip.add(SHELL_FILE, new TextEncoder().encode(text));
             parts.push(zip.take());
-            shellsHeld = true;
           } catch (e) {
             if (trapped(e)) return;
             console.error('cart_shell.ini', e);
@@ -712,16 +706,7 @@ async function writeLabels() {
       }
       parts.push(zip.finish());
       download(new Blob(parts, { type: 'application/zip' }), 'labels.zip');
-      if (s === session) {
-        const held = [
-          carts.length && `${carts.length} ${carts.length === 1 ? 'label' : 'labels'}`,
-          shellsHeld && 'the shells',
-        ]
-          .filter(Boolean)
-          .join(' and ');
-        const zipNote = held ? `${held} in labels.zip. Unzip it at the top of your card.` : '';
-        $('summary').textContent = [zipNote, shellNote].filter(Boolean).join(' ');
-      }
+      if (s === session && shellNote) banner(shellNote);
     }
   } catch (e) {
     if (!trapped(e)) throw e;

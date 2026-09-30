@@ -125,15 +125,15 @@ a{color:var(--ink)}
 .banner .key{margin-left:8px}
 .progress{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:24px 0 0;color:var(--muted);font-size:15px}
 .progress progress{width:min(320px,100%);accent-color:var(--shell-accent)}
-/* Under the masthead and pinned there: the key belongs with the choice you just made, and the
-   carts scroll under it. */
-.write-bar{position:sticky;top:var(--mast-h);z-index:10;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:14px;margin-top:24px;padding:14px 0;background:var(--page);border-bottom:1px solid var(--rule)}
-.count{font-weight:600}
-.summary{color:var(--muted);font-size:15px}
-.summary:empty{display:none}
+/* The platform tabs and the write button share one row, pinned under the masthead so the button
+   stays with the choices you just made while the carts scroll beneath. The shelf's edge runs
+   under both. */
+.shelf-bar{position:sticky;top:var(--mast-h);z-index:10;display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px;margin-top:24px;padding-top:12px;background:var(--page);border-bottom:3px solid var(--housing)}
+.shelf-bar:not(:has(> :not([hidden]))){display:none}
+.write-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:14px;margin-left:auto;padding-bottom:8px}
 
 /* One tab per platform on the card, each the top edge of a cart standing on the shelf. */
-.shelf-tabs{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px;align-items:flex-end;border-bottom:3px solid var(--housing)}
+.shelf-tabs{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}
 .shelf-tab{
   padding:11px 18px 8px;
   border:0;
