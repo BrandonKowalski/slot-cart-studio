@@ -530,7 +530,7 @@ async function dress(s, c) {
       : limit(async () =>
           s === session && !fatal ? fetchThumb(c.platform, folder, name, stub_target) : null,
         ).catch(noImage);
-  // Our own set first, by checksum: it carries logos for platforms libretro has none for at all.
+  // Logos come from our own set alone, by checksum; libretro is asked only for box art.
   const ours = (media) => {
     const path = key && artIndex?.[key]?.[media];
     if (!path) return Promise.resolve(null);
@@ -538,11 +538,11 @@ async function dress(s, c) {
       s === session && !fatal ? fetchArt(ART_BASE, path) : null,
     ).catch(noImage);
   };
-  // The ground's colour is read off the box art either way, so that request starts now and is
-  // waited on after the logo, whichever source the logo turns out to come from.
+  // The ground's colour is read off the box art, so that request starts now and is waited on
+  // after the logo.
   const boxJob = thumb('Named_Boxarts');
   if (!c.logoBytes) {
-    const logo = (await ours('wheel')) ?? (await thumb('Named_Logos'));
+    const logo = await ours('wheel');
     if (s !== session || fatal) return;
     c.logoBytes = logo && readable(logo) ? logo : null;
     // How bright the logo is decides which way its ground goes, so it is measured with the logo.
@@ -828,7 +828,7 @@ async function start() {
       artIndex = await fetchIndex(ART_BASE);
       console.info(`art set: ${Object.keys(artIndex).length} checksums from ${ART_BASE}`);
     } catch (e) {
-      banner(`The art set at ${ART_BASE} didn’t load (${e.message}). Logos come from libretro alone.`);
+      banner(`The art set at ${ART_BASE} didn’t load (${e.message}), so carts get slot’s own labels.`);
     }
   }
   const direct = 'showDirectoryPicker' in window;

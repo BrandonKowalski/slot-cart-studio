@@ -302,9 +302,14 @@ def main():
         page = Cdp(json.load(urllib.request.urlopen(new))['webSocketDebuggerUrl'])
         page.send('Runtime.enable')
         page.width(1280)
-        # STUDIO_ART points the page at a harvested set, the way the address does by hand. Unset,
-        # the run is the one that came before there was a set: every logo from libretro.
-        art = os.environ.get('STUDIO_ART', '')
+        # STUDIO_ART points the page at a harvested set, the way the address does by hand; unset, the
+        # local one `task art` serves. Every logo comes from the set, so a run needs one.
+        art = os.environ.get('STUDIO_ART', 'http://127.0.0.1:8766/')
+        try:
+            urllib.request.urlopen(urllib.request.Request(art.rstrip('/') + '/index.json',
+                                                          headers={'User-Agent': 'slot-cart-studio-verify'}))
+        except OSError as e:
+            sys.exit(f'no art set at {art} ({e}): run `task art`, or point STUDIO_ART at one')
         # With no address the page reaches for the published set; the runs below always name one,
         # an empty one meaning none, so they never depend on the network or its CORS rules.
         bare = f'http://127.0.0.1:{HTTP_PORT}/studio/'
@@ -319,12 +324,24 @@ def main():
         if abs(widths[0] - widths[1]) > 1:
             sys.exit(f'the footer is {widths[0]:.0f} px wide inside a {widths[1]:.0f} px page')
         print(f'asserted: the footer is as wide as the page ({widths[0]:.0f} px)')
+        centred = page.eval("['.intro', '.credits'].map(q => getComputedStyle(document.querySelector(q)).textAlign)"
+                            ".concat(['.actions', '.write-bar'].map(q => getComputedStyle(document.querySelector(q)).justifyContent))")
+        if centred != ['center', 'center', 'center', 'center']:
+            sys.exit(f'the hero and footer are not centred: {centred}')
+        print('asserted: the hero and footer are centred')
         page_url = bare + '?art=' + urllib.parse.quote(art, safe='')
         print('art set:', art or '(none)')
         page.send('Page.navigate', url=page_url)
         wait(lambda: page.eval("document.body && document.body.dataset.ready === 'true'"), 60, 'the studio to start')
 
+        page.eval('performance.setResourceTimingBufferSize(10000)')
         first = open_card(page, 'card', ['Games/' + g for g in games])
+
+        # Logos come from the curated set alone: nothing is asked of libretro's logo folders.
+        asked = page.eval("performance.getEntriesByType('resource').map(e => e.name).filter(n => n.includes('/Named_Logos/'))")
+        if asked:
+            sys.exit(f'the page asked libretro for {len(asked)} logos, e.g. {asked[0]}')
+        print('asserted: no logo is asked of libretro-thumbnails')
 
         # slot's own masthead, exactly: its mark, its six sections, and the studio as the current page.
         mast = page.eval("[...document.querySelectorAll('.mast a')]"
@@ -385,8 +402,7 @@ def main():
         # Credits name every source and its terms, whichever of them this visit used.
         links = page.eval("[...document.querySelectorAll('.credits a')].filter(a => a.getClientRects().length).map(a => a.href)")
         need = ['https://github.com/libretro/libretro-database', 'https://creativecommons.org/licenses/by-sa/4.0/',
-                'https://github.com/libretro-thumbnails', 'https://www.screenscraper.fr/',
-                'https://creativecommons.org/licenses/by-nc-sa/4.0/']
+                'https://www.screenscraper.fr/', 'https://creativecommons.org/licenses/by-nc-sa/4.0/']
         missing = [u for u in need if not any(l.startswith(u) for l in links)]
         if missing:
             sys.exit(f'the credits are missing {missing}')
