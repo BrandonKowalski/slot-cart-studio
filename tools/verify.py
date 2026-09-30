@@ -796,6 +796,27 @@ def main():
         page.eval("document.getElementById('ed-shell-auto').click()")
         page.eval("document.getElementById('ed-close').click()")
 
+        # Replace: a label already on the card, redone on purpose.
+        replaced = 'Metroid Fusion'
+        page.eval(EDIT % json.dumps(replaced))
+        before = page.eval("[!document.getElementById('ed-label-row').hidden, "
+                           "document.querySelector('#ed-label [data-value=\"keep\"]').getAttribute('aria-pressed'), "
+                           "document.getElementById('ed-bg').disabled]")
+        if before != [True, 'true', True]:
+            sys.exit(f'{replaced} should offer Keep, pressed, with Background off: {before}')
+        page.eval("document.querySelector('#ed-label [data-value=\"replace\"]').click()")
+        wait(lambda: state_of(page, replaced)['state'] == 'ready', 120, f'{replaced} to be dressed for a new label')
+        if page.eval("document.getElementById('ed-bg').disabled"):
+            sys.exit(f'Background is still off on {replaced} after Replace')
+        page.eval("document.getElementById('ed-undo').click()")
+        after_undo = state_of(page, replaced)['state']
+        page.eval("document.getElementById('ed-redo').click()")
+        after_redo = state_of(page, replaced)['state']
+        if (after_undo, after_redo) != ('has-label', 'ready'):
+            sys.exit(f'Undo and Redo of Replace gave {after_undo!r} and {after_redo!r}')
+        page.eval("document.getElementById('ed-close').click()")
+        print(f'asserted: Replace turns {replaced}, labelled on the card, back into a cart the studio labels, and undoes')
+
         kept_downloads = OUT / 'downloads-labelled'
         shutil.rmtree(kept_downloads, ignore_errors=True)
         kept_downloads.mkdir()
@@ -806,14 +827,14 @@ def main():
         time.sleep(1)
         with zipfile.ZipFile(kept_downloads / 'labels.zip') as z:
             entries = {nfc(name) for name in z.namelist()}
-        overwritten = sorted(entries & {f'Labels/{where[stem]}/{stem}.png' for stem in kept})
+        overwritten = sorted(entries & {f'Labels/{where[stem]}/{stem}.png' for stem in kept if stem != replaced})
         if overwritten:
             sys.exit(f'labels.zip would overwrite labels the card already has: {overwritten}')
         ready = {
             f'Labels/{where[stem]}/{stem}.png'
             for stem, state in expected.items()
             if state == 'ready'
-        }
+        } | {f'Labels/{where[replaced]}/{replaced}.png'}
         if entries != ready | {'Labels/cart_shell.ini'}:
             sys.exit(f'labels.zip holds {sorted(entries)}, not the ready carts and Labels/cart_shell.ini')
         with zipfile.ZipFile(kept_downloads / 'labels.zip') as z:
@@ -878,6 +899,29 @@ def main():
             sys.exit(f'writing to the card gave cart_shell.ini {on_card["shells"]!r} and a label of '
                      f'{on_card["label"]} bytes, not {want!r} and a label')
         print('asserted: Write to card puts the label and the chosen shell on the card itself')
+
+        # Replace on that card: the label the write just made is written over, not skipped.
+        digest = """(async () => {
+          const card = await (await navigator.storage.getDirectory()).getDirectoryHandle('card');
+          const dir = await (await card.getDirectoryHandle('Labels')).getDirectoryHandle('GBA');
+          const bytes = await (await (await dir.getFileHandle('Advance Wars.png')).getFile()).arrayBuffer();
+          return [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(b => b.toString(16)).join('');
+        })()"""
+        was = page.eval(digest)
+        page.eval(EDIT % json.dumps('Advance Wars'))
+        page.eval("document.querySelector('#ed-label [data-value=\"replace\"]').click()")
+        wait(lambda: state_of(page, 'Advance Wars')['state'] == 'ready', 120, 'Advance Wars to be dressed for a new label')
+        background(page, '#123456')
+        page.eval("document.getElementById('ed-close').click()")
+        page.eval("document.getElementById('summary').textContent = ''")
+        page.eval("document.getElementById('write').click()")
+        wait(lambda: page.eval("document.getElementById('summary').textContent"), 60, 'the replacing write to finish')
+        summary = page.eval("document.getElementById('summary').textContent")
+        if not summary.startswith('1 written') or page.eval(digest) == was:
+            sys.exit(f'Replace did not write over the label on the card: {summary!r}')
+        if state_of(page, 'Advance Wars')['state'] != 'has-label':
+            sys.exit('after the replacing write, Advance Wars is not back to showing its label on the card')
+        print('asserted: Replace writes over the label on the card, and the cart shows it after')
     finally:
         chrome.terminate()
         server.shutdown()

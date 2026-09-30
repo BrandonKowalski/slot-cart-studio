@@ -13,6 +13,7 @@ const cart = (over = {}) => ({
   deep: null,
   userHue: false,
   shell: '',
+  replace: false,
   looking: false,
   ...over,
 });
@@ -112,4 +113,11 @@ test('undo leaves alone the fields history does not own', () => {
   c.existing = 'other face';
   undo(c);
   assert.equal(c.existing, 'other face');
+});
+
+test('choosing to replace a label on the card is a step like any other', () => {
+  const c = cart();
+  commit(c, () => (c.replace = true));
+  assert.equal(undo(c), true);
+  assert.equal(c.replace, false);
 });

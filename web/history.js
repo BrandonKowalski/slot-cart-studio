@@ -11,6 +11,7 @@ export const EDITABLE = [
   'deep',
   'userHue',
   'shell',
+  'replace',
 ];
 
 const capture = (c) => Object.fromEntries(EDITABLE.map((k) => [k, c[k]]));

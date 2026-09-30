@@ -70,6 +70,8 @@ function newCart({ platform, stem, file }) {
     shell: '',
     shellOnCard: '',
     existingPng: null,
+    // Set by hand to make a new label for a cart that already has one on the card.
+    replace: false,
     crc: null,
     game: null,
     // Logos stay PNG bytes, which are small. The label made from one is not kept: see withLabel.
@@ -96,7 +98,7 @@ const activeLogo = (c) => c.droppedBytes ?? (c.rejected ? null : c.logoBytes);
 
 function stateOf(c) {
   if (c.error) return 'error';
-  if (c.existing) return 'has-label';
+  if (c.existing && !c.replace) return 'has-label';
   if (c.looking) return 'looking';
   return activeLogo(c) ? 'ready' : 'needs-logo';
 }
@@ -628,7 +630,7 @@ async function writeLabels() {
             label.png(),
             label.face(c.platform, c.code, c.head, c.shell, c.stem),
           ]);
-          c.result = await s.source.write(c.platform, c.stem, png);
+          c.result = await s.source.write(c.platform, c.stem, png, c.replace);
         } catch (e) {
           if (trapped(e)) return;
           console.error(c.stem, e);
@@ -637,6 +639,7 @@ async function writeLabels() {
         if (c.result === 'written') {
           c.existing = face;
           c.existingPng = png;
+          c.replace = false;
         }
         count[c.result]++;
         paint(c);
@@ -755,6 +758,33 @@ function shellOf(c) {
   return { outline, colour, finish, auto: !c.shell, name: preset?.name ?? `#${colour}` };
 }
 
+// A cart with its label on the card was never looked up; replacing it needs what any other cart
+// has, so it is looked up now, the database fetched first if no other cart needed it.
+function setReplace(c, on) {
+  c.replace = on;
+  if (on) {
+    c.looking = true;
+    track(lookUp(session, c));
+  }
+}
+
+async function lookUp(s, c) {
+  paint(c);
+  try {
+    if (c.crc === null) c.crc = await crcOf(await c.file());
+    if (!dats.has(c.platform)) dats.set(c.platform, Dat.parse(await fetchDat(c.platform)));
+    if (s !== session || fatal) return;
+    c.game = dats.get(c.platform).game_for(c.crc) ?? null;
+    await dress(s, c);
+  } catch (e) {
+    if (trapped(e)) return;
+    console.error(c.stem, e);
+  }
+  if (s !== session) return;
+  c.looking = false;
+  paint(c);
+}
+
 function setShell(c, next) {
   c.shell = next ? `${next.outline} ${next.colour} ${next.finish}` : '';
 }
@@ -802,6 +832,8 @@ const editor = createEditor({
   fromHex,
   matched: (c) => !!c.game && !c.rejected,
   canLabel,
+  onCard: (c) => !!c.existingPng,
+  setReplace,
   canBackground: (c) => stateOf(c) === 'ready',
   canShell: (c) => ['ready', 'has-label', 'needs-logo'].includes(stateOf(c)) && shell_key_ok(c.stem),
   search: (c, query) => dats.get(c.platform)?.search(query, 30) ?? null,

@@ -112,13 +112,16 @@ export async function fromDirectory(root) {
         throw e;
       }
     },
-    async write(platform, stem, bytes) {
+    // A label already on the card is skipped unless `replace` says to write over it.
+    async write(platform, stem, bytes, replace = false) {
       const root_dir = await root.getDirectoryHandle('Labels', { create: true });
       const dir = await root_dir.getDirectoryHandle(platform, { create: true });
       const name = `${stem}.png`;
+      let existed = false;
       try {
         await dir.getFileHandle(name);
-        return 'skipped';
+        existed = true;
+        if (!replace) return 'skipped';
       } catch (e) {
         if (e.name !== 'NotFoundError') throw e;
       }
@@ -133,7 +136,8 @@ export async function fromDirectory(root) {
         await out.close();
       } catch (e) {
         await out?.abort().catch(() => {});
-        await dir.removeEntry(name).catch(() => {});
+        // A label being replaced is left as it was: the write only lands when it closes.
+        if (!existed) await dir.removeEntry(name).catch(() => {});
         throw e;
       }
       return 'written';

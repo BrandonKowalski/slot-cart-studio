@@ -120,6 +120,11 @@ export function createEditor(api) {
     $('ed-face').hidden = !face;
     if (face) api.draw($('ed-face'), face, c.platform);
 
+    // A label already on the card is kept unless it is being replaced on purpose.
+    $('ed-label-row').hidden = !api.onCard(c);
+    press('ed-label', c.replace ? 'replace' : 'keep');
+    enable('ed-label', !c.looking);
+
     const label = api.canLabel(c);
     $('ed-game').disabled = !label;
     $('ed-game').querySelector('span').textContent = api.matched(c) ? c.game : 'Choose a game';
@@ -226,6 +231,11 @@ export function createEditor(api) {
     $('ed-query').select();
   });
   $('ed-query').addEventListener('input', showGames);
+
+  $('ed-label').addEventListener('click', (e) => {
+    const value = e.target.closest('button')?.dataset.value;
+    if (value) change((c) => api.setReplace(c, value === 'replace'));
+  });
 
   $('ed-logo').addEventListener('click', (e) => {
     const value = e.target.closest('button')?.dataset.value;
