@@ -314,13 +314,13 @@ def main():
 
         first = open_card(page, 'card', ['Games/' + g for g in games])
 
-        # slot's own masthead, exactly: its mark and its six sections.
+        # slot's own masthead, exactly: its mark, its six sections, and the studio as the current page.
         mast = page.eval("[...document.querySelectorAll('.mast a')]"
                          ".map(a => [a.textContent.trim(), a.getAttribute('href'), a.getAttribute('aria-current')])")
         site = 'https://slot.kowalski.io/'
         want_mast = [['slot.', site, None]] + [[name, f'{site}#{anchor}', None] for name, anchor in (
             ('Installing', 'install'), ('Guide', 'guide'), ('Buttons', 'buttons'), ('Questions', 'questions'),
-            ('Credits', 'credits'), ('AI', 'disclosure'))]
+            ('Credits', 'credits'), ('AI', 'disclosure'))] + [['Studio', './', 'page']]
         if mast != want_mast:
             sys.exit(f'the masthead is {mast}, not slot\'s {want_mast}')
         print('asserted: the masthead is slot\'s, link for link')
@@ -335,11 +335,12 @@ def main():
             sys.exit(f'the platform tabs run {order}, not Game Boy Advance, Game Boy Color, Game Boy')
         print('asserted: the tabs run Game Boy Advance, Game Boy Color, Game Boy')
 
-        # One plastic for the whole page, silver, whatever the address asks for.
-        key = page.eval("getComputedStyle(document.getElementById('write')).backgroundImage")
-        if 'rgb(184, 188, 194)' not in key:
-            sys.exit(f'the write key is not moulded in silver: {key!r}')
-        print('asserted: the keys are moulded in silver')
+        # The page's own button is the one slot's hero uses: solid ink, 8px corners, nothing moulded.
+        btn = page.eval("(s => [s.backgroundColor, s.backgroundImage, s.borderRadius, s.fontWeight, s.fontSize])"
+                        "(getComputedStyle(document.getElementById('write')))")
+        if btn != ['rgb(244, 245, 249)', 'none', '8px', '600', '16px']:
+            sys.exit(f'the write button is not slot\'s hero button: {btn}')
+        print('asserted: the write button is slot\'s hero button')
 
         # The fine print a real GBA label carries, instead of region pills; Game Boy carts carry none.
         prints = {nfc(s['stem']): (s['platform'], p) for s, p in zip(
