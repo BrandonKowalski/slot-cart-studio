@@ -114,10 +114,9 @@ const baseDeep = (c) => lookOf(c)?.ground ?? Array.from(stopsOf(c)).slice(0, 3);
 const hex = (rgb) => `#${[...rgb].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
 // A checksum as the set names its files: eight upper case hex digits.
 const crcHex = (crc) => crc.toString(16).toUpperCase().padStart(8, '0');
-// Where a set of our own lives, if there is one. Given on the address rather than built in, so a
-// local set and a hosted one are the same page with a different argument, and the published page
-// carries no address it cannot serve.
-const ART_BASE = new URLSearchParams(location.search).get('art') ?? '';
+// Our own set, published beside the studio. `?art=` points at another, a local one while it is
+// being harvested, and an empty `?art=` leaves every cart to libretro.
+const ART_BASE = new URLSearchParams(location.search).get('art') ?? 'https://art.slot-cfw.fyi/';
 let artIndex = null;
 const fromHex = (value) => [1, 3, 5].map((at) => parseInt(value.slice(at, at + 2), 16));
 // A sure look from the art set, or null: anything missing, unsure or malformed counts as no look.
@@ -908,6 +907,7 @@ async function start() {
       shells: () => (session ? session.carts.map((c) => ({ stem: c.stem, shell: c.shell })) : []),
       shellPresets: () => shell_presets(),
       editing: () => editor.current()?.stem ?? null,
+      artBase: () => ART_BASE,
     };
   }
   document.body.dataset.ready = 'true';

@@ -305,10 +305,16 @@ def main():
         # STUDIO_ART points the page at a harvested set, the way the address does by hand. Unset,
         # the run is the one that came before there was a set: every logo from libretro.
         art = os.environ.get('STUDIO_ART', '')
-        page_url = f'http://127.0.0.1:{HTTP_PORT}/studio/'
-        if art:
-            page_url += '?art=' + urllib.parse.quote(art, safe='')
-            print('art set:', art)
+        # With no address the page reaches for the published set; the runs below always name one,
+        # an empty one meaning none, so they never depend on the network or its CORS rules.
+        bare = f'http://127.0.0.1:{HTTP_PORT}/studio/'
+        page.send('Page.navigate', url=bare)
+        wait(lambda: page.eval("document.body && document.body.dataset.ready === 'true'"), 60, 'the bare studio to start')
+        if page.eval('window.__studio.artBase()') != 'https://art.slot-cfw.fyi/':
+            sys.exit(f'with no ?art= the studio uses {page.eval("window.__studio.artBase()")!r}, not the published set')
+        print('asserted: with no ?art= the studio uses https://art.slot-cfw.fyi/')
+        page_url = bare + '?art=' + urllib.parse.quote(art, safe='')
+        print('art set:', art or '(none)')
         page.send('Page.navigate', url=page_url)
         wait(lambda: page.eval("document.body && document.body.dataset.ready === 'true'"), 60, 'the studio to start')
 
@@ -397,7 +403,9 @@ def main():
         # can be switched off and on; an unsure look leaves the label colour alone.
         if art:
             base = art.rstrip('/') + '/'
-            index = json.load(urllib.request.urlopen(base + 'index.json'))
+            # Cloudflare turns away Python's own user agent, so this one says what it is.
+            ask = urllib.request.Request(base + 'index.json', headers={'User-Agent': 'slot-cart-studio-verify'})
+            index = json.load(urllib.request.urlopen(ask))
             looks, wheels = {}, {}
             for g in games:
                 crc = f'{zlib.crc32((SLOT_GAMES / g).read_bytes()) & 0xffffffff:08X}'
