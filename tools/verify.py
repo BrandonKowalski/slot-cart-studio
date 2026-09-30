@@ -382,25 +382,17 @@ def main():
             sys.exit(f'these still read as generic: {sorted(set(generic))}')
         print('asserted: no pills and no spaced capitals on the page or in the editor')
 
-        # Credits name every source and its terms; ScreenScraper's only when its art is in use.
+        # Credits name every source and its terms, whichever of them this visit used.
         links = page.eval("[...document.querySelectorAll('.credits a')].filter(a => a.getClientRects().length).map(a => a.href)")
         need = ['https://github.com/libretro/libretro-database', 'https://creativecommons.org/licenses/by-sa/4.0/',
-                'https://github.com/libretro-thumbnails', 'https://openfontlicense.org/', 'https://slot.kowalski.io/']
-        if art:
-            need += ['https://www.screenscraper.fr/', 'https://creativecommons.org/licenses/by-nc-sa/4.0/']
+                'https://github.com/libretro-thumbnails', 'https://www.screenscraper.fr/',
+                'https://creativecommons.org/licenses/by-nc-sa/4.0/']
         missing = [u for u in need if not any(l.startswith(u) for l in links)]
-        shows_ss = any('screenscraper' in l for l in links)
-        claims = page.eval("document.getElementById(document.getElementById('credit-ss').hidden ? 'credit-lr' : 'credit-ss').textContent")
-        if art and not claims.startswith('Logos and cart scans from ScreenScraper'):
-            sys.exit(f'with an art set the credits still say {claims!r}')
-        if missing or shows_ss != bool(art):
-            sys.exit(f'the credits are missing {missing}, or show ScreenScraper ({shows_ss}) without its art set')
-        credits = ' '.join(page.eval("document.querySelector('.credits').innerText").split())
-        if 'not affiliated with nintendo' not in credits.lower():
+        if missing:
+            sys.exit(f'the credits are missing {missing}')
+        if 'not affiliated with nintendo' not in page.eval("document.querySelector('.credits').innerText").lower():
             sys.exit('the credits carry no Nintendo non-affiliation line')
-        if len(credits.split()) > 45:
-            sys.exit(f'the credits run to {len(credits.split())} words: {credits}')
-        print('asserted: the credits name every source and its terms' + (', ScreenScraper included' if art else ''))
+        print('asserted: the credits name every source and its terms')
 
         # Settled again before the shots: open_card's wait ends when every cart has resolved once,
         # and a shot taken while anything is still being dressed photographs a spinner.

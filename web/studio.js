@@ -826,9 +826,6 @@ async function start() {
   if (ART_BASE) {
     try {
       artIndex = await fetchIndex(ART_BASE);
-      // The set's logos and looks come first, so the credit says so rather than adding a line.
-      $('credit-ss').hidden = false;
-      $('credit-lr').hidden = true;
       console.info(`art set: ${Object.keys(artIndex).length} checksums from ${ART_BASE}`);
     } catch (e) {
       banner(`The art set at ${ART_BASE} didn’t load (${e.message}). Logos come from libretro alone.`);
