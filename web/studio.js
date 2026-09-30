@@ -834,12 +834,6 @@ async function start() {
   const direct = 'showDirectoryPicker' in window;
   $('pick').hidden = !direct;
   $('pick-files-label').hidden = direct;
-  // Writing in place needs no explaining; the zip the other browsers fall back to does.
-  $('mode').hidden = direct;
-  if (!direct) {
-    $('mode').textContent =
-      'This browser can’t write to the SD card, so you’ll get a zip: copy its Labels folder onto the card.';
-  }
 
   $('pick').addEventListener('click', async () => {
     let root;
