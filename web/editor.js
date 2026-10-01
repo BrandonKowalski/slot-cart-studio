@@ -11,6 +11,8 @@ export function createEditor(api) {
   let built = false;
   // A drag through a colour picker is one step: the first input records it, the rest follow.
   let dragging = false;
+  // Which button opened the file picker: Custom or Full label.
+  let picking = 'custom';
 
   function change(fn, c = cart) {
     dragging = false;
@@ -129,7 +131,7 @@ export function createEditor(api) {
     $('ed-game').disabled = !label;
     $('ed-game').querySelector('span').textContent = api.matched(c) ? c.game : 'Choose a game';
     enable('ed-logo', label);
-    press('ed-logo', c.droppedBytes ? 'custom' : 'auto');
+    press('ed-logo', c.fullBytes ? 'full' : c.droppedBytes ? 'custom' : 'auto');
 
     const bg = api.background(c);
     $('ed-bg').disabled = !api.canBackground(c);
@@ -240,14 +242,18 @@ export function createEditor(api) {
   $('ed-logo').addEventListener('click', (e) => {
     const value = e.target.closest('button')?.dataset.value;
     if (value === 'auto') change(api.autoLogo);
-    else if (value === 'custom') $('ed-logo-file').click();
+    else if (value === 'custom' || value === 'full') {
+      picking = value;
+      $('ed-logo-file').click();
+    }
   });
   $('ed-logo-file').addEventListener('change', async () => {
     const c = cart;
     const file = $('ed-logo-file').files[0];
     $('ed-logo-file').value = '';
+    const use = picking === 'full' ? api.useFull : api.useLogo;
     const bytes = await api.readLogo(file);
-    if (bytes) change((c) => api.useLogo(c, bytes), c);
+    if (bytes) change((c) => use(c, bytes), c);
   });
 
   $('ed-bg').addEventListener('click', () => toggle('ed-bg-pal'));

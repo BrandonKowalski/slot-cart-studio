@@ -170,7 +170,7 @@ pub fn pale_colour(deep: &[u8]) -> Vec<u8> {
     label::pale_for([deep[0], deep[1], deep[2]]).to_vec()
 }
 
-/// A label for one cart: a logo over a ground described by its deep corner.
+/// A label for one cart: a logo over a ground described by its deep corner, or a whole label.
 #[wasm_bindgen(js_name = Label)]
 pub struct JsLabel(label::Label);
 
@@ -196,6 +196,13 @@ impl JsLabel {
         )
         .map(JsLabel)
         .ok_or_else(|| JsError::new("not a PNG this studio can read"))
+    }
+
+    /// A whole label, used as it is: cropped to fill, never shrunk onto a ground.
+    pub fn full(png: &[u8], platform: &str) -> Result<JsLabel, JsError> {
+        label::Label::full(png, face::platform_of(platform))
+            .map(JsLabel)
+            .ok_or_else(|| JsError::new("not a PNG this studio can read"))
     }
 
     pub fn deep(&self) -> Vec<u8> {

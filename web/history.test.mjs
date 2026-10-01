@@ -6,6 +6,7 @@ const cart = (over = {}) => ({
   game: 'Tetris',
   rejected: false,
   droppedBytes: null,
+  fullBytes: null,
   logoBytes: null,
   logoLuma: 255,
   look: null,
@@ -55,6 +56,17 @@ test('one step covers every field a change touched', () => {
   assert.deepEqual([c.rejected, c.deep, c.userHue], [true, null, false]);
   undo(c);
   assert.equal(c.rejected, false);
+});
+
+test('a full label is a step, and undo puts the logo back', () => {
+  const logo = new Uint8Array([1]);
+  const full = new Uint8Array([2]);
+  const c = cart({ droppedBytes: logo });
+  assert.equal(commit(c, () => Object.assign(c, { fullBytes: full, droppedBytes: null })), true);
+  assert.equal(undo(c), true);
+  assert.deepEqual([c.fullBytes, c.droppedBytes], [null, logo]);
+  assert.equal(redo(c), true);
+  assert.deepEqual([c.fullBytes, c.droppedBytes], [full, null]);
 });
 
 test('revert goes back to the visit and is itself undoable', () => {

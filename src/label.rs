@@ -285,11 +285,11 @@ pub fn compose(
     dst.take()
 }
 
-/// One logo over a ground, recomposed whenever that ground's colour moves.
+/// One logo over a ground, recomposed whenever that ground's colour moves, or a whole label
+/// given as it is.
 pub struct Label {
-    logo: Vec<u8>,
-    w: u32,
-    h: u32,
+    /// The logo and its size; `None` for a whole label, which has no ground to recompose.
+    logo: Option<(Vec<u8>, u32, u32)>,
     /// The label's own size, which is the well's shape for the platform it was made for.
     lw: u32,
     lh: u32,
@@ -312,13 +312,34 @@ impl Label {
         let (lw, lh) = size(platform);
         let rgba = compose(&logo, w, h, lw, lh, deep, pale_for(deep), band);
         Some(Label {
-            logo,
-            w,
-            h,
+            logo: Some((logo, w, h)),
             lw,
             lh,
             deep,
             band,
+            rgba,
+        })
+    }
+
+    /// A whole label, cropped to fill the platform's label as slot's cover would, so nothing of
+    /// it is shrunk. Transparent pixels go over black, as the opaque PNG written for it has them.
+    pub fn full(png: &[u8], platform: Platform) -> Option<Label> {
+        let (art, w, h) = art::decode(png)?;
+        let (lw, lh) = size(platform);
+        let mut rgba = art::cover_rgba(&art, w, h, lw, lh)?;
+        for p in rgba.chunks_exact_mut(4) {
+            let a = p[3] as u32;
+            for c in &mut p[..3] {
+                *c = ((*c as u32 * a + 127) / 255) as u8;
+            }
+            p[3] = 255;
+        }
+        Some(Label {
+            logo: None,
+            lw,
+            lh,
+            deep: [0; 3],
+            band: None,
             rgba,
         })
     }
@@ -328,11 +349,14 @@ impl Label {
     }
 
     pub fn set_deep(&mut self, deep: &[u8]) {
+        let Some((logo, w, h)) = &self.logo else {
+            return;
+        };
         self.deep = [deep[0], deep[1], deep[2]];
         self.rgba = compose(
-            &self.logo,
-            self.w,
-            self.h,
+            logo,
+            *w,
+            *h,
             self.lw,
             self.lh,
             self.deep,
@@ -643,6 +667,104 @@ mod tests {
             &[5, 150, 60],
             "the band's corner after Label Color moved"
         );
+    }
+
+    fn png_of(rgba: &[u8], w: u32, h: u32) -> Vec<u8> {
+        let mut out = Vec::new();
+        {
+            let mut enc = png::Encoder::new(&mut out, w, h);
+            enc.set_color(png::ColorType::Rgba);
+            enc.set_depth(png::BitDepth::Eight);
+            enc.write_header().unwrap().write_image_data(rgba).unwrap();
+        }
+        out
+    }
+
+    fn rgb_of(png: &[u8]) -> (Vec<u8>, u32, u32) {
+        let mut reader = png::Decoder::new(std::io::Cursor::new(png))
+            .read_info()
+            .unwrap();
+        let mut rgb = vec![0; reader.output_buffer_size()];
+        let info = reader.next_frame(&mut rgb).unwrap();
+        (rgb, info.width, info.height)
+    }
+
+    #[test]
+    fn a_full_label_fills_the_platforms_label_edge_to_edge() {
+        let ink = [INK[0], INK[1], INK[2]];
+        for (platform, want) in [(Platform::Gba, (W, H)), (Platform::Gbc, (GB_W, GB_H))] {
+            let label =
+                Label::full(&png_of(&solid(600, 290), 600, 290), platform).expect("decodes");
+            let (rgb, w, h) = rgb_of(&label.png());
+            assert_eq!((w, h), want, "{platform:?}");
+            for (x, y) in [
+                (0, 0),
+                (w - 1, 0),
+                (0, h - 1),
+                (w - 1, h - 1),
+                (w / 2, h / 2),
+            ] {
+                let i = ((y * w + x) * 3) as usize;
+                assert_eq!(&rgb[i..i + 3], &ink, "{platform:?} at {x},{y}");
+            }
+        }
+    }
+
+    /// A square scan on the 2:1 GBA label loses its top and bottom, as slot's cover would, rather
+    /// than shrinking to fit between bars.
+    #[test]
+    fn a_full_label_is_cropped_to_fill_not_shrunk() {
+        let mut art = solid(400, 400);
+        for y in (0..90).chain(310..400) {
+            for x in 0..400 {
+                let i = ((y * 400 + x) * 4) as usize;
+                art[i..i + 4].copy_from_slice(&[250, 0, 0, 255]);
+            }
+        }
+        let label = Label::full(&png_of(&art, 400, 400), Platform::Gba).expect("decodes");
+        let (rgb, _, _) = rgb_of(&label.png());
+        assert!(
+            rgb.chunks_exact(3).all(|p| p == [INK[0], INK[1], INK[2]]),
+            "the cropped rows showed"
+        );
+    }
+
+    #[test]
+    fn a_full_label_shows_on_the_cart_face_to_its_corners() {
+        let label =
+            Label::full(&png_of(&solid(512, 256), 512, 256), Platform::Gba).expect("decodes");
+        let face = label.face(Platform::Gba, "", &[], "", "Probe");
+        let (x0, y0) = (crate::cart::LABEL_X + 1, crate::cart::LABEL_Y + 1);
+        let (x1, y1) = (
+            crate::cart::LABEL_X + crate::cart::LABEL_W - 2,
+            crate::cart::LABEL_Y + crate::cart::LABEL_H - 2,
+        );
+        for (x, y) in [(x0, y0), (x1, y0), (x0, y1), (x1, y1)] {
+            let i = ((y * crate::cart::CART_W + x) * 4) as usize;
+            assert!(
+                near(
+                    [face[i], face[i + 1], face[i + 2]],
+                    [INK[0], INK[1], INK[2]],
+                    24
+                ),
+                "at {x},{y}: {:?}",
+                &face[i..i + 3]
+            );
+        }
+    }
+
+    #[test]
+    fn a_ground_colour_leaves_a_full_label_alone() {
+        let mut label =
+            Label::full(&png_of(&solid(64, 32), 64, 32), Platform::Gba).expect("decodes");
+        let before = label.png();
+        label.set_deep(&[200, 30, 90]);
+        assert_eq!(label.png(), before);
+    }
+
+    #[test]
+    fn bytes_that_are_not_a_png_make_no_full_label() {
+        assert!(Label::full(b"not a png", Platform::Gba).is_none());
     }
 
     #[test]

@@ -79,6 +79,8 @@ function newCart({ platform, stem, file }) {
     // The real label's ground and band, measured from its scan: sure looks only.
     look: null,
     droppedBytes: null,
+    // A whole label of the person's own, used as it is instead of a logo on a ground.
+    fullBytes: null,
     rejected: false,
     boxHue: null,
     // How bright the logo is decides which way the ground goes, so it is read once with the logo
@@ -94,7 +96,7 @@ function newCart({ platform, stem, file }) {
   };
 }
 
-const activeLogo = (c) => c.droppedBytes ?? (c.rejected ? null : c.logoBytes);
+const activeLogo = (c) => c.fullBytes ?? c.droppedBytes ?? (c.rejected ? null : c.logoBytes);
 
 function stateOf(c) {
   if (c.error) return 'error';
@@ -135,7 +137,7 @@ function parseLook(raw) {
 }
 // A logo dropped by hand, or a match rejected, is the person's own label: the look is the matched
 // cart's, so it does not apply.
-const lookOf = (c) => (c.droppedBytes || c.rejected ? null : c.look);
+const lookOf = (c) => (c.droppedBytes || c.fullBytes || c.rejected ? null : c.look);
 const bandOf = (c) => lookOf(c)?.band ?? null;
 
 const readyCarts = () =>
@@ -167,6 +169,14 @@ function withLabel(bytes, deep, platform, use, band = null) {
 
 // The label this cart is wearing, for as long as the call needs it.
 function withCartLabel(c, use) {
+  if (c.fullBytes) {
+    const label = Label.full(c.fullBytes, c.platform);
+    try {
+      return use(label);
+    } finally {
+      label.free();
+    }
+  }
   const logo = activeLogo(c);
   return logo ? withLabel(logo, c.deep ?? baseDeep(c), c.platform, use, bandOf(c)) : null;
 }
@@ -299,6 +309,7 @@ function chooseGame(c, name) {
   c.game = name;
   c.rejected = false;
   c.droppedBytes = null;
+  c.fullBytes = null;
   c.logoBytes = null;
   c.looking = true;
   track(redress(session, c));
@@ -339,14 +350,21 @@ async function readLogo(file) {
 // A logo of the person's own decides which way its ground goes the same way a fetched one does.
 function useLogo(c, bytes) {
   c.droppedBytes = bytes;
+  c.fullBytes = null;
   c.logoLuma = logo_luma(bytes);
   if (!c.userHue) c.deep = null;
 }
 
 function autoLogo(c) {
   c.droppedBytes = null;
+  c.fullBytes = null;
   c.logoLuma = c.logoBytes ? logo_luma(c.logoBytes) : 255;
   if (!c.userHue) c.deep = null;
+}
+
+function useFull(c, bytes) {
+  c.fullBytes = bytes;
+  c.droppedBytes = null;
 }
 
 // A logo dropped on a card is Logo → Custom without opening the editor.
@@ -783,6 +801,7 @@ function setBackground(c, rgb) {
 function noMatch(c) {
   c.rejected = true;
   c.droppedBytes = null;
+  c.fullBytes = null;
   c.userHue = false;
   c.deep = null;
 }
@@ -819,13 +838,14 @@ const editor = createEditor({
   canLabel,
   onCard: (c) => !!c.existingPng,
   setReplace,
-  canBackground: (c) => stateOf(c) === 'ready',
+  canBackground: (c) => stateOf(c) === 'ready' && !c.fullBytes,
   canShell: (c) => ['ready', 'has-label', 'needs-logo'].includes(stateOf(c)) && shell_key_ok(c.stem),
   search: (c, query) => dats.get(c.platform)?.search(query, 30) ?? null,
   chooseGame,
   noMatch,
   readLogo,
   useLogo,
+  useFull,
   autoLogo,
   background: (c) => ({ rgb: c.deep ?? baseDeep(c), auto: !c.userHue }),
   setBackground,
