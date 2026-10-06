@@ -5,8 +5,12 @@ import { canRedo, canRevert, canUndo, commit, redo, revert, undo, visit, visited
 const cart = (over = {}) => ({
   game: 'Tetris',
   rejected: false,
-  droppedBytes: null,
-  fullBytes: null,
+  choice: 'logo',
+  byHand: false,
+  customLogoBytes: null,
+  customLogoLuma: 255,
+  customLabelBytes: null,
+  realBytes: null,
   logoBytes: null,
   logoLuma: 255,
   look: null,
@@ -14,7 +18,6 @@ const cart = (over = {}) => ({
   deep: null,
   userHue: false,
   shell: '',
-  replace: false,
   looking: false,
   ...over,
 });
@@ -50,7 +53,7 @@ test('a new change after an undo drops the redo', () => {
 
 test('one step covers every field a change touched', () => {
   const c = cart();
-  commit(c, () => Object.assign(c, { rejected: true, deep: null, userHue: false, droppedBytes: null }));
+  commit(c, () => Object.assign(c, { rejected: true, deep: null, userHue: false, customLogoBytes: null }));
   commit(c, () => Object.assign(c, { deep: [9, 9, 9], userHue: true }));
   undo(c);
   assert.deepEqual([c.rejected, c.deep, c.userHue], [true, null, false]);
@@ -58,15 +61,22 @@ test('one step covers every field a change touched', () => {
   assert.equal(c.rejected, false);
 });
 
-test('a full label is a step, and undo puts the logo back', () => {
+test('a tile change is one step, and undo puts the previous choice and file back', () => {
   const logo = new Uint8Array([1]);
-  const full = new Uint8Array([2]);
-  const c = cart({ droppedBytes: logo });
-  assert.equal(commit(c, () => Object.assign(c, { fullBytes: full, droppedBytes: null })), true);
+  const label = new Uint8Array([2]);
+  const c = cart({ choice: 'customLogo', byHand: true, customLogoBytes: logo });
+  assert.equal(commit(c, () => Object.assign(c, { choice: 'customLabel', customLabelBytes: label })), true);
   assert.equal(undo(c), true);
-  assert.deepEqual([c.fullBytes, c.droppedBytes], [null, logo]);
+  assert.deepEqual([c.choice, c.customLogoBytes, c.customLabelBytes], ['customLogo', logo, null]);
   assert.equal(redo(c), true);
-  assert.deepEqual([c.fullBytes, c.droppedBytes], [full, null]);
+  assert.deepEqual([c.choice, c.customLabelBytes], ['customLabel', label]);
+});
+
+test('going back to the card label is a step like any other', () => {
+  const c = cart({ choice: 'card' });
+  commit(c, () => Object.assign(c, { choice: 'real', byHand: true }));
+  undo(c);
+  assert.deepEqual([c.choice, c.byHand], ['card', false]);
 });
 
 test('revert goes back to the visit and is itself undoable', () => {
@@ -125,11 +135,4 @@ test('undo leaves alone the fields history does not own', () => {
   c.existing = 'other face';
   undo(c);
   assert.equal(c.existing, 'other face');
-});
-
-test('choosing to replace a label on the card is a step like any other', () => {
-  const c = cart();
-  commit(c, () => (c.replace = true));
-  assert.equal(undo(c), true);
-  assert.equal(c.replace, false);
 });

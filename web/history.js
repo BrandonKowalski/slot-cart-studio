@@ -3,9 +3,12 @@
 export const EDITABLE = [
   'game',
   'rejected',
-  'droppedBytes',
-  'fullBytes',
-  'textureBytes',
+  'choice',
+  'byHand',
+  'customLogoBytes',
+  'customLogoLuma',
+  'customLabelBytes',
+  'realBytes',
   'logoBytes',
   'logoLuma',
   'look',
@@ -13,7 +16,6 @@ export const EDITABLE = [
   'deep',
   'userHue',
   'shell',
-  'replace',
 ];
 
 const capture = (c) => Object.fromEntries(EDITABLE.map((k) => [k, c[k]]));
