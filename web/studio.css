@@ -143,7 +143,9 @@ a{color:var(--ink)}
 .fill p.fill-question{color:var(--ink);font-size:15px}
 .fill-choices{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .fill-choice{display:flex;flex-direction:column;gap:4px;padding:10px;border:2px solid transparent;border-radius:9px;background:var(--recess);color:var(--ink);font:inherit;text-align:left;cursor:pointer}
-.fill-choice:hover,.fill-choice:focus-visible{border-color:var(--shell-accent);outline:0}
+.fill:focus{outline:0}
+.fill-choice:hover{border-color:var(--shell-accent)}
+.fill-choice:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .fill-choice canvas{width:100%;height:auto;margin-bottom:6px;image-rendering:pixelated}
 .fill-choice b{font-size:15px}
 .fill-choice small{color:var(--muted);font-size:12px;line-height:1.4}
