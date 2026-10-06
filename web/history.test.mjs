@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { canRedo, canRevert, canUndo, commit, redo, revert, undo, visit, visited } from './history.js';
+import { amend, canRedo, canRevert, canUndo, commit, redo, revert, undo, visit, visited } from './history.js';
 
 const cart = (over = {}) => ({
   game: 'Tetris',
@@ -134,4 +134,20 @@ test('undo leaves alone the fields history does not own', () => {
   c.existing = 'other face';
   undo(c);
   assert.equal(c.existing, 'other face');
+});
+
+test('amend rewrites every snapshot, so an undo after a re-fill keeps the new fill', () => {
+  const c = cart({ choice: 'real' });
+  visit(c);
+  commit(c, () => (c.shell = 'a'));
+  c.choice = 'logo';
+  amend(c, (snap) => {
+    if (!snap.byHand && snap.choice !== 'card') snap.choice = 'logo';
+  });
+  undo(c);
+  assert.deepEqual([c.shell, c.choice], ['', 'logo']);
+  redo(c);
+  assert.deepEqual([c.shell, c.choice], ['a', 'logo']);
+  revert(c);
+  assert.deepEqual([c.shell, c.choice], ['', 'logo']);
 });

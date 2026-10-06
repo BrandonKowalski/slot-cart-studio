@@ -58,3 +58,8 @@ export function revert(c) {
 export const canUndo = (c) => !c.looking && !!c.history?.undo.length;
 export const canRedo = (c) => !c.looking && !!c.history?.redo.length;
 export const canRevert = (c) => !c.looking && !!c.history?.visit && !same(c.history.visit, capture(c));
+
+export function amend(c, fix) {
+  const h = log(c);
+  for (const snap of [h.visit, ...h.undo, ...h.redo]) if (snap) fix(snap);
+}

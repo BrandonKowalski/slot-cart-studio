@@ -27,7 +27,7 @@ import init, {
 import { fromDirectory, fromFiles, labelKey, PLATFORMS } from './card.js';
 import { fetchArt, fetchDat, fetchIndex, fetchThumb, limiter } from './libretro.js';
 import { createEditor } from './editor.js';
-import { commit } from './history.js';
+import { amend, commit } from './history.js';
 import { smallPrint } from './smallprint.js';
 import { applyFill, available, fillCounts, fillText, reset, wears } from './label-choice.js';
 
@@ -710,7 +710,7 @@ const unlabelled = (s) => fillCounts(s.carts.map(view)).unlabelled;
 
 function updateFillButton() {
   if (!session) return;
-  $('fill-open').hidden = session.fill == null || unlabelled(session) === 0;
+  $('fill-open').hidden = unlabelled(session) === 0;
 }
 
 async function askFill(s) {
@@ -749,6 +749,9 @@ function answerFill(fill) {
   for (const c of s.carts) {
     const v = view(c);
     if (applyFill([v], fill)) c.choice = v.choice;
+    amend(c, (snap) => {
+      if (!snap.byHand && snap.choice !== 'card' && snap.choice !== null) snap.choice = fill;
+    });
   }
   $('fill').close();
   for (const c of s.carts) {
@@ -987,7 +990,7 @@ const editor = createEditor({
   useCustomLabel,
   resetLabel,
   ensureTiles,
-  canShell: (c) => ['ready', 'has-label', 'needs-logo'].includes(stateOf(c)) && shell_key_ok(c.stem),
+  canShell: (c) => !c.looking && ['ready', 'has-label', 'needs-logo', 'unfilled'].includes(stateOf(c)) && shell_key_ok(c.stem),
   search: (c, query) => dats.get(c.platform)?.search(query, 30) ?? null,
   chooseGame,
   noMatch,
