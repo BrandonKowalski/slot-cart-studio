@@ -10,7 +10,6 @@ const cart = (over = {}) => ({
   customLogoBytes: null,
   customLogoLuma: 255,
   customLabelBytes: null,
-  realBytes: null,
   logoBytes: null,
   logoLuma: 255,
   look: null,

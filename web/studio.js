@@ -82,8 +82,7 @@ function newCart({ platform, stem, file }) {
     customLogoBytes: null,
     customLogoLuma: 255,
     customLabelBytes: null,
-    realBytes: null,
-    realFailed: false,
+    real: null,
     dressed: false,
     rejected: false,
     boxHue: null,
@@ -105,11 +104,14 @@ const realPathOf = (c) => {
   return (key && artIndex?.[key]?.['support-texture']) || null;
 };
 
+const realOf = (c) => (c.real && c.real.path === realPathOf(c) ? c.real : null);
+const realBytesOf = (c) => realOf(c)?.bytes ?? null;
+
 const view = (c) => ({
   choice: c.choice,
   byHand: c.byHand,
   onCard: !!c.existingPng,
-  hasReal: !c.realFailed && !!realPathOf(c),
+  hasReal: !realOf(c)?.failed && !!realPathOf(c),
   hasLogo: !c.rejected && !!c.logoBytes,
   customLogoBytes: c.customLogoBytes,
   customLabelBytes: c.customLabelBytes,
@@ -122,7 +124,7 @@ function stateOf(c) {
   if (c.error) return 'error';
   const { kind, why } = wearing(c);
   if (kind === 'card') return 'has-label';
-  if (c.looking || (kind === 'real' && !c.realBytes)) return 'looking';
+  if (c.looking || (kind === 'real' && !realBytesOf(c))) return 'looking';
   if (kind === 'none') return why === 'unfilled' ? 'unfilled' : 'needs-logo';
   return 'ready';
 }
@@ -190,7 +192,7 @@ function withLabel(bytes, deep, platform, use, band = null) {
 
 function withKindLabel(c, kind, use) {
   if (kind === 'real' || kind === 'customLabel') {
-    const bytes = kind === 'real' ? c.realBytes : c.customLabelBytes;
+    const bytes = kind === 'real' ? realBytesOf(c) : c.customLabelBytes;
     if (!bytes) return null;
     const label = Label.full(bytes, c.platform);
     try {
@@ -326,6 +328,7 @@ function drawFace(canvas, face, platform) {
 
 function paint(c) {
   if (fatal) return;
+  if (session && needsReal(c)) track(fetchReal(session, c));
   const state = stateOf(c);
   const { root, canvas, game } = c.el;
   root.dataset.state = state;
@@ -353,8 +356,6 @@ function chooseGame(c, name) {
   c.game = name;
   c.rejected = false;
   c.logoBytes = null;
-  c.realBytes = null;
-  c.realFailed = false;
   c.looking = true;
   track(redress(session, c));
 }
@@ -427,15 +428,17 @@ function ensureTiles(c) {
   if (c.error) return;
   if (!c.dressed && !c.looking) {
     c.looking = true;
-    track(lookUp(session, c));
+    track(lookUp(session, c).then(() => c.dressed && ensureTiles(c)));
     return;
   }
-  if (c.dressed && realPathOf(c) && !c.realBytes && !c.realFailed) track(fetchReal(session, c));
+  if (c.dressed && realPathOf(c) && !realOf(c)) track(fetchReal(session, c));
 }
 
 async function fetchReal(s, c) {
   const path = realPathOf(c);
-  if (!path || c.realBytes || c.realFailed) return;
+  if (!path || realOf(c)) return;
+  const real = { path, bytes: null, failed: false };
+  c.real = real;
   let bytes = null;
   try {
     bytes = await limit(async () => (s === session && !fatal ? fetchArt(ART_BASE, path) : null));
@@ -445,12 +448,12 @@ async function fetchReal(s, c) {
     bytes = null;
   }
   if (s !== session || fatal) return;
-  if (bytes) c.realBytes = bytes;
-  else c.realFailed = true;
+  if (bytes) real.bytes = bytes;
+  else real.failed = true;
   paint(c);
 }
 
-const needsReal = (c) => wearing(c).kind === 'real' && !c.realBytes;
+const needsReal = (c) => wearing(c).kind === 'real' && !realOf(c);
 
 async function takeLogo(c, file) {
   const bytes = await readLogo(file);

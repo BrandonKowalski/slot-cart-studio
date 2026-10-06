@@ -8,7 +8,6 @@ export const EDITABLE = [
   'customLogoBytes',
   'customLogoLuma',
   'customLabelBytes',
-  'realBytes',
   'logoBytes',
   'logoLuma',
   'look',

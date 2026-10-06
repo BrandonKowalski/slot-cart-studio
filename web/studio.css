@@ -297,3 +297,18 @@ body.editing .cart:not(.current){opacity:.45}
   body.editing .mast{margin-right:0}
   .editor{left:0;width:auto;box-shadow:none}
 }
+.ed-label>.k{display:block;margin-bottom:8px;color:var(--muted);font-size:14px}
+.ed-why{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px;padding:7px 9px;border-radius:6px;background:var(--recess);color:var(--muted);font-size:13px;line-height:1.4}
+.link{flex:none;padding:0;border:0;background:none;color:var(--shell-accent);font:inherit;font-size:13px;cursor:pointer;text-decoration:underline}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tile{position:relative;display:flex;flex-direction:column;gap:5px;padding:6px;border:2px solid transparent;border-radius:7px;background:var(--recess);color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+.tile.wide{grid-column:1/-1}
+.tile[aria-pressed="true"]{border-color:var(--shell-accent)}
+.tile:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.tile:disabled{opacity:.45;cursor:default}
+.tile canvas{width:100%;height:auto;image-rendering:pixelated}
+.tile .t{font-size:13px;font-weight:600}
+.tile small{display:block;color:var(--muted);font-size:11px;font-weight:400}
+.tile .badge{position:absolute;top:3px;right:3px;padding:1px 6px;border-radius:8px;background:#3b5;color:#031;font-size:10px;font-weight:700}
+.tile .add{display:grid;place-items:center;aspect-ratio:1.6;border:2px dashed #55555f;border-radius:4px;color:var(--muted);font-size:24px}
+.tile.has-file .add{display:none}

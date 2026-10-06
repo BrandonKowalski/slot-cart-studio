@@ -89,7 +89,17 @@
       </div>
     </div>
     <hr>
-    <div class="ed-label" id="ed-label-section"></div>
+    <div class="ed-label" id="ed-label-section">
+      <span class="k">Label</span>
+      <div class="ed-why"><span id="ed-why"></span><button class="link" id="ed-reset" type="button">Reset</button></div>
+      <div class="tiles" id="ed-tiles" role="group" aria-label="Label">
+        <button type="button" class="tile wide" data-kind="card"><canvas></canvas><span class="t">On the card<small>Left as it is</small></span></button>
+        <button type="button" class="tile" data-kind="real"><span class="badge">DEFAULT</span><canvas></canvas><span class="t">Real Label<small></small></span></button>
+        <button type="button" class="tile" data-kind="logo"><span class="badge">DEFAULT</span><canvas></canvas><span class="t">Logo Only<small></small></span></button>
+        <button type="button" class="tile" data-kind="customLogo"><canvas></canvas><span class="add">+</span><span class="t">Custom logo<small></small></span></button>
+        <button type="button" class="tile" data-kind="customLabel"><canvas></canvas><span class="add">+</span><span class="t">Custom label<small></small></span></button>
+      </div>
+    </div>
     <input id="ed-file" class="visually-hidden" type="file" accept="image/png,.png" tabindex="-1">
     <div class="prop">
       <span class="k">Background</span>

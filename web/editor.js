@@ -107,6 +107,45 @@ export function createEditor(api) {
     );
   }
 
+  const NAMES = { real: 'Real Label', logo: 'Logo Only', customLogo: 'Custom logo', customLabel: 'Custom label', card: 'On the card' };
+  const WHY = {
+    card: () => 'Keeping the label already on the card.',
+    byHand: (kind) => `${NAMES[kind]}, set by hand.`,
+    fill: (kind) => `${NAMES[kind]}, how this card was filled.`,
+    fallback: (kind) => `No ${kind === 'logo' ? 'real label' : 'logo'} for this game, so it’s using ${NAMES[kind]}.`,
+    nothing: () => 'No art for this game. Pick a custom logo or label.',
+    unfilled: () => 'Waiting for the card to be filled.',
+  };
+
+  function renderTiles(c) {
+    const wearing = api.wearing(c);
+    const fill = api.fill();
+    $('ed-why').textContent = WHY[wearing.why](wearing.kind);
+    $('ed-reset').hidden = !c.byHand;
+    const can = api.canLabel(c);
+    for (const tile of $('ed-tiles').querySelectorAll('.tile')) {
+      const kind = tile.dataset.kind;
+      const ok = api.available(c, kind);
+      tile.hidden = kind === 'card' && !ok;
+      tile.disabled = !can || (!ok && kind !== 'customLogo' && kind !== 'customLabel');
+      tile.setAttribute('aria-pressed', String(wearing.kind === kind));
+      const badge = tile.querySelector('.badge');
+      if (badge) badge.hidden = fill !== kind;
+      const small = tile.querySelector('small');
+      if (small && (kind === 'real' || kind === 'logo')) small.textContent = ok ? '' : 'None for this game';
+      const hasFile = kind === 'customLogo' ? !!c.customLogoBytes : kind === 'customLabel' ? !!c.customLabelBytes : true;
+      tile.classList.toggle('has-file', hasFile);
+      if (small && (kind === 'customLogo' || kind === 'customLabel')) small.textContent = hasFile ? 'Click again to use another file' : '';
+      const canvas = tile.querySelector('canvas');
+      const face = ok && hasFile ? api.tileFace(c, kind) : null;
+      canvas.hidden = !face;
+      if (face) {
+        [canvas.width, canvas.height] = api.box(c.platform);
+        api.draw(canvas, face, c.platform);
+      }
+    }
+  }
+
   function refresh() {
     const c = cart;
     if (!c) return;
@@ -123,9 +162,10 @@ export function createEditor(api) {
     const label = api.canLabel(c);
     $('ed-game').disabled = !label;
     $('ed-game').querySelector('span').textContent = api.matched(c) ? c.game : 'Choose a game';
+    renderTiles(c);
 
     const bg = api.background(c);
-    $('ed-bg').disabled = !api.canBackground(c);
+    $('ed-bg').closest('.prop').hidden = !api.canBackground(c);
     $('ed-bg').querySelector('i').style.background = api.hex(bg.rgb);
     $('ed-bg').querySelector('span').textContent = bg.auto ? 'Automatic' : presetNamed(api.hex(bg.rgb));
     for (const b of $('ed-bg-presets').querySelectorAll('button')) {
@@ -164,6 +204,7 @@ export function createEditor(api) {
     cart?.el.root.classList.remove('current');
     cart = c;
     dragging = false;
+    api.ensureTiles(c);
     visit(c);
     closePops();
     c.el.root.classList.add('current');
@@ -224,6 +265,33 @@ export function createEditor(api) {
     $('ed-query').select();
   });
   $('ed-query').addEventListener('input', showGames);
+
+  let picking = null;
+  $('ed-tiles').addEventListener('click', (e) => {
+    const tile = e.target.closest('.tile');
+    if (!tile || tile.disabled) return;
+    const kind = tile.dataset.kind;
+    const c = cart;
+    const file = kind === 'customLogo' ? c.customLogoBytes : kind === 'customLabel' ? c.customLabelBytes : null;
+    if ((kind === 'customLogo' || kind === 'customLabel') && (!file || c.choice === kind)) {
+      picking = kind;
+      $('ed-file').click();
+      return;
+    }
+    if (kind === 'customLogo') change((c) => api.useCustomLogo(c, file));
+    else if (kind === 'customLabel') change((c) => api.useCustomLabel(c, file));
+    else change((c) => api.choose(c, kind));
+  });
+  $('ed-file').addEventListener('change', async () => {
+    const c = cart;
+    const kind = picking;
+    const file = $('ed-file').files[0];
+    $('ed-file').value = '';
+    const bytes = await api.readLogo(file);
+    if (!bytes || !kind) return;
+    change((c) => (kind === 'customLogo' ? api.useCustomLogo(c, bytes) : api.useCustomLabel(c, bytes)), c);
+  });
+  $('ed-reset').addEventListener('click', () => change(api.resetLabel));
 
   $('ed-bg').addEventListener('click', () => toggle('ed-bg-pal'));
   $('ed-bg-presets').addEventListener('click', (e) => {
