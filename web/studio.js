@@ -29,6 +29,7 @@ import { fetchArt, fetchDat, fetchIndex, fetchThumb, limiter } from './libretro.
 import { createEditor } from './editor.js';
 import { commit } from './history.js';
 import { smallPrint } from './smallprint.js';
+import { applyFill, available, fillCounts, fillText, reset, wears } from './label-choice.js';
 
 const $ = (id) => document.getElementById(id);
 const limit = limiter(4);
@@ -70,18 +71,20 @@ function newCart({ platform, stem, file }) {
     shell: '',
     shellOnCard: '',
     existingPng: null,
-    // Set by hand to make a new label for a cart that already has one on the card.
-    replace: false,
     crc: null,
     game: null,
     // Logos stay PNG bytes, which are small. The label made from one is not kept: see withLabel.
     logoBytes: null,
     // The real label's ground and band, measured from its scan: sure looks only.
     look: null,
-    droppedBytes: null,
-    // A whole label of the person's own, used as it is instead of a logo on a ground.
-    fullBytes: null,
-    textureBytes: null,
+    choice: null,
+    byHand: false,
+    customLogoBytes: null,
+    customLogoLuma: 255,
+    customLabelBytes: null,
+    realBytes: null,
+    realFailed: false,
+    dressed: false,
     rejected: false,
     boxHue: null,
     // How bright the logo is decides which way the ground goes, so it is read once with the logo
@@ -97,13 +100,31 @@ function newCart({ platform, stem, file }) {
   };
 }
 
-const activeLogo = (c) => c.fullBytes ?? c.droppedBytes ?? (c.rejected ? null : c.logoBytes);
+const realPathOf = (c) => {
+  const key = c.rejected ? null : artKey(c);
+  return (key && artIndex?.[key]?.['support-texture']) || null;
+};
+
+const view = (c) => ({
+  choice: c.choice,
+  byHand: c.byHand,
+  onCard: !!c.existingPng,
+  hasReal: !c.realFailed && !!realPathOf(c),
+  hasLogo: !c.rejected && !!c.logoBytes,
+  customLogoBytes: c.customLogoBytes,
+  customLabelBytes: c.customLabelBytes,
+  error: c.error,
+});
+
+const wearing = (c) => wears(view(c));
 
 function stateOf(c) {
   if (c.error) return 'error';
-  if (c.existing && !c.replace) return 'has-label';
-  if (c.looking) return 'looking';
-  return activeLogo(c) ? 'ready' : 'needs-logo';
+  const { kind, why } = wearing(c);
+  if (kind === 'card') return 'has-label';
+  if (c.looking || (kind === 'real' && !c.realBytes)) return 'looking';
+  if (kind === 'none') return why === 'unfilled' ? 'unfilled' : 'needs-logo';
+  return 'ready';
 }
 
 // The box art belongs to the matched game, so its hue only stands while the match does.
@@ -113,7 +134,7 @@ const baseHueOf = (c) =>
 // A label is described by its deep corner, whether computed or picked, and the corner a hue
 // produces depends on the logo going over it: dark logos get a pale ground, bright ones a deep
 // one. stop_colours is that rule, so the page never restates the house numbers itself.
-const stopsOf = (c) => stop_colours(baseHueOf(c), c.logoLuma ?? 255);
+const stopsOf = (c) => stop_colours(baseHueOf(c), lumaOf(c, wearing(c).kind));
 const baseDeep = (c) => lookOf(c)?.ground ?? Array.from(stopsOf(c)).slice(0, 3);
 
 const hex = (rgb) => `#${[...rgb].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
@@ -136,9 +157,8 @@ function parseLook(raw) {
   const ok = ['top', 'bottom', 'left', 'right'].includes(edge) && typeof size === 'number' && size > 0 && size < 0.5;
   return ok && colour ? { ground, band: { edge, size, colour } } : null;
 }
-// A logo dropped by hand, or a match rejected, is the person's own label: the look is the matched
-// cart's, so it does not apply.
-const lookOf = (c) => (c.droppedBytes || c.fullBytes || c.rejected ? null : c.look);
+const lumaOf = (c, kind) => (kind === 'customLogo' ? c.customLogoLuma : c.logoLuma);
+const lookOf = (c) => (wearing(c).kind === 'logo' ? c.look : null);
 const bandOf = (c) => lookOf(c)?.band ?? null;
 
 const readyCarts = () =>
@@ -168,18 +188,40 @@ function withLabel(bytes, deep, platform, use, band = null) {
   }
 }
 
-// The label this cart is wearing, for as long as the call needs it.
-function withCartLabel(c, use) {
-  if (c.fullBytes) {
-    const label = Label.full(c.fullBytes, c.platform);
+function withKindLabel(c, kind, use) {
+  if (kind === 'real' || kind === 'customLabel') {
+    const bytes = kind === 'real' ? c.realBytes : c.customLabelBytes;
+    if (!bytes) return null;
+    const label = Label.full(bytes, c.platform);
     try {
       return use(label);
     } finally {
       label.free();
     }
   }
-  const logo = activeLogo(c);
-  return logo ? withLabel(logo, c.deep ?? baseDeep(c), c.platform, use, bandOf(c)) : null;
+  const bytes = kind === 'logo' ? c.logoBytes : kind === 'customLogo' ? c.customLogoBytes : null;
+  if (!bytes) return null;
+  const look = kind === 'logo' ? c.look : null;
+  const deep = c.deep ?? look?.ground ?? Array.from(stop_colours(baseHueOf(c), lumaOf(c, kind))).slice(0, 3);
+  return withLabel(bytes, deep, c.platform, use, look?.band ?? null);
+}
+
+const withCartLabel = (c, use) => withKindLabel(c, wearing(c).kind, use);
+
+const BLANK = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAAD0lEQVR4nGO0snJiYGAAAAOUALgNWObMAAAAAElFTkSuQmCC'), (ch) => ch.charCodeAt(0));
+
+function faceFor(c, kind) {
+  if (kind === 'card') return c.existing;
+  if (kind === 'none') return existing_face(new Uint8Array(0), c.platform, c.code, c.head, c.shell, c.stem);
+  if (kind === 'unfilled') {
+    const label = Label.full(BLANK, c.platform);
+    try {
+      return label.face(c.platform, c.code, c.head, c.shell, c.stem);
+    } finally {
+      label.free();
+    }
+  }
+  return withKindLabel(c, kind, (label) => label.face(c.platform, c.code, c.head, c.shell, c.stem));
 }
 
 // Whether slot's decoder takes a logo, asked the only way the module can be asked: by making one.
@@ -217,6 +259,7 @@ const noImage = (e) => {
 function describe(c, state) {
   if (state === 'error') return c.error;
   if (state === 'looking') return c.crc === null ? 'Reading the ROM…' : 'Looking it up…';
+  if (state === 'unfilled') return '';
   return '';
 }
 
@@ -268,11 +311,10 @@ function schedulePaint(c) {
 // The face a cart shows. A needs-logo cart has none of its own, so slot's generated label stands
 // in, as it does on the device.
 function faceOf(c, state) {
-  if (state === 'has-label') return c.existing;
-  if (state === 'ready') {
-    return withCartLabel(c, (label) => label.face(c.platform, c.code, c.head, c.shell, c.stem));
-  }
-  if (state === 'needs-logo') return existing_face(new Uint8Array(0), c.platform, c.code, c.head, c.shell, c.stem);
+  if (state === 'has-label') return faceFor(c, 'card');
+  if (state === 'ready') return faceFor(c, wearing(c).kind);
+  if (state === 'needs-logo') return faceFor(c, 'none');
+  if (state === 'unfilled') return faceFor(c, 'unfilled');
   return null;
 }
 
@@ -300,6 +342,7 @@ function paint(c) {
   // The game code is read with the ROM, after the card is built.
   c.el.print.textContent = smallPrint(c.platform, c.code, c.tags);
   updateWriteBar();
+  updateFillButton();
   if (editor.current() === c) editor.refresh();
 }
 
@@ -309,10 +352,9 @@ function chooseGame(c, name) {
   if (c.game === name && !c.rejected) return;
   c.game = name;
   c.rejected = false;
-  c.droppedBytes = null;
-  c.fullBytes = null;
   c.logoBytes = null;
-  c.textureBytes = null;
+  c.realBytes = null;
+  c.realFailed = false;
   c.looking = true;
   track(redress(session, c));
 }
@@ -350,56 +392,69 @@ async function readLogo(file) {
 }
 
 // A logo of the person's own decides which way its ground goes the same way a fetched one does.
-function useLogo(c, bytes) {
-  c.droppedBytes = bytes;
-  c.fullBytes = null;
-  c.logoLuma = logo_luma(bytes);
+function useCustomLogo(c, bytes) {
+  c.customLogoBytes = bytes;
+  c.customLogoLuma = logo_luma(bytes);
+  c.choice = 'customLogo';
+  c.byHand = true;
   if (!c.userHue) c.deep = null;
 }
 
-function autoLogo(c) {
-  c.droppedBytes = null;
-  c.fullBytes = null;
-  c.logoLuma = c.logoBytes ? logo_luma(c.logoBytes) : 255;
+function useCustomLabel(c, bytes) {
+  c.customLabelBytes = bytes;
+  c.choice = 'customLabel';
+  c.byHand = true;
+}
+
+function choose(c, kind) {
+  c.choice = kind;
+  c.byHand = true;
   if (!c.userHue) c.deep = null;
+  if (kind !== 'card' && !c.dressed) ensureTiles(c);
+  else if (needsReal(c)) track(fetchReal(session, c));
 }
 
-function useFull(c, bytes) {
-  c.fullBytes = bytes;
-  c.droppedBytes = null;
+function resetLabel(c) {
+  const v = view(c);
+  reset(v, session.fill ?? null);
+  c.choice = v.choice;
+  c.byHand = v.byHand;
+  if (!c.userHue) c.deep = null;
+  if (needsReal(c)) track(fetchReal(session, c));
 }
 
-function textureOf(c) {
-  const key = c.rejected ? null : artKey(c);
-  return (key && artIndex?.[key]?.['support-texture']) || null;
+function ensureTiles(c) {
+  if (c.error) return;
+  if (!c.dressed && !c.looking) {
+    c.looking = true;
+    track(lookUp(session, c));
+    return;
+  }
+  if (c.dressed && realPathOf(c) && !c.realBytes && !c.realFailed) track(fetchReal(session, c));
 }
 
-async function readOriginal(c) {
-  if (c.textureBytes) return c.textureBytes;
-  const path = textureOf(c);
-  if (!path) return null;
+async function fetchReal(s, c) {
+  const path = realPathOf(c);
+  if (!path || c.realBytes || c.realFailed) return;
   let bytes = null;
   try {
-    bytes = await limit(() => fetchArt(ART_BASE, path));
-    if (fatal) return null;
+    bytes = await limit(async () => (s === session && !fatal ? fetchArt(ART_BASE, path) : null));
     if (bytes && !readable(bytes)) bytes = null;
   } catch (e) {
-    if (trapped(e)) return null;
+    if (trapped(e)) return;
     bytes = null;
   }
-  if (!bytes) banner('The original label would not load');
-  return bytes;
+  if (s !== session || fatal) return;
+  if (bytes) c.realBytes = bytes;
+  else c.realFailed = true;
+  paint(c);
 }
 
-function useOriginal(c, bytes) {
-  c.textureBytes = bytes;
-  useFull(c, bytes);
-}
+const needsReal = (c) => wearing(c).kind === 'real' && !c.realBytes;
 
-// A logo dropped on a card is Logo → Custom without opening the editor.
 async function takeLogo(c, file) {
   const bytes = await readLogo(file);
-  if (bytes && commit(c, () => useLogo(c, bytes))) changed(c);
+  if (bytes && commit(c, () => useCustomLogo(c, bytes))) changed(c);
 }
 
 function progress(done, total, stem, verb = 'Reading') {
@@ -444,6 +499,7 @@ async function open(source) {
   $('pick').hidden = true;
   $('pick-files-label').hidden = true;
   $('write-bar').hidden = true;
+  $('fill-open').hidden = true;
   if (session.carts.length === 0) {
     banner('There are no .gba files in that card’s Games folder.');
     return;
@@ -494,6 +550,7 @@ async function identify(s) {
       if (label) {
         const bytes = new Uint8Array(await (await label()).arrayBuffer());
         c.existingPng = bytes;
+        c.choice = 'card';
         c.existing = existing_face(bytes, c.platform, c.code, c.head, c.shell, c.stem);
         c.looking = false;
       } else {
@@ -537,6 +594,7 @@ async function match(s) {
   $('banner').hidden = true;
   const pending = s.carts.filter((c) => c.crc !== null && !c.game && !c.existing && !c.error);
   await Promise.all(pending.map((c) => art(s, c)));
+  if (s === session && !fatal && s.fill == null) await askFill(s);
 }
 
 async function art(s, c) {
@@ -600,6 +658,8 @@ async function dress(s, c) {
   if (s !== session || fatal) return;
   c.boxHue = box ? (box_hue(box) ?? null) : null;
   if (!c.userHue) c.deep = null;
+  c.dressed = true;
+  if (needsReal(c)) await fetchReal(s, c);
 }
 
 // The platforms this card actually holds, in the studio's shelf order.
@@ -643,6 +703,59 @@ function updateWriteBar() {
   $('write').textContent = session.source.direct ? 'Write to card' : 'Download zip';
 }
 
+const unlabelled = (s) => fillCounts(s.carts.map(view)).unlabelled;
+
+function updateFillButton() {
+  if (!session) return;
+  $('fill-open').hidden = session.fill == null || unlabelled(session) === 0;
+}
+
+async function askFill(s) {
+  const counts = fillCounts(s.carts.map(view));
+  if (counts.unlabelled === 0 || s !== session || fatal) return;
+  const { title, body } = fillText(counts);
+  $('fill-title').textContent = title;
+  $('fill-body').textContent = body;
+  const sample =
+    s.carts.find((c) => !c.existingPng && view(c).hasReal && view(c).hasLogo) ??
+    s.carts.find((c) => !c.existingPng && (view(c).hasReal || view(c).hasLogo));
+  if (sample) await fetchReal(s, sample);
+  if (s !== session || fatal) return;
+  for (const kind of ['real', 'logo']) {
+    const canvas = $(`fill-${kind}`).querySelector('canvas');
+    let face = null;
+    try {
+      face = sample ? faceFor(sample, kind) : null;
+    } catch (e) {
+      if (trapped(e)) return;
+      throw e;
+    }
+    canvas.hidden = !face;
+    if (face) {
+      [canvas.width, canvas.height] = boxOf(sample.platform);
+      drawFace(canvas, face, sample.platform);
+    }
+  }
+  if (!$('fill').open) $('fill').showModal();
+}
+
+function answerFill(fill) {
+  const s = session;
+  if (!s) return;
+  s.fill = fill;
+  for (const c of s.carts) {
+    const v = view(c);
+    if (applyFill([v], fill)) c.choice = v.choice;
+  }
+  $('fill').close();
+  for (const c of s.carts) {
+    if (!c.userHue) c.deep = null;
+    paint(c);
+    if (needsReal(c)) track(fetchReal(s, c));
+  }
+  updateFillButton();
+}
+
 function download(blob, name) {
   const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: name });
   document.body.append(a);
@@ -670,7 +783,7 @@ async function writeLabels() {
             label.png(),
             label.face(c.platform, c.code, c.head, c.shell, c.stem),
           ]);
-          c.result = await s.source.write(c.platform, c.stem, png, c.replace);
+          c.result = await s.source.write(c.platform, c.stem, png, !!c.existingPng);
         } catch (e) {
           if (trapped(e)) return;
           console.error(c.stem, e);
@@ -679,7 +792,8 @@ async function writeLabels() {
         if (c.result === 'written') {
           c.existing = face;
           c.existingPng = png;
-          c.replace = false;
+          c.choice = 'card';
+          c.byHand = false;
         }
         count[c.result]++;
         paint(c);
@@ -768,7 +882,7 @@ async function writeLabels() {
   }
 }
 
-const canLabel = (c) => ['ready', 'needs-logo'].includes(stateOf(c));
+const canLabel = (c) => !c.error && !c.looking;
 
 const SMALL = new Set(['in', 'of', 'the', 'and']);
 const titled = (name) =>
@@ -788,16 +902,6 @@ function shellOf(c) {
   const { outline, colour, finish } = choiceOf(c);
   const preset = presets().find(({ value }) => value.endsWith(` ${colour} ${finish}`));
   return { outline, colour, finish, auto: !c.shell, name: preset?.name ?? `#${colour}` };
-}
-
-// A cart with its label on the card was never looked up; replacing it needs what any other cart
-// has, so it is looked up now, the database fetched first if no other cart needed it.
-function setReplace(c, on) {
-  c.replace = on;
-  if (on) {
-    c.looking = true;
-    track(lookUp(session, c));
-  }
 }
 
 async function lookUp(s, c) {
@@ -829,8 +933,6 @@ function setBackground(c, rgb) {
 // A CRC can be right about the bytes and wrong about the game: a ROM renamed to another's name.
 function noMatch(c) {
   c.rejected = true;
-  c.droppedBytes = null;
-  c.fullBytes = null;
   c.userHue = false;
   c.deep = null;
 }
@@ -865,20 +967,28 @@ const editor = createEditor({
   fromHex,
   matched: (c) => !!c.game && !c.rejected,
   canLabel,
-  onCard: (c) => !!c.existingPng,
-  setReplace,
-  canBackground: (c) => stateOf(c) === 'ready' && !c.fullBytes,
+  canBackground: (c) => stateOf(c) === 'ready' && ['logo', 'customLogo'].includes(wearing(c).kind),
+  wearing,
+  available: (c, kind) => available(view(c), kind),
+  fill: () => session?.fill ?? null,
+  tileFace: (c, kind) => {
+    try {
+      return faceFor(c, kind);
+    } catch (e) {
+      if (trapped(e)) return null;
+      throw e;
+    }
+  },
+  choose,
+  useCustomLogo,
+  useCustomLabel,
+  resetLabel,
+  ensureTiles,
   canShell: (c) => ['ready', 'has-label', 'needs-logo'].includes(stateOf(c)) && shell_key_ok(c.stem),
   search: (c, query) => dats.get(c.platform)?.search(query, 30) ?? null,
   chooseGame,
   noMatch,
   readLogo,
-  useLogo,
-  useFull,
-  hasOriginal: (c) => !!textureOf(c),
-  readOriginal,
-  useOriginal,
-  autoLogo,
   background: (c) => ({ rgb: c.deep ?? baseDeep(c), auto: !c.userHue }),
   setBackground,
   shellOf,
@@ -930,6 +1040,11 @@ async function start() {
     }
   });
   $('write').addEventListener('click', () => track(writeLabels()));
+  $('fill-open').addEventListener('click', () => track(askFill(session)));
+  for (const kind of ['real', 'logo']) $(`fill-${kind}`).addEventListener('click', () => answerFill(kind));
+  $('fill').addEventListener('cancel', (e) => {
+    if (session?.fill == null) e.preventDefault();
+  });
 
   // slot's masthead: a row side by side, a list behind a button on a phone.
   const menu = (open) => {
@@ -961,13 +1076,16 @@ async function start() {
               game: c.game,
               deep: hex(c.deep ?? baseDeep(c)),
               band: !!bandOf(c),
-              logo: activeLogo(c)?.length ?? 0,
+              logo: (wearing(c).kind === 'customLogo' ? c.customLogoBytes : c.logoBytes)?.length ?? 0,
+              wears: wearing(c).kind,
+              why: wearing(c).why,
             }))
           : [],
       shells: () => (session ? session.carts.map((c) => ({ stem: c.stem, shell: c.shell })) : []),
       shellPresets: () => shell_presets(),
       editing: () => editor.current()?.stem ?? null,
       artBase: () => ART_BASE,
+      fill: () => session?.fill ?? null,
     };
   }
   document.body.dataset.ready = 'true';

@@ -134,6 +134,18 @@ a{color:var(--ink)}
 .shelf-bar:not(:has(> :not([hidden]))){display:none}
 .write-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:14px;margin-left:auto}
 .write-bar .btn{display:inline-flex;align-items:center;height:var(--shelf-row);padding-top:0;padding-bottom:0}
+.fill-open{margin:0 0 6px auto}
+.fill-open+.write-bar{margin-left:0}
+.fill{max-width:min(520px,calc(100vw - 32px));padding:22px;border:0;border-radius:12px;background:var(--housing);color:var(--ink);box-shadow:0 24px 60px rgba(0,0,0,.6)}
+.fill::backdrop{background:rgba(10,10,14,.72)}
+.fill h2{margin:0 0 6px;font-size:19px}
+.fill p{margin:0 0 16px;color:var(--muted);font-size:14px;line-height:1.5}
+.fill-choices{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.fill-choice{display:flex;flex-direction:column;gap:4px;padding:10px;border:2px solid transparent;border-radius:9px;background:var(--recess);color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+.fill-choice:hover,.fill-choice:focus-visible{border-color:var(--shell-accent);outline:0}
+.fill-choice canvas{width:100%;height:auto;margin-bottom:6px;image-rendering:pixelated}
+.fill-choice b{font-size:15px}
+.fill-choice small{color:var(--muted);font-size:12px;line-height:1.4}
 
 /* One tab per platform on the card, each the top edge of a cart standing on the shelf. */
 .shelf-tabs{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}

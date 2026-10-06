@@ -11,8 +11,6 @@ export function createEditor(api) {
   let built = false;
   // A drag through a colour picker is one step: the first input records it, the rest follow.
   let dragging = false;
-  // Which button opened the file picker: Custom or Full label.
-  let picking = 'custom';
 
   function change(fn, c = cart) {
     dragging = false;
@@ -122,17 +120,9 @@ export function createEditor(api) {
     $('ed-face').hidden = !face;
     if (face) api.draw($('ed-face'), face, c.platform);
 
-    // A label already on the card is kept unless it is being replaced on purpose.
-    $('ed-label-row').hidden = !api.onCard(c);
-    press('ed-label', c.replace ? 'replace' : 'keep');
-    enable('ed-label', !c.looking);
-
     const label = api.canLabel(c);
     $('ed-game').disabled = !label;
     $('ed-game').querySelector('span').textContent = api.matched(c) ? c.game : 'Choose a game';
-    enable('ed-logo', label);
-    $('ed-logo').querySelector('[data-value="original"]').disabled = !label || !api.hasOriginal(c);
-    press('ed-logo', c.fullBytes ? (c.fullBytes === c.textureBytes ? 'original' : 'full') : c.droppedBytes ? 'custom' : 'auto');
 
     const bg = api.background(c);
     $('ed-bg').disabled = !api.canBackground(c);
@@ -234,33 +224,6 @@ export function createEditor(api) {
     $('ed-query').select();
   });
   $('ed-query').addEventListener('input', showGames);
-
-  $('ed-label').addEventListener('click', (e) => {
-    const value = e.target.closest('button')?.dataset.value;
-    if (value) change((c) => api.setReplace(c, value === 'replace'));
-  });
-
-  $('ed-logo').addEventListener('click', (e) => {
-    const value = e.target.closest('button')?.dataset.value;
-    if (value === 'auto') change(api.autoLogo);
-    else if (value === 'original') {
-      const c = cart;
-      api.readOriginal(c).then((bytes) => {
-        if (bytes) change((c) => api.useOriginal(c, bytes), c);
-      });
-    } else if (value === 'custom' || value === 'full') {
-      picking = value;
-      $('ed-logo-file').click();
-    }
-  });
-  $('ed-logo-file').addEventListener('change', async () => {
-    const c = cart;
-    const file = $('ed-logo-file').files[0];
-    $('ed-logo-file').value = '';
-    const use = picking === 'full' ? api.useFull : api.useLogo;
-    const bytes = await api.readLogo(file);
-    if (bytes) change((c) => use(c, bytes), c);
-  });
 
   $('ed-bg').addEventListener('click', () => toggle('ed-bg-pal'));
   $('ed-bg-presets').addEventListener('click', (e) => {
