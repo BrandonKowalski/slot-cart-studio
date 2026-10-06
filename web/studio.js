@@ -990,7 +990,6 @@ function changed(c, soon = false) {
 }
 
 const editor = createEditor({
-  carts: () => (session ? session.carts.filter((c) => c.platform === session.platform) : []),
   name: (c) => clean_label(c.stem),
   box: boxOf,
   draw: drawFace,

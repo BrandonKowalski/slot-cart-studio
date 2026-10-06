@@ -508,27 +508,22 @@ def main():
                 sys.exit('Undo did not give back the logo the chosen game replaced')
             page.eval("document.getElementById('ed-close').click()")
             print(f'asserted: choosing {donor["game"]} for {banded} brings that game\'s logo, and Undo takes it back')
-        # The editor: ◀ ▶ step through the shelf, and a click on another card moves it there.
+        # The editor: a click on another card moves it there.
         shelf = page.eval(SHELF)
         if len(shelf) < 3:
             sys.exit(f'the first shelf has {len(shelf)} carts; the editor checks need three')
         page.eval(EDIT % json.dumps(shelf[0]))
-        if not page.eval("document.getElementById('ed-prev').disabled"):
-            sys.exit('◀ is enabled on the first cart of the shelf')
-        page.eval("document.getElementById('ed-next').click()")
-        after_next = page.eval('window.__studio.editing()')
-        page.eval("document.getElementById('ed-prev').click()")
-        after_prev = page.eval('window.__studio.editing()')
+        if page.eval("!!document.getElementById('ed-prev') || !!document.getElementById('ed-next')"):
+            sys.exit('the editor still has ◀ ▶')
         page.eval('(' + CARD % json.dumps(shelf[2]) + ').click()')
         after_click = page.eval('window.__studio.editing()')
-        if (after_next, after_prev, after_click) != (shelf[1], shelf[0], shelf[2]):
-            sys.exit(f'the editor went to {after_next!r}, {after_prev!r}, {after_click!r}, '
-                     f'not {shelf[1]!r}, {shelf[0]!r}, {shelf[2]!r}')
+        if after_click != shelf[2]:
+            sys.exit(f'the editor went to {after_click!r}, not {shelf[2]!r}')
         outlined = page.eval("[...document.querySelectorAll('#grid > .cart.current')]"
                              ".map(c => c.querySelector('.stem').title)")
         if outlined != [shelf[2]]:
             sys.exit(f'the outlined cards are {outlined}, not just {shelf[2]!r}')
-        print('asserted: ◀ ▶ step through the shelf, and a click on a card moves the editor there')
+        print('asserted: the editor has no ◀ ▶, and a click on a card moves it there')
 
         # Every row is a step in the cart's history. Choosing the game it already has, or a file
         # that isn't a PNG, is none.

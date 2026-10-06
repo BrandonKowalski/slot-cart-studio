@@ -152,10 +152,6 @@ export function createEditor(api) {
     if (!c) return;
     if (!visited(c)) visit(c);
     $('ed-name').textContent = api.name(c);
-    const shelf = api.carts();
-    const at = shelf.indexOf(c);
-    $('ed-prev').disabled = at <= 0;
-    $('ed-next').disabled = at < 0 || at === shelf.length - 1;
     const face = api.face(c);
     $('ed-face').hidden = !face;
     if (face) api.draw($('ed-face'), face, c.platform);
@@ -225,14 +221,6 @@ export function createEditor(api) {
     document.body.classList.remove('editing');
   }
 
-  function move(by) {
-    const shelf = api.carts();
-    const next = shelf[shelf.indexOf(cart) + by];
-    if (!next) return;
-    open(next);
-    next.el.root.scrollIntoView({ block: 'nearest' });
-  }
-
   // A swatch's name, at once and kept inside the window; the browser's own tooltip is slow to come.
   function tip(b) {
     const t = $('ed-tip');
@@ -256,8 +244,6 @@ export function createEditor(api) {
   }
 
   $('ed-close').addEventListener('click', close);
-  $('ed-prev').addEventListener('click', () => move(-1));
-  $('ed-next').addEventListener('click', () => move(1));
 
   $('ed-game').addEventListener('click', () => {
     if (!toggle('ed-games')) return;
