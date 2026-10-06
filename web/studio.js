@@ -244,6 +244,7 @@ function trapped(e) {
   if (!(e instanceof WebAssembly.RuntimeError)) return false;
   if (!fatal) {
     fatal = true;
+    loading(null);
     console.error(e);
     $('progress').hidden = true;
     banner(FATAL);
@@ -469,7 +470,14 @@ async function takeLogo(c, file) {
   if (bytes && commit(c, () => useCustomLogo(c, bytes))) changed(c);
 }
 
+function loading(text) {
+  document.body.classList.toggle('loading', !!text);
+  $('loader').hidden = !text;
+  if (text) $('loader-text').textContent = text;
+}
+
 function progress(done, total, stem, verb = 'Reading') {
+  if (document.body.classList.contains('loading') && stem) loading(`${verb} ${done + 1} of ${total}: ${stem}`);
   $('progress').hidden = done >= total;
   $('bar').max = total;
   $('bar').value = done;
@@ -497,6 +505,7 @@ async function open(source) {
     return;
   }
   editor.close();
+  loading(null);
   session = { source, carts: source.carts.map(newCart) };
   $('banner').hidden = true;
   // A card opened mid-scan replaces identify()'s loop before it reaches progress(total, total, ''),
@@ -516,6 +525,7 @@ async function open(source) {
     banner('There are no .gba files in that card’s Games folder.');
     return;
   }
+  loading('Reading the card…');
   track(identify(session));
 }
 
@@ -577,7 +587,9 @@ async function identify(s) {
   // A card opened during the last read has its own bar up by now.
   if (s !== session) return;
   progress(total, total, '');
+  loading('Looking up the games…');
   await match(s);
+  if (s === session) loading(null);
 }
 
 async function match(s) {
@@ -768,9 +780,10 @@ function answerFill(fill) {
   s.fill = fill;
   for (const c of s.carts) {
     const v = view(c);
-    if (applyFill([v], fill)) c.choice = v.choice;
+    if (!applyFill([v], fill)) continue;
+    c.choice = v.choice;
     amend(c, (snap) => {
-      if (!snap.byHand && snap.choice !== 'card' && snap.choice !== null) snap.choice = fill;
+      if (snap.choice == null) snap.choice = fill;
     });
   }
   $('fill').close();

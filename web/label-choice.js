@@ -28,12 +28,12 @@ export function wears(c) {
   }
 }
 
-const fillable = (c) => !c.onCard && !c.error;
+const fillable = (c) => !c.onCard && !c.error && !c.byHand && c.choice == null;
 
 export function applyFill(carts, fill) {
   let n = 0;
   for (const c of carts) {
-    if (!fillable(c) || c.byHand || c.choice === fill) continue;
+    if (!fillable(c)) continue;
     c.choice = fill;
     n++;
   }

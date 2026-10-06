@@ -127,6 +127,10 @@ a{color:var(--ink)}
 .banner .key{margin-left:8px}
 .progress{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:24px 0 0;color:var(--muted);font-size:15px}
 .progress progress{width:min(320px,100%);accent-color:var(--shell-accent)}
+.loader{display:flex;flex-direction:column;align-items:center;gap:16px;margin:64px 0;color:var(--muted);font-size:15px;text-align:center;overflow-wrap:anywhere}
+.spinner{width:40px;height:40px;border:3px solid var(--housing);border-top-color:var(--shell-accent);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+body.loading #grid,body.loading .shelf-bar,body.loading #progress{display:none}
 /* The platform tabs and the write button share one row, pinned under the masthead so the button
    stays with the choices you just made while the carts scroll beneath. The shelf's edge runs
    under both. */

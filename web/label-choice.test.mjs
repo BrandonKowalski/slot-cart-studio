@@ -57,7 +57,7 @@ test('available says which tiles a cart can wear', () => {
   assert.equal(available(cart(), 'card'), false);
 });
 
-test('the fill skips carts on the card, set by hand, or in error', () => {
+test('the fill only touches carts with no label yet', () => {
   const carts = [
     cart(),
     cart({ onCard: true, choice: 'card' }),
@@ -65,8 +65,8 @@ test('the fill skips carts on the card, set by hand, or in error', () => {
     cart({ error: 'unreadable' }),
     cart({ choice: 'logo' }),
   ];
-  assert.equal(applyFill(carts, 'real'), 2);
-  assert.deepEqual(carts.map((c) => c.choice), ['real', 'card', 'logo', null, 'real']);
+  assert.equal(applyFill(carts, 'real'), 1);
+  assert.deepEqual(carts.map((c) => c.choice), ['real', 'card', 'logo', null, 'logo']);
 });
 
 test('reset goes back to the card label, or to the fill', () => {
@@ -88,6 +88,8 @@ test('the counts cover unlabelled carts only', () => {
     cart({ hasReal: false, hasLogo: false }),
     cart({ onCard: true, choice: 'card' }),
     cart({ error: 'x' }),
+    cart({ choice: 'real' }),
+    cart({ choice: 'logo', byHand: true }),
   ];
   assert.deepEqual(fillCounts(carts), { unlabelled: 3, real: 1, logo: 2, neither: 1 });
   assert.deepEqual(fillCounts([cart({ onCard: true })]), { unlabelled: 0, real: 0, logo: 0, neither: 0 });
