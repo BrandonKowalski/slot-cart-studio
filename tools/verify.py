@@ -89,12 +89,13 @@ PICK_HIT = """
   return true;
 })(%s)
 """
-# Hand the Logo row's Custom picker a file that is not a PNG.
+# Hand the Custom picker a file that is not a PNG.
 PICK_JUNK = """
 (() => {
+  document.querySelector('#ed-tiles [data-kind="customLogo"]').click();
   const files = new DataTransfer();
   files.items.add(new File(['not a png'], 'notes.png', { type: 'image/png' }));
-  const input = document.getElementById('ed-logo-file');
+  const input = document.getElementById('ed-file');
   input.files = files.files;
   input.dispatchEvent(new Event('change'));
   return true;
@@ -108,13 +109,14 @@ UNDO_FOCUSED = ("(document.activeElement || document.body).dispatchEvent("
 DRAG_ONLY = """
 (v => { const i = document.getElementById('ed-bg-custom'); i.value = v; i.dispatchEvent(new Event('input')); })(%s)
 """
-# Hand the Logo row's Custom picker the PNG at `url`.
+# Hand the Custom picker the PNG at `url`.
 PICK_LOGO = """
 (async url => {
+  document.querySelector('#ed-tiles [data-kind="customLogo"]').click();
   const blob = await (await fetch(url)).blob();
   const files = new DataTransfer();
   files.items.add(new File([blob], 'logo.png', { type: 'image/png' }));
-  const input = document.getElementById('ed-logo-file');
+  const input = document.getElementById('ed-file');
   input.files = files.files;
   input.dispatchEvent(new Event('change'));
   return true;
@@ -237,6 +239,9 @@ def open_card(page, card, paths):
     """Hands the page a card's files and waits for every cart to settle. Returns their states."""
     print('opened', page.eval(OPEN_FILES % (json.dumps(card), json.dumps(paths))), 'files')
     wait(lambda: page.eval('window.__studio.idle()'), 600, 'every cart to be looked up')
+    if page.eval("document.getElementById('fill').open"):
+        page.eval("document.getElementById('fill-logo').click()")
+        wait(lambda: page.eval('window.__studio.idle()'), 600, 'every cart to be filled')
     states = page.eval('window.__studio.states()')
     for s in states:
         print(f"  {s['state']:<10} {s['deep']}  {s['stem']}  ->  {s['game']}")
@@ -473,9 +478,9 @@ def main():
             picked = state_of(page, banded)
             if picked['band'] or picked['deep'].lstrip('#') == looks[banded]['ground']:
                 sys.exit(f'{banded} still wears its look after a logo was picked for it: {picked}')
-            custom = page.eval("document.querySelector('#ed-logo [data-value=\"custom\"]').getAttribute('aria-pressed')")
+            custom = page.eval("document.querySelector('#ed-tiles [data-kind=\"customLogo\"]').getAttribute('aria-pressed')")
             if custom != 'true':
-                sys.exit('the Logo row does not say Custom after a logo was picked')
+                sys.exit('the Custom logo tile is not chosen after a logo was picked')
             page.eval("document.getElementById('ed-undo').click()")
             wait(lambda: page.eval(CART_CANVAS % json.dumps(banded)) == on, 20, 'Undo to give the look back')
             if not state_of(page, banded)['band']:
@@ -542,7 +547,7 @@ def main():
         page.eval(PICK_JUNK)
         wait(lambda: 'notes.png' in page.eval("document.getElementById('banner').textContent"), 10,
              'the banner for a logo that is not a PNG')
-        logo = page.eval("document.querySelector('#ed-logo [data-value=\"auto\"]').getAttribute('aria-pressed')")
+        logo = page.eval("document.querySelector('#ed-tiles [data-kind=\"logo\"]').getAttribute('aria-pressed')")
         if not page.eval("document.getElementById('ed-undo').disabled") or logo != 'true':
             sys.exit('a file that is not a PNG changed the cart')
         page.eval("document.getElementById('banner').hidden = true")
@@ -767,13 +772,16 @@ def main():
         presets = [p.split('\t')[1] for p in page.eval('window.__studio.shellPresets()')]
         preset = presets[5]
         page.eval(EDIT % json.dumps(chosen))
-        disabled = page.eval(
-            "['ed-game', 'ed-bg', 'ed-shell'].map(id => document.getElementById(id).disabled)"
-            ".concat([[...document.querySelectorAll('#ed-logo button')].every(b => b.disabled)])"
+        wait(lambda: page.eval('window.__studio.idle()'), 60, f'{chosen} to be looked up for its tiles')
+        seen = page.eval(
+            "[document.querySelector('#ed-tiles [data-kind=\"card\"]').hidden,"
+            " document.querySelector('#ed-tiles [data-kind=\"card\"]').getAttribute('aria-pressed'),"
+            " document.getElementById('ed-bg').closest('.prop').hidden,"
+            " document.getElementById('ed-shell').disabled]"
         )
-        if disabled != [True, True, False, True]:
-            sys.exit(f'{chosen} has its label: Game, Background and Logo should be off and Shell on, got {disabled}')
-        print(f'asserted: {chosen}, whose label is on the card, can change its shell and nothing else')
+        if seen != [False, 'true', True, False]:
+            sys.exit(f'{chosen} has its label: On the card should be shown and chosen, Background hidden and Shell on, got {seen}')
+        print(f'asserted: {chosen}, whose label is on the card, wears it as On the card and can change its shell')
 
         was = shell_of(page, chosen)
         pick_shell(page, 5)
@@ -819,15 +827,16 @@ def main():
         # Replace: a label already on the card, redone on purpose.
         replaced = 'Metroid Fusion'
         page.eval(EDIT % json.dumps(replaced))
-        before = page.eval("[!document.getElementById('ed-label-row').hidden, "
-                           "document.querySelector('#ed-label [data-value=\"keep\"]').getAttribute('aria-pressed'), "
-                           "document.getElementById('ed-bg').disabled]")
+        wait(lambda: page.eval('window.__studio.idle()'), 120, f'{replaced} to be looked up for its tiles')
+        before = page.eval("[!document.querySelector('#ed-tiles [data-kind=\"card\"]').hidden, "
+                           "document.querySelector('#ed-tiles [data-kind=\"card\"]').getAttribute('aria-pressed'), "
+                           "document.getElementById('ed-bg').closest('.prop').hidden]")
         if before != [True, 'true', True]:
-            sys.exit(f'{replaced} should offer Keep, pressed, with Background off: {before}')
-        page.eval("document.querySelector('#ed-label [data-value=\"replace\"]').click()")
+            sys.exit(f'{replaced} should offer On the card, chosen, with Background hidden: {before}')
+        page.eval("document.querySelector('#ed-tiles [data-kind=\"logo\"]').click()")
         wait(lambda: state_of(page, replaced)['state'] == 'ready', 120, f'{replaced} to be dressed for a new label')
-        if page.eval("document.getElementById('ed-bg').disabled"):
-            sys.exit(f'Background is still off on {replaced} after Replace')
+        if page.eval("document.getElementById('ed-bg').closest('.prop').hidden"):
+            sys.exit(f'Background is still hidden on {replaced} after Logo Only')
         page.eval("document.getElementById('ed-undo').click()")
         after_undo = state_of(page, replaced)['state']
         page.eval("document.getElementById('ed-redo').click()")
@@ -888,6 +897,9 @@ def main():
           return true;
         })(%s)""" % json.dumps(direct))
         wait(lambda: page.eval('window.__studio.idle()'), 600, 'the directory card to be looked up')
+        if page.eval("document.getElementById('fill').open"):
+            page.eval("document.getElementById('fill-logo').click()")
+            wait(lambda: page.eval('window.__studio.idle()'), 600, 'the directory card to be filled')
         page.eval(EDIT % json.dumps('Advance Wars'))
         pick_shell(page, 5)
         page.eval("document.getElementById('ed-close').click()")
@@ -927,7 +939,8 @@ def main():
         })()"""
         was = page.eval(digest)
         page.eval(EDIT % json.dumps('Advance Wars'))
-        page.eval("document.querySelector('#ed-label [data-value=\"replace\"]').click()")
+        wait(lambda: page.eval('window.__studio.idle()'), 120, 'Advance Wars to be looked up for its tiles')
+        page.eval("document.querySelector('#ed-tiles [data-kind=\"logo\"]').click()")
         wait(lambda: state_of(page, 'Advance Wars')['state'] == 'ready', 120, 'Advance Wars to be dressed for a new label')
         background(page, '#123456')
         page.eval("document.getElementById('ed-close').click()")

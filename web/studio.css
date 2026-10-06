@@ -309,6 +309,6 @@ body.editing .cart:not(.current){opacity:.45}
 .tile canvas{width:100%;height:auto;image-rendering:pixelated}
 .tile .t{font-size:13px;font-weight:600}
 .tile small{display:block;color:var(--muted);font-size:11px;font-weight:400}
-.tile .badge{position:absolute;top:3px;right:3px;padding:1px 6px;border-radius:8px;background:#3b5;color:#031;font-size:10px;font-weight:700}
+.tile .badge{position:absolute;top:3px;right:3px;padding:1px 5px;border-radius:3px;background:#3b5;color:#031;font-size:10px;font-weight:700}
 .tile .add{display:grid;place-items:center;aspect-ratio:1.6;border:2px dashed #55555f;border-radius:4px;color:var(--muted);font-size:24px}
 .tile.has-file .add{display:none}
