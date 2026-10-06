@@ -81,6 +81,7 @@ function newCart({ platform, stem, file }) {
     droppedBytes: null,
     // A whole label of the person's own, used as it is instead of a logo on a ground.
     fullBytes: null,
+    textureBytes: null,
     rejected: false,
     boxHue: null,
     // How bright the logo is decides which way the ground goes, so it is read once with the logo
@@ -154,7 +155,7 @@ const mergedShells = (s, carts, values) =>
   );
 const SHELL_FILE = 'Labels/cart_shell.ini';
 
-// A Label holds its 1280x640 composition in WASM memory, which never shrinks and stops at 4 GiB.
+// A Label holds its composition in WASM memory, which never shrinks and stops at 4 GiB.
 // One kept per cart runs a big card out of it, so a Label lives only for the call that needs it.
 function withLabel(bytes, deep, platform, use, band = null) {
   const label = band
@@ -311,6 +312,7 @@ function chooseGame(c, name) {
   c.droppedBytes = null;
   c.fullBytes = null;
   c.logoBytes = null;
+  c.textureBytes = null;
   c.looking = true;
   track(redress(session, c));
 }
@@ -365,6 +367,33 @@ function autoLogo(c) {
 function useFull(c, bytes) {
   c.fullBytes = bytes;
   c.droppedBytes = null;
+}
+
+function textureOf(c) {
+  const key = c.rejected ? null : artKey(c);
+  return (key && artIndex?.[key]?.['support-texture']) || null;
+}
+
+async function readOriginal(c) {
+  if (c.textureBytes) return c.textureBytes;
+  const path = textureOf(c);
+  if (!path) return null;
+  let bytes = null;
+  try {
+    bytes = await limit(() => fetchArt(ART_BASE, path));
+    if (fatal) return null;
+    if (bytes && !readable(bytes)) bytes = null;
+  } catch (e) {
+    if (trapped(e)) return null;
+    bytes = null;
+  }
+  if (!bytes) banner('The original label would not load');
+  return bytes;
+}
+
+function useOriginal(c, bytes) {
+  c.textureBytes = bytes;
+  useFull(c, bytes);
 }
 
 // A logo dropped on a card is Logo → Custom without opening the editor.
@@ -846,6 +875,9 @@ const editor = createEditor({
   readLogo,
   useLogo,
   useFull,
+  hasOriginal: (c) => !!textureOf(c),
+  readOriginal,
+  useOriginal,
   autoLogo,
   background: (c) => ({ rgb: c.deep ?? baseDeep(c), auto: !c.userHue }),
   setBackground,

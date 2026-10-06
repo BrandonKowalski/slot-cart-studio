@@ -5,6 +5,7 @@ export const EDITABLE = [
   'rejected',
   'droppedBytes',
   'fullBytes',
+  'textureBytes',
   'logoBytes',
   'logoLuma',
   'look',

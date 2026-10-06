@@ -215,6 +215,19 @@ def fetch(url):
     return body if len(body) >= 256 else None
 
 
+def as_png(body):
+    if not body or body.startswith(b'\x89PNG\r\n\x1a\n'):
+        return body
+    try:
+        import io
+        from PIL import Image
+        out = io.BytesIO()
+        Image.open(io.BytesIO(body)).save(out, 'PNG')
+        return out.getvalue()
+    except Exception:
+        return None
+
+
 def save(body, dest):
     if not body:
         return False
@@ -278,7 +291,7 @@ def main():
     ap.add_argument('--dat', choices=sorted(PLATFORMS) + ['all'],
                     help='every dump a platform has, not just a card; "all" for every platform')
     ap.add_argument('--out', help='where the set is written')
-    ap.add_argument('--media', default='wheel,look',
+    ap.add_argument('--media', default='wheel,look,support-texture',
                     help='comma separated ScreenScraper media types, or look for the label measured from the cart scan')
     ap.add_argument('--relook', action='store_true', help='measure every look again')
     ap.add_argument('--probe', help='print every media one rom has, and stop')
@@ -363,7 +376,7 @@ def main():
                     measured = look.measure_look(body) if body else None
                     if measured:
                         got.append(want)
-                elif save(body, root / want / f'{crc}.png'):
+                elif save(as_png(body), root / want / f'{crc}.png'):
                     got.append(want)
             except Exception:
                 pass

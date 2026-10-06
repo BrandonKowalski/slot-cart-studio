@@ -131,7 +131,8 @@ export function createEditor(api) {
     $('ed-game').disabled = !label;
     $('ed-game').querySelector('span').textContent = api.matched(c) ? c.game : 'Choose a game';
     enable('ed-logo', label);
-    press('ed-logo', c.fullBytes ? 'full' : c.droppedBytes ? 'custom' : 'auto');
+    $('ed-logo').querySelector('[data-value="original"]').disabled = !label || !api.hasOriginal(c);
+    press('ed-logo', c.fullBytes ? (c.fullBytes === c.textureBytes ? 'original' : 'full') : c.droppedBytes ? 'custom' : 'auto');
 
     const bg = api.background(c);
     $('ed-bg').disabled = !api.canBackground(c);
@@ -242,7 +243,12 @@ export function createEditor(api) {
   $('ed-logo').addEventListener('click', (e) => {
     const value = e.target.closest('button')?.dataset.value;
     if (value === 'auto') change(api.autoLogo);
-    else if (value === 'custom' || value === 'full') {
+    else if (value === 'original') {
+      const c = cart;
+      api.readOriginal(c).then((bytes) => {
+        if (bytes) change((c) => api.useOriginal(c, bytes), c);
+      });
+    } else if (value === 'custom' || value === 'full') {
       picking = value;
       $('ed-logo-file').click();
     }
