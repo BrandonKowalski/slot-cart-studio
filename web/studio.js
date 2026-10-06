@@ -29,7 +29,7 @@ import { fetchArt, fetchDat, fetchIndex, fetchThumb, limiter } from './libretro.
 import { createEditor } from './editor.js';
 import { amend, commit } from './history.js';
 import { smallPrint } from './smallprint.js';
-import { applyFill, available, fillCounts, fillText, reset, wears } from './label-choice.js';
+import { applyFill, autoFill, available, fillCounts, fillText, reset, wears } from './label-choice.js';
 
 const $ = (id) => document.getElementById(id);
 const limit = limiter(4);
@@ -260,6 +260,7 @@ const noImage = (e) => {
 
 function describe(c, state) {
   if (state === 'error') return c.error;
+  if (state === 'looking' && !c.looking) return 'Loading the real label…';
   if (state === 'looking') return c.crc === null ? 'Reading the ROM…' : 'Looking it up…';
   if (state === 'unfilled') return '';
   return '';
@@ -409,7 +410,7 @@ function useCustomLabel(c, bytes) {
 
 function choose(c, kind) {
   c.choice = kind;
-  c.byHand = true;
+  c.byHand = kind !== 'card';
   if (!c.userHue) c.deep = null;
   if (kind !== 'card' && !c.dressed) ensureTiles(c);
   else if (needsReal(c)) track(fetchReal(session, c));
@@ -434,23 +435,31 @@ function ensureTiles(c) {
   if (c.dressed && realPathOf(c) && !realOf(c)) track(fetchReal(session, c));
 }
 
-async function fetchReal(s, c) {
+function fetchReal(s, c) {
   const path = realPathOf(c);
-  if (!path || realOf(c)) return;
-  const real = { path, bytes: null, failed: false };
+  if (!path) return Promise.resolve();
+  if (realOf(c)) return realOf(c).pending;
+  const real = { path, bytes: null, failed: false, pending: null };
   c.real = real;
-  let bytes = null;
-  try {
-    bytes = await limit(async () => (s === session && !fatal ? fetchArt(ART_BASE, path) : null));
-    if (bytes && !readable(bytes)) bytes = null;
-  } catch (e) {
-    if (trapped(e)) return;
-    bytes = null;
-  }
-  if (s !== session || fatal) return;
-  if (bytes) real.bytes = bytes;
-  else real.failed = true;
-  paint(c);
+  real.pending = (async () => {
+    let bytes = null;
+    try {
+      bytes = await limit(async () => (s === session && !fatal ? fetchArt(ART_BASE, path) : null));
+      if (bytes && !readable(bytes)) bytes = null;
+    } catch (e) {
+      if (trapped(e)) return;
+      bytes = null;
+    }
+    if (s !== session || fatal) return;
+    if (bytes) real.bytes = bytes;
+    else real.failed = true;
+    paint(c);
+  })();
+  return real.pending;
+}
+
+function retryReal(c) {
+  if (realOf(c)?.failed) c.real = null;
 }
 
 const needsReal = (c) => wearing(c).kind === 'real' && !realOf(c);
@@ -597,7 +606,7 @@ async function match(s) {
   $('banner').hidden = true;
   const pending = s.carts.filter((c) => c.crc !== null && !c.game && !c.existing && !c.error);
   await Promise.all(pending.map((c) => art(s, c)));
-  if (s === session && !fatal && s.fill == null) await askFill(s);
+  if (s === session && !fatal && s.fill == null) await fillOrAsk(s);
 }
 
 async function art(s, c) {
@@ -663,6 +672,7 @@ async function dress(s, c) {
   if (!c.userHue) c.deep = null;
   c.dressed = true;
   if (needsReal(c)) await fetchReal(s, c);
+  if (editor.current() === c) ensureTiles(c);
 }
 
 // The platforms this card actually holds, in the studio's shelf order.
@@ -706,11 +716,18 @@ function updateWriteBar() {
   $('write').textContent = session.source.direct ? 'Write to card' : 'Download zip';
 }
 
-const unlabelled = (s) => fillCounts(s.carts.map(view)).unlabelled;
-
 function updateFillButton() {
   if (!session) return;
-  $('fill-open').hidden = unlabelled(session) === 0;
+  const counts = fillCounts(session.carts.map(view));
+  $('fill-open').hidden = counts.unlabelled === 0 || (session.fill != null && autoFill(counts) !== null);
+}
+
+async function fillOrAsk(s) {
+  const counts = fillCounts(s.carts.map(view));
+  if (counts.unlabelled === 0 || s !== session || fatal) return;
+  const auto = autoFill(counts);
+  if (auto) answerFill(auto);
+  else await askFill(s);
 }
 
 async function askFill(s) {
@@ -739,7 +756,10 @@ async function askFill(s) {
       drawFace(canvas, face, sample.platform);
     }
   }
-  if (!$('fill').open) $('fill').showModal();
+  if (!$('fill').open) {
+    $('fill').showModal();
+    $('fill').focus();
+  }
 }
 
 function answerFill(fill) {
@@ -976,6 +996,8 @@ const editor = createEditor({
   canBackground: (c) => stateOf(c) === 'ready' && ['logo', 'customLogo'].includes(wearing(c).kind),
   wearing,
   available: (c, kind) => available(view(c), kind),
+  realFailed: (c) => !!realOf(c)?.failed,
+  retryReal,
   fill: () => session?.fill ?? null,
   tileFace: (c, kind) => {
     try {

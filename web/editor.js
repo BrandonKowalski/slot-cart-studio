@@ -126,13 +126,14 @@ export function createEditor(api) {
     for (const tile of $('ed-tiles').querySelectorAll('.tile')) {
       const kind = tile.dataset.kind;
       const ok = api.available(c, kind);
+      const retry = kind === 'real' && api.realFailed(c);
       tile.hidden = kind === 'card' && !ok;
-      tile.disabled = !can || (!ok && kind !== 'customLogo' && kind !== 'customLabel');
+      tile.disabled = !can || (!ok && !retry && kind !== 'customLogo' && kind !== 'customLabel');
       tile.setAttribute('aria-pressed', String(wearing.kind === kind));
       const badge = tile.querySelector('.badge');
       if (badge) badge.hidden = fill !== kind;
       const small = tile.querySelector('small');
-      if (small && (kind === 'real' || kind === 'logo')) small.textContent = ok ? '' : 'None for this game';
+      if (small && (kind === 'real' || kind === 'logo')) small.textContent = retry ? 'Couldn’t load. Click to try again' : ok ? '' : 'None for this game';
       const hasFile = kind === 'customLogo' ? !!c.customLogoBytes : kind === 'customLabel' ? !!c.customLabelBytes : true;
       tile.classList.toggle('has-file', hasFile);
       if (small && (kind === 'customLogo' || kind === 'customLabel')) small.textContent = hasFile ? 'Click again to use another file' : '';
@@ -278,6 +279,7 @@ export function createEditor(api) {
       $('ed-file').click();
       return;
     }
+    if (kind === 'real') api.retryReal(c);
     if (kind === 'customLogo') change((c) => api.useCustomLogo(c, file));
     else if (kind === 'customLabel') change((c) => api.useCustomLabel(c, file));
     else change((c) => api.choose(c, kind));

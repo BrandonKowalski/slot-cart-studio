@@ -62,3 +62,8 @@ export function fillText({ unlabelled }) {
     ? { title: '1 cart has no label yet', question: 'How should the studio fill it?' }
     : { title: `${unlabelled} carts have no label yet`, question: 'How should the studio fill them?' };
 }
+
+export function autoFill({ real, logo }) {
+  if (real > 0 && logo > 0) return null;
+  return real > 0 ? 'real' : 'logo';
+}

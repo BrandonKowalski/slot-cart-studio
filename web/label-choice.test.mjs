@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyFill, available, fillCounts, fillText, reset, wears } from './label-choice.js';
+import { applyFill, autoFill, available, fillCounts, fillText, reset, wears } from './label-choice.js';
 
 const LOGO = new Uint8Array([1]);
 const LABEL = new Uint8Array([2]);
@@ -102,4 +102,11 @@ test('the prompt says how many carts, and asks how to fill them', () => {
     title: '1 cart has no label yet',
     question: 'How should the studio fill it?',
   });
+});
+
+test('the fill is only asked when both styles have art somewhere', () => {
+  assert.equal(autoFill({ unlabelled: 3, real: 2, logo: 3, neither: 0 }), null);
+  assert.equal(autoFill({ unlabelled: 3, real: 0, logo: 3, neither: 0 }), 'logo');
+  assert.equal(autoFill({ unlabelled: 3, real: 3, logo: 0, neither: 0 }), 'real');
+  assert.equal(autoFill({ unlabelled: 1, real: 0, logo: 0, neither: 1 }), 'logo');
 });
