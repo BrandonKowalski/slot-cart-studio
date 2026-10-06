@@ -139,7 +139,7 @@ body.loading #grid,body.loading .shelf-bar,body.loading #progress{display:none}
 .write-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:14px;margin-left:auto}
 .write-bar .btn{display:inline-flex;align-items:center;height:var(--shelf-row);padding-top:0;padding-bottom:0}
 .fill-open{margin:0 0 6px auto}
-.fill-open+.write-bar{margin-left:0}
+.fill-open:not([hidden])+.write-bar{margin-left:0}
 .fill{max-width:min(520px,calc(100vw - 32px));padding:22px;border:0;border-radius:12px;background:var(--housing);color:var(--ink);box-shadow:0 24px 60px rgba(0,0,0,.6)}
 .fill::backdrop{background:rgba(10,10,14,.72)}
 .fill h2{margin:0 0 6px;font-size:19px}

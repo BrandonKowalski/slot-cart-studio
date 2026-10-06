@@ -728,7 +728,7 @@ function updateWriteBar() {
   // Nothing to write means no button at all.
   $('write-bar').hidden = n === 0;
   $('write').disabled = n === 0 || writing || fatal;
-  $('write').textContent = session.source.direct ? 'Write to card' : 'Download zip';
+  $('write').textContent = session.source.direct ? 'Write to card' : 'Download ZIP';
 }
 
 function updateFillButton() {
