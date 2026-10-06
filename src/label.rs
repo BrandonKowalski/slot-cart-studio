@@ -497,22 +497,32 @@ mod tests {
     }
 
     #[test]
-    fn a_tall_logo_fills_rows_70_to_493() {
+    fn a_tall_logo_fills_the_box_from_its_top_row() {
         let (deep, pale) = ground_for(30);
         let label = compose(&solid(100, 100), 100, 100, W, H, deep, pale, None);
         let (first, last) = logo_rows(&label, 30);
-        assert!((69..=71).contains(&first), "first logo row {first}");
-        assert!((491..=493).contains(&last), "last logo row {last}");
+        let row = |r: f32| (r * H as f32 / 640.0).round() as u32;
+        assert!(
+            (row(70.0) - 1..=row(70.0) + 1).contains(&first),
+            "first logo row {first}"
+        );
+        assert!(
+            (row(493.0) - 2..=row(493.0)).contains(&last),
+            "last logo row {last}"
+        );
         assert!(near(at(&label, 640, 280), [INK[0], INK[1], INK[2]], 2));
     }
 
     #[test]
-    fn a_wide_logo_centres_on_row_320() {
+    fn a_wide_logo_centres_on_the_middle_row() {
         let (deep, pale) = ground_for(30);
         let label = compose(&solid(400, 40), 400, 40, W, H, deep, pale, None);
         let (first, last) = logo_rows(&label, 30);
         let mid = (first + last) as f32 / 2.0;
-        assert!((mid - 320.0).abs() <= 1.0, "logo centred on row {mid}");
+        assert!(
+            (mid - H as f32 / 2.0).abs() <= 1.0,
+            "logo centred on row {mid}"
+        );
         // 920 wide from 400 is a scale of 2.3, so 92 rows.
         assert!((90..=93).contains(&(last - first)), "rows {first}..{last}");
     }
