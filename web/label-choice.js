@@ -57,18 +57,8 @@ export function fillCounts(carts) {
   return counts;
 }
 
-export function fillText({ unlabelled, real, logo, neither }) {
-  if (unlabelled === 1) {
-    const has = real && logo ? 'It has a real label and a logo.' : real ? 'It has a real label but no logo.' : logo ? 'It has a logo but no real label.' : 'It has no real label or logo, so it will need art of your own.';
-    return { title: '1 Cart has no label yet', question: 'How should the studio fill it?', body: `${has} You can change it afterwards.` };
-  }
-  const parts = [];
-  parts.push(real === unlabelled ? `All ${real} have a real label.` : `${real} of them have a real label.`);
-  const noReal = unlabelled - real - neither;
-  const noLogo = unlabelled - logo - neither;
-  if (noReal > 0) parts.push(noReal === 1 ? 'The one that doesn’t will use Logo Only instead.' : `The ${noReal} that don’t will use Logo Only instead.`);
-  if (noLogo > 0) parts.push(`${noLogo} ${noLogo === 1 ? 'has' : 'have'} no logo and will use Real Label if you pick Logo Only.`);
-  if (neither > 0) parts.push(`${neither} ${neither === 1 ? 'has' : 'have'} no logo either and will need art of your own.`);
-  parts.push('You can change any cart afterwards.');
-  return { title: `${unlabelled} Carts have no label yet`, question: 'How should the studio fill them?', body: parts.join(' ') };
+export function fillText({ unlabelled }) {
+  return unlabelled === 1
+    ? { title: '1 cart has no label yet', question: 'How should the studio fill it?' }
+    : { title: `${unlabelled} carts have no label yet`, question: 'How should the studio fill them?' };
 }

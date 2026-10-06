@@ -716,10 +716,9 @@ function updateFillButton() {
 async function askFill(s) {
   const counts = fillCounts(s.carts.map(view));
   if (counts.unlabelled === 0 || s !== session || fatal) return;
-  const { title, question, body } = fillText(counts);
+  const { title, question } = fillText(counts);
   $('fill-title').textContent = title;
   $('fill-question').textContent = question;
-  $('fill-body').textContent = body;
   const sample =
     s.carts.find((c) => !c.existingPng && view(c).hasReal && view(c).hasLogo) ??
     s.carts.find((c) => !c.existingPng && (view(c).hasReal || view(c).hasLogo));
