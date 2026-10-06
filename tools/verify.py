@@ -73,7 +73,7 @@ CANVAS_HIDDEN = """
 """
 # One cart's card element, by stem, as a JS expression.
 CARD = "document.querySelectorAll('#grid > .cart')[window.__studio.states().findIndex(s => s.stem === %s)]"
-EDIT = '(' + CARD + ").querySelector('.edit-open').click()"
+EDIT = '(' + CARD + ").click()"
 # The stems on the shelf showing, in order.
 SHELF = ("[...document.querySelectorAll('#grid > .cart')].filter(c => !c.hidden)"
          ".map(c => c.querySelector('.stem').title)")
@@ -755,13 +755,14 @@ def main():
             sys.exit(f'the card\'s two cart_shell.ini files were not read: {shells}')
         print('asserted: the card\'s shells were read, Labels/cart_shell.ini over System\'s')
 
-        no_pencil = page.eval(
+        not_buttons = page.eval(
             "[...document.querySelectorAll('#grid > .cart')].filter(c => !c.hidden"
-            " && c.querySelector('.edit-open').offsetParent === null).map(c => c.querySelector('.stem').title)"
+            " && (c.querySelector('.edit-open') || c.getAttribute('role') !== 'button' || c.tabIndex !== 0))"
+            ".map(c => c.querySelector('.stem').title)"
         )
-        if no_pencil:
-            sys.exit(f'these carts show no ✎: {no_pencil}')
-        print('asserted: every cart on the shelf shows its ✎')
+        if not_buttons:
+            sys.exit(f'these carts are not one button that opens the editor: {not_buttons}')
+        print('asserted: every cart on the shelf is itself the button that opens the editor, with no ✎')
 
         chosen = 'Advance Wars'
         presets = [p.split('\t')[1] for p in page.eval('window.__studio.shellPresets()')]

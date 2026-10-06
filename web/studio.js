@@ -283,9 +283,12 @@ function buildCard(c) {
     .flatMap((group) => group.split(','))
     .map((tag) => tag.trim())
     .filter(Boolean);
-  q('.edit-open').addEventListener('click', () => editor.open(c));
-  root.addEventListener('click', () => {
-    if (editor.current()) editor.open(c);
+  root.setAttribute('aria-label', `Edit ${clean_label(c.stem)}`);
+  root.addEventListener('click', () => editor.open(c));
+  root.addEventListener('keydown', (e) => {
+    if (e.target !== root || (e.key !== 'Enter' && e.key !== ' ')) return;
+    e.preventDefault();
+    editor.open(c);
   });
   // Always taken, so a file dropped on a cart that can't use it doesn't navigate the page away.
   c.el.face.addEventListener('dragover', (e) => {
