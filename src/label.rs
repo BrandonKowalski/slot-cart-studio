@@ -1,4 +1,4 @@
-//! The house style: a game's logo on a two-stop diagonal gradient, 1280x640.
+//! The house style: a game's logo on a two-stop diagonal gradient.
 
 use resvg::tiny_skia::{FilterQuality, IntSize, Pixmap, PixmapPaint, Transform};
 use slot_store::Platform;
@@ -6,17 +6,16 @@ use slot_store::Platform;
 use crate::{art, face, hue};
 
 pub const W: u32 = 1280;
-pub const H: u32 = 640;
+pub const H: u32 = 661;
 
 /// The Game Boy label, at its own well's proportion rather than the GBA well's. slot fills a
 /// well by covering it, so a wide label on the near-square Game Boy well loses its sides —
-/// Metal Gear Solid read "METAL GEA". 176:150 is that well; the size is chosen so composing one
+/// Metal Gear Solid read "METAL GEA". The size is chosen so composing one
 /// costs about what a GBA label costs, because this is held in wasm memory a cart at a time.
 pub const GB_W: u32 = 1024;
-pub const GB_H: u32 = 873;
+pub const GB_H: u32 = 901;
 
-/// The label a platform's well wants. The GBA label stays exactly 1280x640: that shape was
-/// settled by eye, and every label already written to a card has it.
+/// The label a platform's well wants.
 pub fn size(platform: Platform) -> (u32, u32) {
     match platform {
         Platform::Gba => (W, H),
@@ -28,10 +27,10 @@ pub fn size(platform: Platform) -> (u32, u32) {
 /// one: a label of another shape has to place its logo in the same relative place, not at
 /// offsets measured on a 1280 by 640.
 const BOX_W_OF: f32 = 920.0 / W as f32;
-const BOX_H_OF: f32 = 423.0 / H as f32;
+const BOX_H_OF: f32 = 423.0 / 640.0;
 /// Where a logo that fills the box's height starts. A wider logo centres on `MID_ROW_OF` instead.
-const TALL_TOP_OF: f32 = 70.0 / H as f32;
-const MID_ROW_OF: f32 = 320.0 / H as f32;
+const TALL_TOP_OF: f32 = 70.0 / 640.0;
+const MID_ROW_OF: f32 = 320.0 / 640.0;
 /// Bounds ignore the faint fringe some rips carry around a logo.
 const ALPHA_EDGE: u8 = 16;
 
@@ -214,8 +213,7 @@ impl Band {
 }
 
 /// The part of a label slot shows, as x0, y0, x1, y1. slot covers its well with the label, so a
-/// label of another shape loses rows or columns: a GBA label's 2:1 loses some top and bottom to
-/// the 196 by 86 well.
+/// label of another shape loses rows or columns.
 fn shown(lw: u32, lh: u32) -> (u32, u32, u32, u32) {
     let (ww, wh) = if (lw, lh) == (W, H) {
         (crate::cart::LABEL_W, crate::cart::LABEL_H)
@@ -547,7 +545,7 @@ mod tests {
     }
 
     #[test]
-    fn the_png_is_1280_by_640_rgb() {
+    fn the_png_is_rgb_at_the_gba_size() {
         let mut logo = Vec::new();
         {
             let mut enc = png::Encoder::new(&mut logo, 8, 4);
@@ -578,7 +576,7 @@ mod tests {
     }
 
     /// A Game Boy label is its own well's shape, not the GBA one's. slot covers a well with what
-    /// it is given, so a 2.0 label on a 1.17 well loses its sides: composing at the well's ratio
+    /// it is given, so a wide label on a near-square well loses its sides: composing at the well's ratio
     /// is what stops a wide wordmark being cropped to its middle.
     #[test]
     fn a_game_boy_label_is_the_shape_of_its_own_well() {
@@ -586,12 +584,11 @@ mod tests {
         assert_eq!(size(Platform::Gb), (GB_W, GB_H));
         assert_eq!(size(Platform::Gbc), (GB_W, GB_H));
 
-        // slot's Game Boy well is 176 x 150; the label matches that ratio to within a percent.
-        let want = 176.0 / 150.0;
+        let want = crate::cart::GB_LABEL_W as f32 / crate::cart::GB_LABEL_H as f32;
         let got = GB_W as f32 / GB_H as f32;
         assert!((got - want).abs() < 0.01, "{got} is not the well's {want}");
 
-        // And what comes out carries it: a GBA label is still 1280 by 640, a Game Boy one is not.
+        // And what comes out carries it.
         let mut logo = Vec::new();
         {
             let mut enc = png::Encoder::new(&mut logo, 8, 4);
@@ -710,7 +707,7 @@ mod tests {
         }
     }
 
-    /// A square scan on the 2:1 GBA label loses its top and bottom, as slot's cover would, rather
+    /// A square scan on the GBA label loses its top and bottom, as slot's cover would, rather
     /// than shrinking to fit between bars.
     #[test]
     fn a_full_label_is_cropped_to_fill_not_shrunk() {

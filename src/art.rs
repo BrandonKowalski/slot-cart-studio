@@ -112,7 +112,7 @@ pub(crate) fn decode(png: &[u8]) -> Option<(Vec<u8>, u32, u32)> {
     let mut reader = dec.read_info().ok()?;
     // Unlike slot's art.rs, a frame over 64 MiB is refused before it is allocated. The limit above
     // doesn't cover this buffer, which is sized from the header alone, so a 45-byte PNG can ask
-    // for gigabytes; on wasm32 that traps and leaves the page unusable. A label is 1280x640.
+    // for gigabytes; on wasm32 that traps and leaves the page unusable.
     if reader.output_buffer_size() > 64 << 20 {
         return None;
     }

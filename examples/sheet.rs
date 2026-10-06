@@ -1,6 +1,6 @@
 //! A contact sheet: every labelled cart on one card drawn by slot's own `cart_face`, beside the
 //! same cart on a second card, at 2x. `task sheet` sets the studio's generated labels next to
-//! slot's hand-made ones, so the house style is judged at cart size, not from 1280x640 PNGs.
+//! slot's hand-made ones, so the house style is judged at cart size.
 //!
 //! cargo run --example sheet -- <left card> <right card> <out.png>
 
