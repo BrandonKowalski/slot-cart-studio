@@ -95,19 +95,23 @@ test('the counts cover unlabelled carts only', () => {
 
 test('the prompt says how many, and what happens to the rest', () => {
   assert.deepEqual(fillText({ unlabelled: 7, real: 6, logo: 7, neither: 0 }), {
-    title: '7 carts have no label yet',
-    body: 'How should the studio fill them? 6 of them have a real label. The one that doesn’t will use Logo Only instead. You can change any cart afterwards.',
+    title: '7 Carts have no label yet',
+    question: 'How should the studio fill them?',
+    body: '6 of them have a real label. The one that doesn’t will use Logo Only instead. You can change any cart afterwards.',
   });
   assert.deepEqual(fillText({ unlabelled: 1, real: 1, logo: 1, neither: 0 }), {
-    title: '1 cart has no label yet',
-    body: 'How should the studio fill it? It has a real label and a logo. You can change it afterwards.',
+    title: '1 Cart has no label yet',
+    question: 'How should the studio fill it?',
+    body: 'It has a real label and a logo. You can change it afterwards.',
   });
   assert.deepEqual(fillText({ unlabelled: 5, real: 5, logo: 3, neither: 0 }), {
-    title: '5 carts have no label yet',
-    body: 'How should the studio fill them? All 5 have a real label. 2 have no logo and will use Real Label if you pick Logo Only. You can change any cart afterwards.',
+    title: '5 Carts have no label yet',
+    question: 'How should the studio fill them?',
+    body: 'All 5 have a real label. 2 have no logo and will use Real Label if you pick Logo Only. You can change any cart afterwards.',
   });
   assert.deepEqual(fillText({ unlabelled: 4, real: 2, logo: 2, neither: 1 }), {
-    title: '4 carts have no label yet',
-    body: 'How should the studio fill them? 2 of them have a real label. The one that doesn’t will use Logo Only instead. 1 has no logo and will use Real Label if you pick Logo Only. 1 has no logo either and will need art of your own. You can change any cart afterwards.',
+    title: '4 Carts have no label yet',
+    question: 'How should the studio fill them?',
+    body: '2 of them have a real label. The one that doesn’t will use Logo Only instead. 1 has no logo and will use Real Label if you pick Logo Only. 1 has no logo either and will need art of your own. You can change any cart afterwards.',
   });
 });

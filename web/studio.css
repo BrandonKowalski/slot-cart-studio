@@ -140,6 +140,7 @@ a{color:var(--ink)}
 .fill::backdrop{background:rgba(10,10,14,.72)}
 .fill h2{margin:0 0 6px;font-size:19px}
 .fill p{margin:0 0 16px;color:var(--muted);font-size:14px;line-height:1.5}
+.fill p.fill-question{margin-bottom:6px;color:var(--ink);font-size:15px}
 .fill-choices{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .fill-choice{display:flex;flex-direction:column;gap:4px;padding:10px;border:2px solid transparent;border-radius:9px;background:var(--recess);color:var(--ink);font:inherit;text-align:left;cursor:pointer}
 .fill-choice:hover,.fill-choice:focus-visible{border-color:var(--shell-accent);outline:0}
