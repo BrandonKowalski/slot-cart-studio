@@ -121,7 +121,7 @@ export function createEditor(api) {
       tile.hidden = kind === 'card' && !ok;
       tile.disabled = !can || (!ok && !retry && kind !== 'customLogo' && kind !== 'customLabel');
       tile.setAttribute('aria-pressed', String(wearing.kind === kind));
-      const badge = tile.querySelector('.badge');
+      const badge = tile.querySelector('.badge.default');
       if (badge) badge.hidden = fill !== kind;
       const small = tile.querySelector('small');
       if (small && (kind === 'real' || kind === 'logo')) small.textContent = retry ? 'Couldn’t load. Click to try again' : ok ? '' : 'None for this game';
