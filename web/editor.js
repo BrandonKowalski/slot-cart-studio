@@ -1,6 +1,7 @@
 // One panel for everything about one cart. It keeps no cart state: every change goes through the
 // studio's api, one history step at a time.
 import { canRedo, canRevert, canUndo, commit, redo, revert, undo, visit, visited } from './history.js';
+import { arrange } from './palette.js';
 
 const $ = (id) => document.getElementById(id);
 const OPENERS = { 'ed-games': 'ed-game', 'ed-bg-pal': 'ed-bg', 'ed-shell-pal': 'ed-shell' };
@@ -72,16 +73,18 @@ export function createEditor(api) {
   function build() {
     if (built) return;
     built = true;
+    const { neutrals, colours } = arrange(api.presets());
+    const swatch = ({ name, value }) => {
+      const b = Object.assign(document.createElement('button'), { type: 'button' });
+      b.setAttribute('aria-label', name);
+      b.dataset.value = value;
+      b.dataset.finish = value.split(' ')[2];
+      b.style.backgroundColor = `#${value.split(' ')[1]}`;
+      return b;
+    };
     for (const id of ['ed-bg-presets', 'ed-shell-presets']) {
-      $(id).replaceChildren(
-        ...api.presets().map(({ name, value }) => {
-          const b = Object.assign(document.createElement('button'), { type: 'button' });
-          b.setAttribute('aria-label', name);
-          b.dataset.value = value;
-          b.style.background = `#${value.split(' ')[1]}`;
-          return b;
-        }),
-      );
+      const gap = Object.assign(document.createElement('span'), { className: 'pal-break' });
+      $(id).replaceChildren(...neutrals.map(swatch), gap, ...colours.map(swatch));
     }
   }
 

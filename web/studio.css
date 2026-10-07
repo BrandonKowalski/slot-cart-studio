@@ -275,6 +275,8 @@ body.editing .cart:not(.current){opacity:.45}
 .pal-grid button{width:26px;height:26px;padding:0;border:0;border-radius:5px;box-shadow:inset 0 1px 0 rgba(255,255,255,.35),inset 0 -1px 0 rgba(0,0,0,.35),0 1px 2px rgba(0,0,0,.6);cursor:pointer}
 .pal-grid button[aria-pressed="true"]{outline:2px solid var(--shell-accent);outline-offset:2px}
 .pal-grid button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.pal-grid button[data-finish="clear"],.pal-grid button[data-finish="glitter"]{background-image:linear-gradient(135deg,rgba(255,255,255,.45) 0 22%,transparent 22% 100%)}
+.pal-break{grid-column:1/-1;height:1px;margin:2px 0;background:var(--rule)}
 .pal-grid+.pal-foot{margin-top:10px}
 .pal-foot{display:flex;flex-wrap:wrap;gap:8px}
 .pick{position:relative}
