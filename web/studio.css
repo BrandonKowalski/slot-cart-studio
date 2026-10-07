@@ -289,8 +289,6 @@ body.editing .cart:not(.current){opacity:.45}
   .editor{left:0;width:auto;box-shadow:none}
 }
 .ed-label>.k{display:block;margin-bottom:8px;color:var(--muted);font-size:14px}
-.ed-why{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px;padding:7px 9px;border-radius:6px;background:var(--recess);color:var(--muted);font-size:13px;line-height:1.4}
-.link{flex:none;padding:0;border:0;background:none;color:var(--shell-accent);font:inherit;font-size:13px;cursor:pointer;text-decoration:underline}
 .tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .tile{position:relative;display:flex;flex-direction:column;gap:5px;padding:6px;border:2px solid transparent;border-radius:7px;background:var(--recess);color:var(--ink);font:inherit;text-align:left;cursor:pointer}
 .tile.wide{grid-column:1/-1}

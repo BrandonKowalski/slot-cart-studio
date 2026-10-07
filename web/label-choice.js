@@ -40,11 +40,6 @@ export function applyFill(carts, fill) {
   return n;
 }
 
-export function reset(c, fill) {
-  c.byHand = false;
-  c.choice = c.onCard ? 'card' : fill;
-}
-
 export function fillCounts(carts) {
   const counts = { unlabelled: 0, real: 0, logo: 0, neither: 0 };
   for (const c of carts) {

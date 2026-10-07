@@ -107,21 +107,9 @@ export function createEditor(api) {
     );
   }
 
-  const NAMES = { real: 'Real Label', logo: 'Logo Only', customLogo: 'Custom logo', customLabel: 'Custom label', card: 'On the card' };
-  const WHY = {
-    card: () => 'Keeping the label already on the card.',
-    byHand: (kind) => `${NAMES[kind]}, set by hand.`,
-    fill: (kind) => `${NAMES[kind]}, how this card was filled.`,
-    fallback: (kind) => `No ${kind === 'logo' ? 'real label' : 'logo'} for this game, so it’s using ${NAMES[kind]}.`,
-    nothing: () => 'No art for this game. Pick a custom logo or label.',
-    unfilled: () => 'Waiting for the card to be filled.',
-  };
-
   function renderTiles(c) {
     const wearing = api.wearing(c);
     const fill = api.fill();
-    $('ed-why').textContent = WHY[wearing.why](wearing.kind);
-    $('ed-reset').hidden = !c.byHand;
     const can = api.canLabel(c);
     for (const tile of $('ed-tiles').querySelectorAll('.tile')) {
       const kind = tile.dataset.kind;
@@ -279,7 +267,6 @@ export function createEditor(api) {
     if (!bytes || !kind) return;
     change((c) => (kind === 'customLogo' ? api.useCustomLogo(c, bytes) : api.useCustomLabel(c, bytes)), c);
   });
-  $('ed-reset').addEventListener('click', () => change(api.resetLabel));
 
   $('ed-bg').addEventListener('click', () => toggle('ed-bg-pal'));
   $('ed-bg-presets').addEventListener('click', (e) => {

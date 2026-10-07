@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyFill, autoFill, available, fillCounts, fillText, reset, wears } from './label-choice.js';
+import { applyFill, autoFill, available, fillCounts, fillText, wears } from './label-choice.js';
 
 const LOGO = new Uint8Array([1]);
 const LABEL = new Uint8Array([2]);
@@ -67,18 +67,6 @@ test('the fill only touches carts with no label yet', () => {
   ];
   assert.equal(applyFill(carts, 'real'), 1);
   assert.deepEqual(carts.map((c) => c.choice), ['real', 'card', 'logo', null, 'logo']);
-});
-
-test('reset goes back to the card label, or to the fill', () => {
-  const onCard = cart({ onCard: true, choice: 'logo', byHand: true });
-  reset(onCard, 'real');
-  assert.deepEqual([onCard.choice, onCard.byHand], ['card', false]);
-  const plain = cart({ choice: 'customLogo', byHand: true, customLogoBytes: LOGO });
-  reset(plain, 'logo');
-  assert.deepEqual([plain.choice, plain.byHand, plain.customLogoBytes], ['logo', false, LOGO]);
-  const early = cart({ choice: 'logo', byHand: true });
-  reset(early, null);
-  assert.equal(early.choice, null);
 });
 
 test('the counts cover unlabelled carts only', () => {

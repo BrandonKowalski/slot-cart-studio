@@ -29,7 +29,7 @@ import { fetchArt, fetchDat, fetchIndex, fetchThumb, limiter } from './libretro.
 import { createEditor } from './editor.js';
 import { amend, commit } from './history.js';
 import { smallPrint } from './smallprint.js';
-import { applyFill, autoFill, available, fillCounts, fillText, reset, wears } from './label-choice.js';
+import { applyFill, autoFill, available, fillCounts, fillText, wears } from './label-choice.js';
 
 const $ = (id) => document.getElementById(id);
 const limit = limiter(4);
@@ -418,15 +418,6 @@ function choose(c, kind) {
   if (!c.userHue) c.deep = null;
   if (kind !== 'card' && !c.dressed) ensureTiles(c);
   else if (needsReal(c)) track(fetchReal(session, c));
-}
-
-function resetLabel(c) {
-  const v = view(c);
-  reset(v, session.fill ?? null);
-  c.choice = v.choice;
-  c.byHand = v.byHand;
-  if (!c.userHue) c.deep = null;
-  if (needsReal(c)) track(fetchReal(session, c));
 }
 
 function ensureTiles(c) {
@@ -1025,7 +1016,6 @@ const editor = createEditor({
   choose,
   useCustomLogo,
   useCustomLabel,
-  resetLabel,
   ensureTiles,
   canShell: (c) => !c.looking && ['ready', 'has-label', 'needs-logo', 'unfilled'].includes(stateOf(c)) && shell_key_ok(c.stem),
   search: (c, query) => dats.get(c.platform)?.search(query, 30) ?? null,
