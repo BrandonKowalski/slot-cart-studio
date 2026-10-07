@@ -255,7 +255,7 @@ body.editing .cart:not(.current){opacity:.45}
 .field{width:100%;display:flex;align-items:center;gap:8px;padding:7px 10px;border:0;border-radius:5px;background:var(--recess);box-shadow:inset 0 1px 3px rgba(0,0,0,.85),inset 0 -1px 0 #2d2d34;color:var(--ink);font:inherit;font-size:14px;text-align:left;cursor:pointer}
 .field>span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .field>i{flex:none;width:20px;height:20px;border-radius:4px;box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 1px 0 rgba(0,0,0,.6)}
-.field::after{content:"▾";color:var(--muted)}
+.field::after{content:"";flex:none;width:8px;height:8px;margin:-4px 4px 0 2px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg)}
 .field:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .field:disabled,.seg button:disabled{opacity:.45;cursor:default}
 /* A switch is a row of keys; the chosen one stays pressed in. */
