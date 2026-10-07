@@ -469,6 +469,9 @@ version = "0.1.0"
 [[package]]
 name = "slot-store"
 version = "0.1.0"
+dependencies = [
+ "unicode-normalization",
+]
 
 [[package]]
 name = "slot-store-shim"
