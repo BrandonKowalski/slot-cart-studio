@@ -77,6 +77,19 @@ SS_EXPECT = {'GB': 'game boy', 'GBC': 'game boy color', 'GBA': 'game boy advance
 # Most dumps in circulation are USA or World, so prefer the art that belongs with those before
 # falling back to whatever a game has.
 REGIONS = ('us', 'wor', 'eu', 'jp')
+COUNTRY = {
+    'USA': 'us', 'World': 'wor', 'Europe': 'eu', 'Japan': 'jp', 'Germany': 'de', 'France': 'fr',
+    'Spain': 'sp', 'Italy': 'it', 'UK': 'uk', 'Australia': 'au', 'Netherlands': 'nl',
+    'Sweden': 'se', 'Korea': 'kr', 'Brazil': 'br', 'China': 'cn',
+}
+IN_EUROPE = {'de', 'fr', 'sp', 'it', 'uk', 'au', 'nl', 'se'}
+
+
+def regions_for(name):
+    found = re.search(r'\(([^)]*)\)', name)
+    own = COUNTRY.get(found.group(1).split(',')[0].strip()) if found else None
+    first = [own] + (['eu'] if own in IN_EUROPE else []) if own else []
+    return tuple(dict.fromkeys(first + list(REGIONS)))
 
 
 def creds():
@@ -198,10 +211,10 @@ def crc32(path):
     return f'{h & 0xffffffff:08X}'
 
 
-def pick(medias, want):
+def pick(medias, want, regions=REGIONS):
     """The wanted media in the most useful region, or None."""
     same = [m for m in medias if m.get('type') == want]
-    for region in REGIONS:
+    for region in regions:
         for m in same:
             if (m.get('region') or '').lower() == region:
                 return m
@@ -246,8 +259,10 @@ def write_index(path, index):
     path.write_text(json.dumps(index, separators=(',', ':'), sort_keys=True))
 
 
-def todo_for(crc, wanted, index, root, relook):
+def todo_for(crc, wanted, index, root, relook, redo=False):
     """The media this cart still needs: files not on disk, and a look not yet recorded."""
+    if redo:
+        return list(wanted)
     def needed(w):
         if w == 'look':
             return relook or 'look' not in index.get(crc, {})
@@ -294,6 +309,7 @@ def main():
     ap.add_argument('--media', default='wheel,look,support-texture',
                     help='comma separated ScreenScraper media types, or look for the label measured from the cart scan')
     ap.add_argument('--relook', action='store_true', help='measure every look again')
+    ap.add_argument('--reregion', action='store_true', help='fetch every media again for dumps whose own region is not USA')
     ap.add_argument('--probe', help='print every media one rom has, and stop')
     ap.add_argument('--limit', type=int, help='stop after this many games, for a trial run')
     args = ap.parse_args()
@@ -343,7 +359,9 @@ def main():
         # The dat's name is only ever what this run calls a cart while it works; a rom it has
         # never heard of goes by its checksum, which is what the file is named anyway.
         name = entries.get(crc, crc)
-        todo = todo_for(crc, wanted, index, root, args.relook)
+        regions = regions_for(entries.get(crc) or romname)
+        redo = args.reregion and regions[0] != 'us'
+        todo = todo_for(crc, wanted, index, root, args.relook, redo)
         if not todo:
             with lock:
                 n['skipped'] += 1
@@ -369,7 +387,7 @@ def main():
         medias = ((data or {}).get('response', {}).get('jeu') or {}).get('medias', [])
         got, measured = [], None
         for want in todo:
-            m = pick(medias, SOURCE.get(want, want))
+            m = pick(medias, SOURCE.get(want, want), regions)
             try:
                 body = fetch(m['url']) if m else None
                 if want == 'look':
