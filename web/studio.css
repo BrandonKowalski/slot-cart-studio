@@ -93,8 +93,11 @@ a{color:var(--ink)}
 }
 .btn:hover{transform:translateY(-1px)}
 .btn:disabled{opacity:.45;cursor:default;transform:none}
-.btn.busy{background:linear-gradient(90deg,var(--ink) var(--done),color-mix(in srgb,var(--ink) 55%,var(--page)) var(--done));transition:none}
+.btn.busy{position:relative;overflow:hidden}
 .btn.busy:disabled{opacity:1}
+.btn.busy::before,.btn.busy::after{content:"";position:absolute;left:10px;bottom:6px;height:3px;border-radius:2px}
+.btn.busy::before{right:10px;background:color-mix(in srgb,var(--opening) 15%,transparent)}
+.btn.busy::after{width:calc((100% - 20px) * var(--done));background:var(--opening);transition:width .35s ease-out}
 .btn:focus-visible,label.btn:focus-within{outline:2px solid var(--ink);outline-offset:3px}
 
 /* The editor's buttons are keys moulded in dark housing: lit along the top, shaded beneath. */

@@ -724,7 +724,7 @@ function updateWriteBar() {
 
 function writeProgress(done, total) {
   $('write').classList.toggle('busy', total > 0);
-  $('write').style.setProperty('--done', total > 0 ? `${(done / total) * 100}%` : '0%');
+  $('write').style.setProperty('--done', total > 0 ? String(done / total) : '0');
 }
 
 function updateFillButton() {
@@ -875,19 +875,17 @@ async function writeLabels() {
       const parts = [];
       const total = carts.length;
       for (const [i, c] of carts.entries()) {
-        writeProgress(i, total + shells.length);
+        writeProgress(i + 1, total + shells.length);
         zip.add(
           `Labels/${c.platform}/${c.stem}.png`,
           withCartLabel(c, (label) => label.png()),
         );
         parts.push(zip.take());
         // Packing a few hundred carts is seconds of synchronous work with nothing on screen, so
-        // give the tab a turn every few carts to paint the bar above and take input.
-        if (i % 4 === 3) {
-          await new Promise((r) => setTimeout(r, 0));
-          // A trap elsewhere, or a card replacing this one, can happen while this awaits.
-          if (fatal || s !== session) return;
-        }
+        // give the tab a turn to paint the bar and take input.
+        await new Promise((r) => setTimeout(r, 0));
+        // A trap elsewhere, or a card replacing this one, can happen while this awaits.
+        if (fatal || s !== session) return;
       }
       let shellNote = '';
       if (shells.length) {
