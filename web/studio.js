@@ -717,9 +717,14 @@ function updateWriteBar() {
   if (!session) return;
   const n = readyCarts().length + shellChanges().length;
   // Nothing to write means no button at all.
-  $('write-bar').hidden = n === 0;
+  $('write-bar').hidden = n === 0 && !writing;
   $('write').disabled = n === 0 || writing || fatal;
   $('write').textContent = session.source.direct ? 'Write to card' : 'Download ZIP';
+}
+
+function writeProgress(done, total) {
+  $('write').classList.toggle('busy', total > 0);
+  $('write').style.setProperty('--done', total > 0 ? `${(done / total) * 100}%` : '0%');
 }
 
 function updateFillButton() {
@@ -804,6 +809,7 @@ async function writeLabels() {
   if ((!carts.length && !shells.length) || writing || fatal) return;
   writing = true;
   updateWriteBar();
+  writeProgress(0, carts.length + shells.length);
   try {
     if (s.source.direct) {
       const count = { written: 0, skipped: 0, failed: 0 };
@@ -829,6 +835,7 @@ async function writeLabels() {
           c.byHand = false;
         }
         count[c.result]++;
+        writeProgress(count.written + count.skipped + count.failed, carts.length + shells.length);
         paint(c);
       }
       let shellNote = '';
@@ -868,7 +875,7 @@ async function writeLabels() {
       const parts = [];
       const total = carts.length;
       for (const [i, c] of carts.entries()) {
-        progress(i, total, c.stem, 'Packing');
+        writeProgress(i, total + shells.length);
         zip.add(
           `Labels/${c.platform}/${c.stem}.png`,
           withCartLabel(c, (label) => label.png()),
@@ -906,12 +913,8 @@ async function writeLabels() {
     if (!trapped(e)) throw e;
   } finally {
     writing = false;
+    writeProgress(0, 0);
     updateWriteBar();
-    // The zip path's loop can return early, before its own final progress() call, leaving the
-    // bar stuck on a stale count — the same failure mode open() already guards against for a
-    // reopened card. Only clear it if this is still the session it was showing progress for; a
-    // card opened since owns the bar now, and trapped() already hid it if this run went fatal.
-    if (s === session) $('progress').hidden = true;
   }
 }
 
