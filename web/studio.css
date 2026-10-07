@@ -285,6 +285,9 @@ body.editing .cart:not(.current){opacity:.45}
 .ed-foot{display:flex;justify-content:space-between;gap:8px;margin-top:auto;padding-top:14px;border-top:1px solid #1a1a1e;box-shadow:inset 0 1px 0 #34343c}
 .ed-history{display:flex;gap:8px}
 .tip{position:fixed;z-index:50;padding:4px 8px;border-radius:4px;background:var(--ink);color:var(--opening);font-size:13px;font-weight:600;white-space:nowrap;pointer-events:none;box-shadow:0 2px 6px rgba(0,0,0,.5)}
+@media (min-width:721px){
+  .ed-face{display:none}
+}
 @media (max-width:720px){
   body.editing{padding-right:0}
   body.editing .mast{margin-right:0}
