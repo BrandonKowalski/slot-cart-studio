@@ -35,7 +35,7 @@ const byCart = (a, b) =>
         ? 1
         : 0;
 
-const NO_GAMES = 'There is no Games folder there. Choose the top of your slot SD card.';
+const NO_GAMES = 'That doesn’t look like a slot SD card. Be sure to select the root of the card.';
 const OLD_LAYOUT =
   'This card still keeps its roms loose in Games. Start slot once on the device to sweep them into GBA, GB and GBC folders, then choose the card again.';
 
