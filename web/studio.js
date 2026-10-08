@@ -480,7 +480,7 @@ function progress(done, total, stem, verb = 'Reading') {
 
 function banner(text, retry) {
   const b = $('banner');
-  b.replaceChildren(text);
+  b.replaceChildren(Object.assign(document.createElement('span'), { className: 'message', textContent: text }));
   const key = (label, click, extra = '') => {
     const button = Object.assign(document.createElement('button'), {
       type: 'button',

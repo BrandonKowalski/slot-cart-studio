@@ -13,6 +13,8 @@
   --shell-base:#b8bcc2;
   --shell-accent:#b8bcc2;
   --shell-ink:#2b2e33;
+  --error:#ff4d4d;
+  --error-ground:#3a1416;
   --mast-h:60px;
   --panel:380px;
   /* The platform tabs and the write button beside them stand this tall on the shelf's edge. */
@@ -128,8 +130,10 @@ a{color:var(--ink)}
 .title{font-size:clamp(40px,7vw,64px);font-weight:700;letter-spacing:-.045em;line-height:1.05;margin:0}
 .intro{text-align:center}
 .actions{display:flex;flex-wrap:wrap;justify-content:center;gap:12px;margin-top:22px}
-.banner{margin:24px 0 0;padding:14px 16px;border-radius:6px;background:var(--recess);box-shadow:inset 0 1px 3px rgba(0,0,0,.7)}
-.banner:not([hidden]){display:flex;align-items:center;gap:8px}
+.banner{margin:24px 0 0;padding:14px 16px;border:1px solid var(--error);border-radius:6px;background:var(--error-ground);box-shadow:inset 0 1px 3px rgba(0,0,0,.7)}
+.banner:not([hidden]){display:flex;align-items:center;gap:10px}
+.banner .message{position:relative;padding-left:30px}
+.banner .message::before{content:"";position:absolute;left:0;top:calc((1lh - 20px) / 2);width:20px;height:20px;background:var(--error);-webkit-mask:var(--warn) center/contain no-repeat;mask:var(--warn) center/contain no-repeat;--warn:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2 1 21h22L12 2zm-1 7h2v6h-2V9zm0 8h2v2h-2v-2z'/%3E%3C/svg%3E")}
 .banner .copy-log{margin-left:auto;flex:none}
 .progress{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:24px 0 0;color:var(--muted);font-size:15px}
 .progress progress{width:min(320px,100%);accent-color:var(--shell-accent)}
