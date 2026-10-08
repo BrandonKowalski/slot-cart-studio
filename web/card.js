@@ -82,18 +82,19 @@ export async function fromDirectory(root) {
     // No Labels folder yet: every cart needs a label.
   }
 
-  // slot reads System's file, then lays the one beside the labels over it; the studio writes the
-  // second, so a card's own System choices stay as they were.
   const shellFile = async (folder) => {
     try {
       const dir = await root.getDirectoryHandle(folder);
       return await (await (await dir.getFileHandle('cart_shell.ini')).getFile()).text();
     } catch (e) {
-      if (e.name === 'NotFoundError') return '';
+      if (e.name === 'NotFoundError') return null;
       throw e;
     }
   };
-  const shells = async () => ({ system: await shellFile('System'), labels: await shellFile('Labels') });
+  const shells = async () => ({
+    system: (await shellFile('Config')) ?? (await shellFile('System')) ?? '',
+    labels: (await shellFile('Labels')) ?? '',
+  });
 
   return {
     carts: carts.sort(byCart),
@@ -158,7 +159,7 @@ export function fromFiles(files) {
     if (parts.length === 3) {
       const [, dir, name] = parts;
       if (dir.toLowerCase() === 'games' && isRom(name)) loose = true;
-      if (['system', 'labels'].includes(dir.toLowerCase()) && name.toLowerCase() === 'cart_shell.ini') {
+      if (['config', 'system', 'labels'].includes(dir.toLowerCase()) && name.toLowerCase() === 'cart_shell.ini') {
         shellFiles[dir.toLowerCase()] = file;
       }
       continue;
@@ -176,7 +177,10 @@ export function fromFiles(files) {
   }
   if (!sawPlatform) throw new Error(loose ? OLD_LAYOUT : NO_GAMES);
   const text = async (file) => (file ? file.text() : '');
-  const shells = async () => ({ system: await text(shellFiles.system), labels: await text(shellFiles.labels) });
+  const shells = async () => ({
+    system: await text(shellFiles.config ?? shellFiles.system),
+    labels: await text(shellFiles.labels),
+  });
   return { carts: carts.sort(byCart), labels, direct: false, write: null, shells };
 }
 

@@ -206,12 +206,9 @@ fn a_chosen_shell_matches_slot() {
         ("GBA", PLAIN, NO_GB, "rounded 2b3a88 clear"),
     ] {
         let d = card(dir, code, gb, &label);
-        std::fs::create_dir_all(d.path().join("System")).unwrap();
-        std::fs::write(
-            d.path().join("System/cart_shell.ini"),
-            format!("{STEM} = {line}\n"),
-        )
-        .unwrap();
+        let shells = d.path().join(slot_store::CART_SHELL_FILE);
+        std::fs::create_dir_all(shells.parent().unwrap()).unwrap();
+        std::fs::write(shells, format!("{STEM} = {line}\n")).unwrap();
         let (want, read_code, stem) = slot_face(d.path());
         assert!(
             want == face::from_png(

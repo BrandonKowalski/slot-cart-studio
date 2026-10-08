@@ -167,8 +167,7 @@ const readyCarts = () =>
   session ? session.carts.filter((c) => stateOf(c) === 'ready' && c.result !== 'skipped') : [];
 
 const shellChanges = () => (session ? session.carts.filter((c) => c.shell !== c.shellOnCard) : []);
-// Into the Labels layer. A cart put back on Automatic over a choice in System's file needs a line
-// saying so, or System's choice shows through again.
+// Into the Labels layer.
 const mergedShells = (s, carts, values) =>
   merge_cart_shells(
     s.shellText ?? '',

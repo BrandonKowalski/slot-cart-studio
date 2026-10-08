@@ -265,11 +265,11 @@ def stage_labelled(card, games):
     for name, source in labels.items():
         (card / 'Labels' / name).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(source, card / 'Labels' / name)
-    (card / 'System').mkdir(parents=True, exist_ok=True)
-    (card / 'System' / 'cart_shell.ini').write_text(SHELLS_ON_CARD)
+    (card / 'Config').mkdir(parents=True, exist_ok=True)
+    (card / 'Config' / 'cart_shell.ini').write_text(SHELLS_ON_CARD)
     (card / 'Labels' / 'cart_shell.ini').write_text(LABEL_SHELLS_ON_CARD)
     return ([f'Games/{g}' for g in games] + [f'Games/{probe}'] + [f'Labels/{name}' for name in labels]
-            + ['System/cart_shell.ini', 'Labels/cart_shell.ini'])
+            + ['Config/cart_shell.ini', 'Labels/cart_shell.ini'])
 
 
 def main():
@@ -753,7 +753,7 @@ def main():
         if (shells.get('Catrap (USA)'), shells.get('Tetris Rosy Retrospection')) != (
                 'rounded 112233 solid', 'auto 445566 clear'):
             sys.exit(f'the card\'s two cart_shell.ini files were not read: {shells}')
-        print('asserted: the card\'s shells were read, Labels/cart_shell.ini over System\'s')
+        print('asserted: the card\'s shells were read, Labels/cart_shell.ini over Config\'s')
 
         not_buttons = page.eval(
             "[...document.querySelectorAll('#grid > .cart')].filter(c => !c.hidden"
@@ -814,7 +814,6 @@ def main():
             sys.exit(f'the editor does not show {chosen} as its card does')
         print(f'asserted: the editor shows {chosen} as its card does, and the shell stays when it closes')
 
-        # Back to Automatic over a System choice: the Labels layer has to say so, or System shows through.
         page.eval(EDIT % json.dumps('Catrap (USA)'))
         page.eval("document.getElementById('ed-shell').click()")
         page.eval("document.getElementById('ed-shell-auto').click()")
@@ -867,7 +866,7 @@ def main():
         want = LABEL_SHELLS_ON_CARD + f'{chosen} = auto {preset.split(" ", 1)[1]}\n' + 'Catrap (USA) = auto\n'
         if written != want:
             sys.exit(f'Labels/cart_shell.ini came out as {written!r}, not {want!r}')
-        print(f'asserted: Labels/cart_shell.ini keeps its lines, adds {chosen}\'s shell, and masks Catrap\'s System choice with auto')
+        print(f'asserted: Labels/cart_shell.ini keeps its lines, adds {chosen}\'s shell, and masks Catrap\'s Config choice with auto')
         print(f'asserted: {len(kept)} carts are has-label: {", ".join(sorted(kept))}')
         print(f'asserted: the other {len(ready)} carts are ready')
         print(f'asserted: labels.zip holds exactly those {len(ready)}, and none of the {len(kept)} with labels')
