@@ -34,10 +34,8 @@ const CONFIG = 'A = rounded 112233 solid\n';
 const SYSTEM = 'A = notched 445566 clear\n';
 const LABELS = 'A = auto\n';
 
-const both = async (tree) => [
-  await (await fromDirectory(dirHandle(tree))).shells(),
-  await fromFiles(listed(tree)).shells(),
-];
+const layers = async (source) => ({ system: await source.systemShells(), labels: await source.labelShells() });
+const both = async (tree) => [await layers(await fromDirectory(dirHandle(tree))), await layers(fromFiles(listed(tree)))];
 
 test('a card slot has moved reads its shells from Config', async () => {
   for (const got of await both({ ...GAMES, Config: { 'cart_shell.ini': CONFIG }, Labels: { 'cart_shell.ini': LABELS } })) {
@@ -73,4 +71,19 @@ test('a card with no shell files reads as empty', async () => {
   for (const got of await both(GAMES)) {
     assert.deepEqual(got, { system: '', labels: '' });
   }
+});
+
+test('a Config file the browser refuses fails only its own layer', async () => {
+  const refused = Object.assign(new Error('could not be read'), { name: 'NotReadableError' });
+  const card = dirHandle({ ...GAMES, Config: { 'cart_shell.ini': CONFIG }, Labels: { 'cart_shell.ini': LABELS } });
+  const config = await card.getDirectoryHandle('Config');
+  const source = await fromDirectory({
+    ...card,
+    async getDirectoryHandle(name) {
+      if (name !== 'Config') return card.getDirectoryHandle(name);
+      return { ...config, getFileHandle: async () => ({ kind: 'file', getFile: async () => Promise.reject(refused) }) };
+    },
+  });
+  await assert.rejects(source.systemShells(), { name: 'NotReadableError' });
+  assert.equal(await source.labelShells(), LABELS);
 });

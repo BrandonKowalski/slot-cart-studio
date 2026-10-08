@@ -91,16 +91,15 @@ export async function fromDirectory(root) {
       throw e;
     }
   };
-  const shells = async () => ({
-    system: (await shellFile('Config')) ?? (await shellFile('System')) ?? '',
-    labels: (await shellFile('Labels')) ?? '',
-  });
+  const systemShells = async () => (await shellFile('Config')) ?? (await shellFile('System')) ?? '';
+  const labelShells = async () => (await shellFile('Labels')) ?? '';
 
   return {
     carts: carts.sort(byCart),
     labels,
     direct: true,
-    shells,
+    systemShells,
+    labelShells,
     async writeShells(text) {
       const dir = await root.getDirectoryHandle('Labels', { create: true });
       const file = await dir.getFileHandle('cart_shell.ini', { create: true });
@@ -177,11 +176,14 @@ export function fromFiles(files) {
   }
   if (!sawPlatform) throw new Error(loose ? OLD_LAYOUT : NO_GAMES);
   const text = async (file) => (file ? file.text() : '');
-  const shells = async () => ({
-    system: await text(shellFiles.config ?? shellFiles.system),
-    labels: await text(shellFiles.labels),
-  });
-  return { carts: carts.sort(byCart), labels, direct: false, write: null, shells };
+  return {
+    carts: carts.sort(byCart),
+    labels,
+    direct: false,
+    write: null,
+    systemShells: () => text(shellFiles.config ?? shellFiles.system),
+    labelShells: () => text(shellFiles.labels),
+  };
 }
 
 export { labelKey };

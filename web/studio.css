@@ -129,7 +129,8 @@ a{color:var(--ink)}
 .intro{text-align:center}
 .actions{display:flex;flex-wrap:wrap;justify-content:center;gap:12px;margin-top:22px}
 .banner{margin:24px 0 0;padding:14px 16px;border-radius:6px;background:var(--recess);box-shadow:inset 0 1px 3px rgba(0,0,0,.7)}
-.banner .key{margin-left:8px}
+.banner:not([hidden]){display:flex;align-items:center;gap:8px}
+.banner .copy-log{margin-left:auto;flex:none}
 .progress{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:24px 0 0;color:var(--muted);font-size:15px}
 .progress progress{width:min(320px,100%);accent-color:var(--shell-accent)}
 .loader{display:flex;flex-direction:column;align-items:center;gap:16px;margin:64px 0;color:var(--muted);font-size:15px;text-align:center;overflow-wrap:anywhere}

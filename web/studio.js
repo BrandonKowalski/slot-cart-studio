@@ -29,6 +29,7 @@ import { fetchArt, fetchDat, fetchIndex, fetchThumb, limiter } from './libretro.
 import { createEditor } from './editor.js';
 import { amend, commit } from './history.js';
 import { smallPrint } from './smallprint.js';
+import { hasLog, logError, logText } from './log.js';
 import { applyFill, autoFill, available, fillCounts, fillText, wears } from './label-choice.js';
 
 const $ = (id) => document.getElementById(id);
@@ -244,7 +245,7 @@ function trapped(e) {
   if (!fatal) {
     fatal = true;
     loading(null);
-    console.error(e);
+    logError('trap', e);
     $('progress').hidden = true;
     banner(FATAL);
     updateWriteBar();
@@ -480,14 +481,26 @@ function progress(done, total, stem, verb = 'Reading') {
 function banner(text, retry) {
   const b = $('banner');
   b.replaceChildren(text);
-  if (retry) {
+  const key = (label, click, extra = '') => {
     const button = Object.assign(document.createElement('button'), {
       type: 'button',
-      className: 'key dark',
-      textContent: 'Retry',
+      className: `key dark ${extra}`.trim(),
+      textContent: label,
     });
-    button.addEventListener('click', retry);
+    button.addEventListener('click', () => click(button));
     b.append(' ', button);
+  };
+  if (retry) key('Retry', retry);
+  if (hasLog()) {
+    key('Copy log', async (button) => {
+      try {
+        await navigator.clipboard.writeText(logText(navigator.userAgent));
+        button.textContent = 'Copied';
+      } catch (e) {
+        console.error('clipboard', e);
+        button.textContent = 'Couldn’t copy';
+      }
+    }, 'copy-log');
   }
   b.hidden = false;
 }
@@ -533,15 +546,23 @@ async function crcOf(file) {
 }
 
 async function identify(s) {
-  let text = { system: '', labels: '' };
+  const text = { system: '', labels: '' };
+  const unread = [];
   try {
-    text = await s.source.shells();
+    text.system = await s.source.systemShells();
   } catch (e) {
-    console.error('cart_shell.ini', e);
+    logError('Config/cart_shell.ini', e);
+    unread.push('The shells chosen on the device couldn’t be read, so they don’t show.');
+  }
+  try {
+    text.labels = await s.source.labelShells();
+  } catch (e) {
+    logError(SHELL_FILE, e);
     s.shellReadFailed = true;
-    banner('The card’s cart_shell.ini couldn’t be read, so shells chosen before don’t show.');
+    unread.push('The card’s Labels/cart_shell.ini couldn’t be read, so shells chosen here before don’t show.');
   }
   if (s !== session || fatal) return;
+  if (unread.length) banner(unread.join(' '));
   s.shellText = text.labels;
   const system = cart_shells(text.system);
   s.systemShells = new Set(system.filter((_, i) => i % 2 === 0).map((stem) => stem.normalize('NFC')));
@@ -594,6 +615,7 @@ async function match(s) {
       dats.set(platform, Dat.parse(await fetchDat(platform)));
     } catch (e) {
       if (trapped(e) || s !== session || fatal) return;
+      s.datFailed = true;
       banner(
         `The ${platform} database didn’t load (${e.message}), so carts can’t be matched yet. Logos can still be dropped in by hand.`,
         () => track(match(s)),
@@ -608,7 +630,10 @@ async function match(s) {
     }
   }
   if (s !== session || fatal) return;
-  $('banner').hidden = true;
+  if (s.datFailed) {
+    s.datFailed = false;
+    $('banner').hidden = true;
+  }
   const pending = s.carts.filter((c) => c.crc !== null && !c.game && !c.existing && !c.error);
   await Promise.all(pending.map((c) => art(s, c)));
   if (s === session && !fatal && s.fill == null) await fillOrAsk(s);
@@ -824,7 +849,7 @@ async function writeLabels() {
           c.result = await s.source.write(c.platform, c.stem, png, !!c.existingPng);
         } catch (e) {
           if (trapped(e)) return;
-          console.error(c.stem, e);
+          logError(c.stem, e);
           c.result = 'failed';
         }
         if (c.result === 'written') {
@@ -840,7 +865,7 @@ async function writeLabels() {
       let shellNote = '';
       if (shells.length) {
         if (s.shellReadFailed) {
-          shellNote = 'Shells not written: the card’s cart_shell.ini could not be read.';
+          shellNote = 'Shells not written: the card’s Labels/cart_shell.ini could not be read.';
         } else {
           // Captured before the write's await, so a change made during it is not marked written.
           const values = shells.map((c) => c.shell);
@@ -851,7 +876,7 @@ async function writeLabels() {
             shells.forEach((c, i) => (c.shellOnCard = values[i]));
           } catch (e) {
             if (trapped(e)) return;
-            console.error('cart_shell.ini', e);
+            logError(SHELL_FILE, e);
             shellNote = 'Writing the shells failed.';
           }
         }
@@ -889,7 +914,7 @@ async function writeLabels() {
       let shellNote = '';
       if (shells.length) {
         if (s.shellReadFailed) {
-          shellNote = 'Shells not written: the card’s cart_shell.ini could not be read.';
+          shellNote = 'Shells not written: the card’s Labels/cart_shell.ini could not be read.';
         } else {
           try {
             const text = mergedShells(s, shells, shells.map((c) => c.shell));
@@ -897,7 +922,7 @@ async function writeLabels() {
             parts.push(zip.take());
           } catch (e) {
             if (trapped(e)) return;
-            console.error('cart_shell.ini', e);
+            logError(SHELL_FILE, e);
             shellNote = 'Writing the shells failed.';
           }
         }
@@ -947,7 +972,7 @@ async function lookUp(s, c) {
     await dress(s, c);
   } catch (e) {
     if (trapped(e)) return;
-    console.error(c.stem, e);
+    logError(c.stem, e);
   }
   if (s !== session) return;
   c.looking = false;
