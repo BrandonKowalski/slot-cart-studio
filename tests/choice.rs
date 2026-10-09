@@ -6,17 +6,24 @@ use slot_cart_studio::choice;
 fn merging_gives_what_slot_writes() {
     let start = "# keep\nOther = auto 112233 solid\nA = auto 000000 solid\n";
     let d = tempfile::tempdir().unwrap();
-    std::fs::create_dir_all(d.path().join("System")).unwrap();
-    std::fs::write(d.path().join("System/cart_shell.ini"), start).unwrap();
+    let file = d.path().join(slot_store::CART_SHELL_FILE);
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(&file, start).unwrap();
     slot_store::ini::write(
         d.path(),
-        "System/cart_shell.ini",
+        slot_store::CART_SHELL_FILE,
         "A",
         "rounded 86b9bf glitter",
     )
     .unwrap();
-    slot_store::ini::write(d.path(), "System/cart_shell.ini", "B", "auto abcdef clear").unwrap();
-    let slot = std::fs::read_to_string(d.path().join("System/cart_shell.ini")).unwrap();
+    slot_store::ini::write(
+        d.path(),
+        slot_store::CART_SHELL_FILE,
+        "B",
+        "auto abcdef clear",
+    )
+    .unwrap();
+    let slot = std::fs::read_to_string(&file).unwrap();
     let ours = choice::merge_cart_shells(
         start,
         &["A".into(), "B".into()],
@@ -107,9 +114,9 @@ fn automatic_is_what_slot_would_draw_and_presets_are_values() {
 }
 
 #[test]
-fn the_labels_file_lies_over_system_as_slot_reads_them() {
+fn the_labels_file_lies_over_config_as_slot_reads_them() {
     let got = choice::layered_cart_shells(
-        "Both = rounded 111111 solid\nSystemOnly = notched 222222 clear\nBackToAuto = rounded 333333 glitter\n",
+        "Both = rounded 111111 solid\nConfigOnly = notched 222222 clear\nBackToAuto = rounded 333333 glitter\n",
         "Both = auto 444444 clear\nLabelsOnly = auto 555555 solid\nBackToAuto = auto\n",
     );
     let mut pairs: Vec<(String, String)> = got
@@ -121,8 +128,8 @@ fn the_labels_file_lies_over_system_as_slot_reads_them() {
         pairs,
         [
             ("Both".to_string(), "auto 444444 clear".to_string()),
+            ("ConfigOnly".to_string(), "notched 222222 clear".to_string()),
             ("LabelsOnly".to_string(), "auto 555555 solid".to_string()),
-            ("SystemOnly".to_string(), "notched 222222 clear".to_string()),
         ]
     );
 }
