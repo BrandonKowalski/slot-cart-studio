@@ -109,3 +109,11 @@ test('a listed card carries every file in its Labels folder but dotfiles', async
     ['Labels/Odd/note.txt', 'n'],
   ]);
 });
+
+test('a folder the browser listed as empty says it could not be read', () => {
+  assert.throws(() => fromFiles([]), /couldn’t read that folder/);
+});
+
+test('a folder with files but no games is still not a slot card', () => {
+  assert.throws(() => fromFiles(listed({ Photos: { 'a.jpg': '' } })), /doesn’t look like a slot SD card/);
+});
