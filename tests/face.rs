@@ -49,8 +49,9 @@ fn head(root: &Path) -> Vec<u8> {
 
 /// Slot's face for the only cart on `root`, with the code and stem slot read for it.
 fn slot_face(root: &Path) -> (Vec<u8>, String, String) {
-    let carts = slot_store::scan(root).expect("scan");
-    let cart = &carts[0];
+    let mut cart = slot_store::scan(root).expect("scan").remove(0);
+    cart.read_header();
+    let cart = &cart;
     (
         slot_ui::cart_face(cart).rgba,
         cart.code.clone(),
