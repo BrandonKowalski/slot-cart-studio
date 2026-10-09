@@ -175,7 +175,7 @@ const mergedShells = (s, carts, values) =>
     carts.map((c) => c.stem),
     values.map((v, i) => v || (s.systemShells?.has(carts[i].stem.normalize('NFC')) ? 'auto' : '')),
   );
-const SHELL_FILE = 'Labels/cart_shell.ini';
+const SHELL_FILE = 'Labels/cart_shell.txt';
 const pathKey = (path) => path.normalize('NFC').toLowerCase();
 
 // A Label holds its composition in WASM memory, which never shrinks and stops at 4 GiB.
@@ -552,18 +552,18 @@ async function identify(s) {
   try {
     text.system = await s.source.systemShells();
   } catch (e) {
-    logError('Config/cart_shell.ini', e);
-    unread.push('The shells chosen on the device couldn’t be read, so they don’t show.');
+    logError('Config/cart_shell.txt', e);
+    unread.push(e.name === 'OldShellFile' ? e.message : 'The shells chosen on the device couldn’t be read, so they don’t show.');
   }
   try {
     text.labels = await s.source.labelShells();
   } catch (e) {
     logError(SHELL_FILE, e);
     s.shellReadFailed = true;
-    unread.push('The card’s Labels/cart_shell.ini couldn’t be read, so shells chosen here before don’t show.');
+    unread.push(e.name === 'OldShellFile' ? e.message : 'The card’s Labels/cart_shell.txt couldn’t be read, so shells chosen here before don’t show.');
   }
   if (s !== session || fatal) return;
-  if (unread.length) banner(unread.join(' '));
+  if (unread.length) banner([...new Set(unread)].join(' '));
   s.shellText = text.labels;
   const system = cart_shells(text.system);
   s.systemShells = new Set(system.filter((_, i) => i % 2 === 0).map((stem) => stem.normalize('NFC')));
@@ -866,7 +866,7 @@ async function writeLabels() {
       let shellNote = '';
       if (shells.length) {
         if (s.shellReadFailed) {
-          shellNote = 'Shells not written: the card’s Labels/cart_shell.ini could not be read.';
+          shellNote = 'Shells not written: the card’s Labels/cart_shell.txt could not be read.';
         } else {
           // Captured before the write's await, so a change made during it is not marked written.
           const values = shells.map((c) => c.shell);
@@ -916,7 +916,7 @@ async function writeLabels() {
       let shellNote = '';
       if (shells.length) {
         if (s.shellReadFailed) {
-          shellNote = 'Shells not written: the card’s Labels/cart_shell.ini could not be read.';
+          shellNote = 'Shells not written: the card’s Labels/cart_shell.txt could not be read.';
         } else {
           try {
             const text = mergedShells(s, shells, shells.map((c) => c.shell));

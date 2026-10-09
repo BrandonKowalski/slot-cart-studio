@@ -20,7 +20,7 @@ pub fn platform_of(dir: &str) -> Platform {
 /// Slot's `cart_face` reads a cart's label through `art::cover` and its pak's header through
 /// `gb`. Both answer from a stash here, so the cart names the stash keys where file paths
 /// would go. The title is left empty because slot's generated label is titled from the stem, not
-/// the header. `shell` is the choice as its `cart_shell.ini` value, empty for Automatic.
+/// the header. `shell` is the choice empty for Automatic.
 fn draw(
     platform: Platform,
     code: &str,

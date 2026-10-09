@@ -1,4 +1,4 @@
-//! A cart's shell choice as the page holds it: the `cart_shell.ini` value, empty for Automatic.
+//! A cart's shell choice as the page holds it: empty for Automatic.
 
 use slot_store::{Cart, Outline, Platform, ShellChoice, ShellFinish};
 use unicode_normalization::UnicodeNormalization;

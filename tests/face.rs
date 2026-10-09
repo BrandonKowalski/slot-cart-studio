@@ -189,7 +189,7 @@ fn a_composed_label_matches_slot_reading_its_png() {
     }
 }
 
-/// A card whose cart_shell.ini chooses a shell draws the cart the way the studio draws it when
+/// A card that chooses a shell draws the cart the way the studio draws it when
 /// handed the same line.
 #[test]
 fn a_chosen_shell_matches_slot() {

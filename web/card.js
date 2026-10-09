@@ -38,6 +38,8 @@ const byCart = (a, b) =>
 const NO_GAMES = 'That doesn’t look like a slot SD card. Be sure to select the root of the card.';
 const UNREADABLE =
   'Your browser couldn’t read that folder. In Firefox, the card’s hidden .Spotlight-V100 folder or a file with an accented name like é can cause this.';
+const OLD_SHELL_FILE =
+  'This card keeps its shells in cart_shell.ini, which this browser won’t open. Start the latest slot once on the device to rename it, then choose the card again.';
 const OLD_LAYOUT =
   'This card still keeps its roms loose in Games. Start slot once on the device to sweep them into GBA, GB and GBC folders, then choose the card again.';
 
@@ -85,12 +87,28 @@ export async function fromDirectory(root) {
   }
 
   const shellFile = async (folder) => {
+    let dir;
     try {
-      const dir = await root.getDirectoryHandle(folder);
-      return await (await (await dir.getFileHandle('cart_shell.ini')).getFile()).text();
+      dir = await root.getDirectoryHandle(folder);
     } catch (e) {
       if (e.name === 'NotFoundError') return null;
       throw e;
+    }
+    const read = async (name) => {
+      try {
+        return await (await (await dir.getFileHandle(name)).getFile()).text();
+      } catch (e) {
+        if (e.name === 'NotFoundError') return null;
+        throw e;
+      }
+    };
+    const txt = await read('cart_shell.txt');
+    if (txt !== null) return txt;
+    try {
+      return await read('cart_shell.ini');
+    } catch (e) {
+      if (e.name !== 'TypeError') throw e;
+      throw Object.assign(new Error(OLD_SHELL_FILE, { cause: e }), { name: 'OldShellFile' });
     }
   };
   const systemShells = async () => (await shellFile('Config')) ?? (await shellFile('System')) ?? '';
@@ -104,7 +122,7 @@ export async function fromDirectory(root) {
     labelShells,
     async writeShells(text) {
       const dir = await root.getDirectoryHandle('Labels', { create: true });
-      const file = await dir.getFileHandle('cart_shell.ini', { create: true });
+      const file = await dir.getFileHandle('cart_shell.txt', { create: true });
       const out = await file.createWritable();
       try {
         await out.write(text);
@@ -165,8 +183,9 @@ export function fromFiles(files) {
     if (parts.length === 3) {
       const [, dir, name] = parts;
       if (dir.toLowerCase() === 'games' && isRom(name)) loose = true;
-      if (['config', 'system', 'labels'].includes(dir.toLowerCase()) && name.toLowerCase() === 'cart_shell.ini') {
-        shellFiles[dir.toLowerCase()] = file;
+      const ext = ['cart_shell.txt', 'cart_shell.ini'].indexOf(name.toLowerCase());
+      if (['config', 'system', 'labels'].includes(dir.toLowerCase()) && ext !== -1) {
+        (shellFiles[dir.toLowerCase()] ??= [])[ext] = file;
       }
       continue;
     }
@@ -182,7 +201,10 @@ export function fromFiles(files) {
     }
   }
   if (!sawPlatform) throw new Error(loose ? OLD_LAYOUT : NO_GAMES);
-  const text = async (file) => (file ? file.text() : '');
+  const text = async (files) => {
+    const file = files?.[0] ?? files?.[1];
+    return file ? file.text() : '';
+  };
   return {
     carts: carts.sort(byCart),
     labels,

@@ -38,7 +38,7 @@ const layers = async (source) => ({ system: await source.systemShells(), labels:
 const both = async (tree) => [await layers(await fromDirectory(dirHandle(tree))), await layers(fromFiles(listed(tree)))];
 
 test('a card slot has moved reads its shells from Config', async () => {
-  for (const got of await both({ ...GAMES, Config: { 'cart_shell.ini': CONFIG }, Labels: { 'cart_shell.ini': LABELS } })) {
+  for (const got of await both({ ...GAMES, Config: { 'cart_shell.txt': CONFIG }, Labels: { 'cart_shell.txt': LABELS } })) {
     assert.deepEqual(got, { system: CONFIG, labels: LABELS });
   }
 });
@@ -50,13 +50,13 @@ test('a card slot has not moved yet reads its shells from System', async () => {
 });
 
 test('Config wins over a System file left behind', async () => {
-  for (const got of await both({ ...GAMES, Config: { 'cart_shell.ini': CONFIG }, System: { 'cart_shell.ini': SYSTEM } })) {
+  for (const got of await both({ ...GAMES, Config: { 'cart_shell.txt': CONFIG }, System: { 'cart_shell.ini': SYSTEM } })) {
     assert.deepEqual(got, { system: CONFIG, labels: '' });
   }
 });
 
 test('an empty Config file is still the one slot reads', async () => {
-  for (const got of await both({ ...GAMES, Config: { 'cart_shell.ini': '' }, System: { 'cart_shell.ini': SYSTEM } })) {
+  for (const got of await both({ ...GAMES, Config: { 'cart_shell.txt': '' }, System: { 'cart_shell.ini': SYSTEM } })) {
     assert.deepEqual(got, { system: '', labels: '' });
   }
 });
@@ -75,7 +75,7 @@ test('a card with no shell files reads as empty', async () => {
 
 test('a Config file the browser refuses fails only its own layer', async () => {
   const refused = Object.assign(new Error('could not be read'), { name: 'NotReadableError' });
-  const card = dirHandle({ ...GAMES, Config: { 'cart_shell.ini': CONFIG }, Labels: { 'cart_shell.ini': LABELS } });
+  const card = dirHandle({ ...GAMES, Config: { 'cart_shell.txt': CONFIG }, Labels: { 'cart_shell.txt': LABELS } });
   const config = await card.getDirectoryHandle('Config');
   const source = await fromDirectory({
     ...card,
@@ -88,12 +88,70 @@ test('a Config file the browser refuses fails only its own layer', async () => {
   assert.equal(await source.labelShells(), LABELS);
 });
 
+test('a card slot has not started on since the rename reads its .ini shells', async () => {
+  for (const got of await both({ ...GAMES, Config: { 'cart_shell.ini': CONFIG }, Labels: { 'cart_shell.ini': LABELS } })) {
+    assert.deepEqual(got, { system: CONFIG, labels: LABELS });
+  }
+});
+
+test('a .txt wins over the .ini beside it', async () => {
+  const tree = {
+    ...GAMES,
+    Config: { 'cart_shell.ini': SYSTEM, 'cart_shell.txt': CONFIG },
+    Labels: { 'cart_shell.ini': SYSTEM, 'cart_shell.txt': LABELS },
+  };
+  for (const got of await both(tree)) {
+    assert.deepEqual(got, { system: CONFIG, labels: LABELS });
+  }
+});
+
+test('an .ini the browser will not open by name asks for slot to start once', async () => {
+  const card = dirHandle({ ...GAMES, Labels: { 'cart_shell.ini': LABELS } });
+  const labels = await card.getDirectoryHandle('Labels');
+  const source = await fromDirectory({
+    ...card,
+    async getDirectoryHandle(name) {
+      if (name !== 'Labels') return card.getDirectoryHandle(name);
+      return {
+        ...labels,
+        async getFileHandle(file) {
+          if (file.endsWith('.ini')) throw new TypeError('Name is not allowed.');
+          return labels.getFileHandle(file);
+        },
+      };
+    },
+  });
+  await assert.rejects(source.labelShells(), { name: 'OldShellFile' });
+});
+
+test('shells are written to Labels/cart_shell.txt', async () => {
+  const written = {};
+  const card = dirHandle({ ...GAMES, Labels: {} });
+  const source = await fromDirectory({
+    ...card,
+    async getDirectoryHandle(name) {
+      if (name !== 'Labels') return card.getDirectoryHandle(name);
+      return {
+        async getFileHandle(file) {
+          return {
+            async createWritable() {
+              return { write: async (t) => (written[`${name}/${file}`] = t), close: async () => {} };
+            },
+          };
+        },
+      };
+    },
+  });
+  await source.writeShells(LABELS);
+  assert.deepEqual(written, { 'Labels/cart_shell.txt': LABELS });
+});
+
 test('a listed card carries every file in its Labels folder but dotfiles', async () => {
   const source = fromFiles(
     listed({
       ...GAMES,
       labels: {
-        'cart_shell.ini': LABELS,
+        'cart_shell.txt': LABELS,
         '.DS_Store': '',
         GBA: { 'A.png': 'a', 'Gone.png': 'g', '._A.png': '' },
         Odd: { 'note.txt': 'n' },
@@ -103,7 +161,7 @@ test('a listed card carries every file in its Labels folder but dotfiles', async
   );
   const got = await Promise.all(source.labelFiles.map(async (f) => [f.path, await (await f.file()).text()]));
   assert.deepEqual(got, [
-    ['Labels/cart_shell.ini', LABELS],
+    ['Labels/cart_shell.txt', LABELS],
     ['Labels/GBA/A.png', 'a'],
     ['Labels/GBA/Gone.png', 'g'],
     ['Labels/Odd/note.txt', 'n'],
