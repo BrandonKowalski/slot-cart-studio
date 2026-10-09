@@ -87,3 +87,25 @@ test('a Config file the browser refuses fails only its own layer', async () => {
   await assert.rejects(source.systemShells(), { name: 'NotReadableError' });
   assert.equal(await source.labelShells(), LABELS);
 });
+
+test('a listed card carries every file in its Labels folder but dotfiles', async () => {
+  const source = fromFiles(
+    listed({
+      ...GAMES,
+      labels: {
+        'cart_shell.ini': LABELS,
+        '.DS_Store': '',
+        GBA: { 'A.png': 'a', 'Gone.png': 'g', '._A.png': '' },
+        Odd: { 'note.txt': 'n' },
+      },
+      Saves: { GBA: { 'A.sav': '' } },
+    }),
+  );
+  const got = await Promise.all(source.labelFiles.map(async (f) => [f.path, await (await f.file()).text()]));
+  assert.deepEqual(got, [
+    ['Labels/cart_shell.ini', LABELS],
+    ['Labels/GBA/A.png', 'a'],
+    ['Labels/GBA/Gone.png', 'g'],
+    ['Labels/Odd/note.txt', 'n'],
+  ]);
+});

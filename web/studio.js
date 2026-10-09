@@ -176,6 +176,7 @@ const mergedShells = (s, carts, values) =>
     values.map((v, i) => v || (s.systemShells?.has(carts[i].stem.normalize('NFC')) ? 'auto' : '')),
   );
 const SHELL_FILE = 'Labels/cart_shell.ini';
+const pathKey = (path) => path.normalize('NFC').toLowerCase();
 
 // A Label holds its composition in WASM memory, which never shrinks and stops at 4 GiB.
 // One kept per cart runs a big card out of it, so a Label lives only for the call that needs it.
@@ -897,14 +898,15 @@ async function writeLabels() {
       // Each entry is taken out of WASM memory as soon as it is added, so the card's labels pile
       // up here, where memory is given back, and not in the module.
       const parts = [];
-      const total = carts.length;
+      const written = new Set();
+      const carried = s.source.labelFiles;
+      const total = carts.length + shells.length + carried.length;
       for (const [i, c] of carts.entries()) {
-        writeProgress(i + 1, total + shells.length);
-        zip.add(
-          `Labels/${c.platform}/${c.stem}.png`,
-          withCartLabel(c, (label) => label.png()),
-        );
+        writeProgress(i + 1, total);
+        const path = `Labels/${c.platform}/${c.stem}.png`;
+        zip.add(path, withCartLabel(c, (label) => label.png()));
         parts.push(zip.take());
+        written.add(pathKey(path));
         // Packing a few hundred carts is seconds of synchronous work with nothing on screen, so
         // give the tab a turn to paint the bar and take input.
         await new Promise((r) => setTimeout(r, 0));
@@ -920,6 +922,7 @@ async function writeLabels() {
             const text = mergedShells(s, shells, shells.map((c) => c.shell));
             zip.add(SHELL_FILE, new TextEncoder().encode(text));
             parts.push(zip.take());
+            written.add(pathKey(SHELL_FILE));
           } catch (e) {
             if (trapped(e)) return;
             logError(SHELL_FILE, e);
@@ -927,9 +930,27 @@ async function writeLabels() {
           }
         }
       }
+      let unread = 0;
+      for (const [i, f] of carried.entries()) {
+        writeProgress(carts.length + shells.length + i + 1, total);
+        if (written.has(pathKey(f.path))) continue;
+        try {
+          zip.add(f.path, new Uint8Array(await (await f.file()).arrayBuffer()));
+          parts.push(zip.take());
+        } catch (e) {
+          if (trapped(e)) return;
+          logError(f.path, e);
+          unread++;
+        }
+        if (fatal || s !== session) return;
+      }
       parts.push(zip.finish());
       download(new Blob(parts, { type: 'application/zip' }), 'labels.zip');
-      if (s === session && shellNote) banner(shellNote);
+      const unreadNote =
+        unread > 0 &&
+        `${unread === 1 ? '1 file' : `${unread} files`} in the card’s Labels folder couldn’t be read and aren’t in the zip. Merge it into the card’s Labels folder rather than replacing it.`;
+      const notes = [shellNote, unreadNote].filter(Boolean);
+      if (s === session && notes.length) banner(notes.join(' '));
     }
   } catch (e) {
     if (!trapped(e)) throw e;

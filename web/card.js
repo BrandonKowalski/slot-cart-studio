@@ -148,13 +148,17 @@ export async function fromDirectory(root) {
 export function fromFiles(files) {
   const carts = [];
   const labels = new Map();
+  const labelFiles = [];
   let sawPlatform = false;
   let loose = false;
   const shellFiles = {};
   for (const file of files) {
+    const parts = file.webkitRelativePath.split('/');
+    if (parts.length >= 3 && parts[1].toLowerCase() === 'labels' && parts.slice(2).every(visible)) {
+      labelFiles.push({ path: ['Labels', ...parts.slice(2)].join('/'), file: async () => file });
+    }
     // The picked folder, then Games or Labels, then the platform, then the file. Anything
     // shallower is the layout slot swept away; anything deeper is not slot's.
-    const parts = file.webkitRelativePath.split('/');
     if (parts.length === 3) {
       const [, dir, name] = parts;
       if (dir.toLowerCase() === 'games' && isRom(name)) loose = true;
@@ -179,6 +183,7 @@ export function fromFiles(files) {
   return {
     carts: carts.sort(byCart),
     labels,
+    labelFiles,
     direct: false,
     write: null,
     systemShells: () => text(shellFiles.config ?? shellFiles.system),
