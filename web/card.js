@@ -37,7 +37,7 @@ const byCart = (a, b) =>
 
 const NO_GAMES = 'That doesn’t look like a slot SD card. Be sure to select the root of the card.';
 const UNREADABLE =
-  'Your browser couldn’t read that folder. A file with an accented name like é can cause this in Firefox.';
+  'Your browser couldn’t read that folder. In Firefox, the card’s hidden .Spotlight-V100 folder or a file with an accented name like é can cause this.';
 const OLD_LAYOUT =
   'This card still keeps its roms loose in Games. Start slot once on the device to sweep them into GBA, GB and GBC folders, then choose the card again.';
 
