@@ -548,22 +548,22 @@ async function crcOf(file) {
 
 async function identify(s) {
   const text = { system: '', labels: '' };
-  const unread = [];
+  const failed = [];
   try {
     text.system = await s.source.systemShells();
   } catch (e) {
     logError('Config/cart_shell.txt', e);
-    unread.push(e.name === 'OldShellFile' ? e.message : 'The shells chosen on the device couldn’t be read, so they don’t show.');
+    failed.push(e);
   }
   try {
     text.labels = await s.source.labelShells();
   } catch (e) {
     logError(SHELL_FILE, e);
     s.shellReadFailed = true;
-    unread.push(e.name === 'OldShellFile' ? e.message : 'The card’s Labels/cart_shell.txt couldn’t be read, so shells chosen here before don’t show.');
+    failed.push(e);
   }
   if (s !== session || fatal) return;
-  if (unread.length) banner([...new Set(unread)].join(' '));
+  if (failed.length) banner(failed.find((e) => e.name === 'OldShellFile')?.message ?? 'The card’s shells couldn’t be read.');
   s.shellText = text.labels;
   const system = cart_shells(text.system);
   s.systemShells = new Set(system.filter((_, i) => i % 2 === 0).map((stem) => stem.normalize('NFC')));
@@ -866,7 +866,7 @@ async function writeLabels() {
       let shellNote = '';
       if (shells.length) {
         if (s.shellReadFailed) {
-          shellNote = 'Shells not written: the card’s Labels/cart_shell.txt could not be read.';
+          shellNote = 'Shells not written: the card’s shells couldn’t be read.';
         } else {
           // Captured before the write's await, so a change made during it is not marked written.
           const values = shells.map((c) => c.shell);
@@ -916,7 +916,7 @@ async function writeLabels() {
       let shellNote = '';
       if (shells.length) {
         if (s.shellReadFailed) {
-          shellNote = 'Shells not written: the card’s Labels/cart_shell.txt could not be read.';
+          shellNote = 'Shells not written: the card’s shells couldn’t be read.';
         } else {
           try {
             const text = mergedShells(s, shells, shells.map((c) => c.shell));

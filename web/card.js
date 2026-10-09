@@ -39,7 +39,7 @@ const NO_GAMES = 'That doesn’t look like a slot SD card. Be sure to select the
 const UNREADABLE =
   'Your browser couldn’t read that folder. In Firefox, the card’s hidden .Spotlight-V100 folder or a file with an accented name like é can cause this.';
 const OLD_SHELL_FILE =
-  'This card keeps its shells in cart_shell.ini, which this browser won’t open. Start the latest slot once on the device to rename it, then choose the card again.';
+  'This browser can’t open cart_shell.ini. Start the latest slot once, then choose the card again.';
 const OLD_LAYOUT =
   'This card still keeps its roms loose in Games. Start slot once on the device to sweep them into GBA, GB and GBC folders, then choose the card again.';
 
