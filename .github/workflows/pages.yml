@@ -55,6 +55,13 @@ jobs:
         working-directory: slot-cart-studio
         run: wasm-pack build --release --target web --no-typescript --out-dir web/pkg
 
+      - name: Stamp the commit into the footer
+        working-directory: slot-cart-studio
+        run: |
+          set -eu
+          sed -i "s/^const BUILD = 'dev';\$/const BUILD = '$GITHUB_SHA';/" web/studio.js
+          grep -q "^const BUILD = '$GITHUB_SHA';\$" web/studio.js
+
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v3

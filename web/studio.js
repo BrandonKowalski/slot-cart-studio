@@ -37,6 +37,7 @@ const limit = limiter(4);
 // The GBA game code sits at 0xAC and the Game Boy header ends at 0x150; nothing past that is read.
 const HEAD = 0x150;
 const FATAL = 'The studio ran out of memory or hit an internal error. Reload the page to start again.';
+const BUILD = 'dev';
 
 // The box each platform's cart is drawn in, taken from slot at startup. A Game Boy Game Pak is
 // the same width as a GBA cart and nearly twice as tall, so a canvas cut for one refuses the
@@ -1170,4 +1171,13 @@ async function start() {
   document.body.dataset.ready = 'true';
 }
 
+$('build').append(
+  'Build ',
+  BUILD === 'dev'
+    ? 'dev'
+    : Object.assign(document.createElement('a'), {
+        href: `https://github.com/BrandonKowalski/slot-cart-studio/commit/${BUILD}`,
+        textContent: BUILD.slice(0, 7),
+      }),
+);
 start();
