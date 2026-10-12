@@ -176,6 +176,13 @@ test('a folder with files but no games is still not a slot card', () => {
   assert.throws(() => fromFiles(listed({ Photos: { 'a.jpg': '' } })), /doesn’t look like a slot SD card/);
 });
 
+test('roms loose in Games ask to be moved into platform folders by hand', async () => {
+  const loose = { Games: { 'A.gba': '' } };
+  const asks = { message: /Move them into the GBA, GB and GBC folders/ };
+  await assert.rejects(fromDirectory(dirHandle(loose)), asks);
+  assert.throws(() => fromFiles(listed(loose)), asks);
+});
+
 test('a card without shell files reads as empty where the browser refuses .ini names', async () => {
   const windows = (dir) => ({
     ...dir,
