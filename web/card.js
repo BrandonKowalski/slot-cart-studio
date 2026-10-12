@@ -104,6 +104,9 @@ export async function fromDirectory(root) {
     };
     const txt = await read('cart_shell.txt');
     if (txt !== null) return txt;
+    let listed = false;
+    for await (const [name] of dir.entries()) listed ||= name.toLowerCase() === 'cart_shell.ini';
+    if (!listed) return null;
     try {
       return await read('cart_shell.ini');
     } catch (e) {

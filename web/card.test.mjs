@@ -175,3 +175,18 @@ test('a folder the browser listed as empty says it could not be read', () => {
 test('a folder with files but no games is still not a slot card', () => {
   assert.throws(() => fromFiles(listed({ Photos: { 'a.jpg': '' } })), /doesn’t look like a slot SD card/);
 });
+
+test('a card without shell files reads as empty where the browser refuses .ini names', async () => {
+  const windows = (dir) => ({
+    ...dir,
+    async getDirectoryHandle(name) {
+      return windows(await dir.getDirectoryHandle(name));
+    },
+    async getFileHandle(name) {
+      if (name.endsWith('.ini')) throw new TypeError('Name is not allowed.');
+      return dir.getFileHandle(name);
+    },
+  });
+  const source = await fromDirectory(windows(dirHandle({ ...GAMES, Config: {}, Labels: {} })));
+  assert.deepEqual(await layers(source), { system: '', labels: '' });
+});
