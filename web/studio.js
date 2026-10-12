@@ -1176,7 +1176,6 @@ async function start() {
 }
 
 $('build').append(
-  'Build ',
   BUILD === 'dev'
     ? 'dev'
     : Object.assign(document.createElement('a'), {
