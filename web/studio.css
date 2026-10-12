@@ -147,6 +147,7 @@ body.loading #grid,body.loading .shelf-bar,body.loading #progress{display:none}
 .shelf-bar{position:sticky;top:var(--mast-h);z-index:10;display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px;margin-top:24px;padding-top:12px;background:var(--page);border-bottom:3px solid var(--housing)}
 .shelf-bar:not(:has(> :not([hidden]))){display:none}
 .write-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:14px;margin-left:auto}
+.write-bar .eject{color:var(--muted);font-size:15px}
 .write-bar .btn{display:inline-flex;align-items:center;height:var(--shelf-row);padding-top:0;padding-bottom:0}
 .fill-open{margin:0 0 6px auto}
 .fill-open:not([hidden])+.write-bar{margin-left:0}

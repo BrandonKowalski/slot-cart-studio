@@ -516,6 +516,7 @@ async function open(source) {
   loading(null);
   session = { source, carts: source.carts.map(newCart) };
   $('banner').hidden = true;
+  $('eject').hidden = true;
   // A card opened mid-scan replaces identify()'s loop before it reaches progress(total, total, ''),
   // so the old bar has to be cleared here rather than left for a call that may never come.
   $('progress').hidden = true;
@@ -742,8 +743,9 @@ function showPlatform(p) {
 function updateWriteBar() {
   if (!session) return;
   const n = readyCarts().length + shellChanges().length;
+  $('write-bar').hidden = n === 0 && !writing && $('eject').hidden;
   // Nothing to write means no button at all.
-  $('write-bar').hidden = n === 0 && !writing;
+  $('write').hidden = n === 0 && !writing;
   $('write').disabled = n === 0 || writing || fatal;
   $('write').textContent = session.source.direct ? 'Write to card' : 'Download ZIP';
 }
@@ -834,6 +836,7 @@ async function writeLabels() {
   const shells = shellChanges();
   if ((!carts.length && !shells.length) || writing || fatal) return;
   writing = true;
+  $('eject').hidden = true;
   updateWriteBar();
   writeProgress(0, carts.length + shells.length);
   try {
@@ -876,6 +879,7 @@ async function writeLabels() {
             await s.source.writeShells(text);
             s.shellText = text;
             shells.forEach((c, i) => (c.shellOnCard = values[i]));
+            count.shells = shells.length;
           } catch (e) {
             if (trapped(e)) return;
             logError(SHELL_FILE, e);
@@ -883,9 +887,9 @@ async function writeLabels() {
           }
         }
       }
-      // A write that went through says nothing; one that didn't, all of it, says so. Not over a card
-      // opened while this one was writing.
+      // One that didn't, all of it, says so. Not over a card opened while this one was writing.
       if (s === session) {
+        $('eject').hidden = !(count.written || count.shells);
         const plural = (k, one, many) => `${k} ${k === 1 ? one : many}`;
         const problems = [
           count.failed && `${plural(count.failed, 'label', 'labels')} couldn’t be written.`,
