@@ -1,8 +1,12 @@
-//! slot cart studio. Four of slot's own source files are compiled here unchanged, so a preview
+//! slot cart studio. slot's own source files are compiled here unchanged, so a preview
 //! is the device's cart face rather than an imitation of it. They reach each other through
 //! `crate::` paths, which is why they sit at the root. `art` is the one module swapped out:
 //! slot's reads a label from disk, and a browser has no disk.
 
+#[allow(dead_code)]
+#[rustfmt::skip]
+#[path = "../../slot/crates/slot-ui/src/bitmaps.rs"]
+mod bitmaps;
 #[allow(dead_code)]
 #[rustfmt::skip]
 #[path = "../../slot/crates/slot-ui/src/cart.rs"]
@@ -21,6 +25,7 @@ mod silhouette;
 mod text;
 
 mod art;
+mod board;
 pub mod choice;
 pub mod dat;
 pub mod face;

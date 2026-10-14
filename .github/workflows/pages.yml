@@ -1,6 +1,6 @@
 name: pages
 
-# The page is static, but its WASM is built from this crate and from four of slot's own source
+# The page is static, but its WASM is built from this crate and from slot's own source
 # files, which is why slot is checked out beside it at the commit slot.ref names.
 on:
   push:

@@ -6,6 +6,8 @@
 use std::cell::RefCell;
 use std::path::Path;
 
+pub(crate) use self::decode as decode_png_bytes;
+
 const KEY: &str = "stash:label";
 
 enum Stashed {

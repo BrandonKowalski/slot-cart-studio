@@ -41,4 +41,15 @@ pub mod gb {
             None => ::slot_store_real::gb::class(rom),
         }
     }
+
+    pub fn cached_header(rom: &Path) -> Option<Header> {
+        stashed(rom).unwrap_or_else(|| ::slot_store_real::gb::cached_header(rom))
+    }
+
+    pub fn cached_class(rom: &Path) -> Class {
+        match stashed(rom) {
+            Some(h) => h.map_or(Class::Original, |h| h.class()),
+            None => ::slot_store_real::gb::cached_class(rom),
+        }
+    }
 }

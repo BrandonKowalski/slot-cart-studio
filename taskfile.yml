@@ -2,7 +2,7 @@ version: '3'
 
 vars:
   SLOT: ../slot
-  # What the studio's faces are made of: the four files compiled in place, slot's art.rs that
+  # What the studio's faces are made of: the files compiled in place, slot's art.rs that
   # src/art.rs copies, the assets they include, where `Cart` comes from, gba.rs, whose header
   # rule src/rom.rs mirrors, gb.rs, whose header the shim answers for, and ini.rs and
   # cart_shell.rs, which the shell choice is read and merged through.
@@ -15,6 +15,8 @@ vars:
     crates/slot-ui/assets/lettering_gbc.png crates/slot-ui/assets/lettering_gba.png
     crates/slot-ui/assets/label.ttf crates/slot-store/src/scan.rs crates/slot-store/src/gba.rs
     crates/slot-store/src/gb.rs crates/slot-store/src/ini.rs crates/slot-store/src/cart_shell.rs
+    crates/slot-ui/src/bitmaps.rs crates/slot-ui/src/board.rs crates/slot-gfx/src/surface.rs
+    crates/slot-ui/assets/*.png
 
 tasks:
   default:
