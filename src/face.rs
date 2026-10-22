@@ -30,7 +30,7 @@ fn draw(
     key: &Path,
 ) -> Vec<u8> {
     slot_store::gb::with_header(head, |rom| {
-        cart::cart_face(&slot_store::Cart {
+        let cart = slot_store::Cart {
             platform,
             stem: stem.to_string(),
             rom: rom.to_path_buf(),
@@ -38,9 +38,31 @@ fn draw(
             title: String::new(),
             code: code.to_string(),
             shell: slot_store::ShellChoice::parse(shell),
-        })
-        .rgba
+        };
+        let face = cart::cart_face(&cart).rgba;
+        if !cart::shows_interior(&cart) {
+            return face;
+        }
+        let mut out = cart::cart_interior(&cart).rgba;
+        over(&mut out, &cart::cart_backing(cart::gb_shell_of(&cart)).rgba);
+        over(&mut out, &face);
+        out
     })
+}
+
+fn over(dst: &mut [u8], src: &[u8]) {
+    for (d, s) in dst.chunks_exact_mut(4).zip(src.chunks_exact(4)) {
+        let sa = u32::from(s[3]);
+        let da = u32::from(d[3]) * (255 - sa) / 255;
+        let a = sa + da;
+        if a == 0 {
+            continue;
+        }
+        for c in 0..3 {
+            d[c] = ((u32::from(s[c]) * sa + u32::from(d[c]) * da + a / 2) / a) as u8;
+        }
+        d[3] = a as u8;
+    }
 }
 
 /// PNG bytes as a card holds them. Bytes that don't decode fall back to slot's generated label,

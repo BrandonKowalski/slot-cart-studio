@@ -52,11 +52,30 @@ fn slot_face(root: &Path) -> (Vec<u8>, String, String) {
     let mut cart = slot_store::scan(root).expect("scan").remove(0);
     cart.read_header();
     let cart = &cart;
-    (
-        slot_ui::cart_face(cart).rgba,
-        cart.code.clone(),
-        cart.stem.clone(),
-    )
+    (shelf_face(cart), cart.code.clone(), cart.stem.clone())
+}
+
+fn shelf_face(cart: &slot_store::Cart) -> Vec<u8> {
+    let face = slot_ui::cart_face(cart).rgba;
+    if !slot_ui::shows_interior(cart) {
+        return face;
+    }
+    let mut out = slot_ui::cart_interior(cart).rgba;
+    for layer in [slot_ui::cart_backing(slot_ui::gb_shell_of(cart)).rgba, face] {
+        for (d, s) in out.chunks_exact_mut(4).zip(layer.chunks_exact(4)) {
+            let sa = u32::from(s[3]);
+            let da = u32::from(d[3]) * (255 - sa) / 255;
+            let a = sa + da;
+            if a == 0 {
+                continue;
+            }
+            for c in 0..3 {
+                d[c] = ((u32::from(s[c]) * sa + u32::from(d[c]) * da + a / 2) / a) as u8;
+            }
+            d[3] = a as u8;
+        }
+    }
+    out
 }
 
 fn encode(w: u32, h: u32, colour: png::ColorType, data: &[u8]) -> Vec<u8> {
