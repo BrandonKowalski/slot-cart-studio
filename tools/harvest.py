@@ -22,11 +22,10 @@ and credential problems that rule ScreenScraper out of the page itself apply her
     SS_... tools/harvest.py --dat all --out ../slot-thumbnails
 
 Alongside the images it writes index.json, mapping CRC32 to the file that was saved. The studio
-already computes a cart's CRC32, so that index is an exact lookup: no name matching, no probing a
+already computes a cart's CRC32, so that index is an exact lookup: no probing a
 url per cart to see whether it 404s, and it reaches roms No-Intro has never heard of.
 
-Files are named by that CRC32 rather than by a game's name, so nothing in the set is named after a
-database it did not come from. The No-Intro dat is read only to know which dumps exist and what to
+The dat is read only to know which dumps exist and what to
 call them while the run reports itself; every image is ScreenScraper's.
 
 ScreenScraper's quota is per account, per minute and per day, and their documentation makes
@@ -42,6 +41,7 @@ import re
 import sys
 import threading
 import time
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -50,7 +50,9 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 API = 'https://api.screenscraper.fr/api2'
-DAT = 'https://raw.githubusercontent.com/libretro/libretro-database/master/metadat/no-intro/'
+LIBRETRO = 'https://raw.githubusercontent.com/libretro/libretro-database/master/metadat/'
+VIDEO = 'Game Boy Advance Video'
+EXTRAS = Path(__file__).with_name('extras.json')
 
 # The card folders slot files roms under, and libretro's name for each system. The ScreenScraper
 # system id is looked up from that name rather than hard-coded, so a renumbering upstream cannot
@@ -99,7 +101,7 @@ def creds():
     c = {
         'devid': os.environ['SS_DEVID'],
         'devpassword': os.environ['SS_DEVPASSWORD'],
-        'softname': os.environ.get('SS_SOFTNAME', 'slot-cart-studio'),
+        'softname': os.environ.get('SS_SOFTNAME', 'Cannoli'),
         'output': 'json',
     }
     # A user account carries the quota; without one the per-day allowance is too small to build
@@ -163,22 +165,40 @@ def quota(c):
     }
 
 
-def dat_entries(platform):
-    """CRC32 to No-Intro name: which dumps exist, and what to call them in this run's own output.
-
-    The name never reaches a file on disk — those are named for the CRC — so this is a worklist
-    and a log, not a source.
-    """
-    url = DAT + urllib.parse.quote(PLATFORMS[platform]) + '.dat'
-    with urllib.request.urlopen(url, timeout=120) as r:
-        text = r.read().decode('utf-8', 'replace')
+def parse_dat(text, prefix=''):
     out = {}
     for block in re.finditer(r'game\s*\((.*?)\n\)', text, re.S):
         body = block.group(1)
-        name = re.search(r'name\s+"([^"]+)"', body)
+        name = re.search(r'^\s*(?:name|comment)\s+"([^"]+)"', body, re.M)
         crc = re.search(r'\bcrc\s+([0-9A-Fa-f]{8})', body)
-        if name and crc:
-            out[crc.group(1).upper()] = name.group(1)
+        if name and crc and name.group(1).startswith(prefix):
+            out.setdefault(crc.group(1).upper(), name.group(1))
+    return out
+
+
+def read_dat(folder, platform):
+    url = LIBRETRO + folder + '/' + urllib.parse.quote(PLATFORMS[platform]) + '.dat'
+    try:
+        with urllib.request.urlopen(url, timeout=120) as r:
+            return r.read().decode('utf-8', 'replace')
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return ''
+        raise
+
+
+def dat_entries(platform):
+    """CRC32 to No-Intro name: which dumps exist, and what to call them in this run's own output.
+
+    The name never reaches a file on disk, so this is a worklist and a log, not a source.
+    """
+    return parse_dat(read_dat('no-intro', platform))
+
+
+def other_dumps(platform):
+    out = parse_dat(read_dat('hacks', platform))
+    for crc, name in parse_dat(read_dat('serial', platform), VIDEO).items():
+        out.setdefault(crc, name)
     return out
 
 
@@ -280,6 +300,85 @@ def roms(card, platform):
     )
 
 
+def collect(medias, todo, regions, root, key):
+    got = {}
+    for want in todo:
+        m = pick(medias, SOURCE.get(want, want), regions)
+        try:
+            body = fetch(m['url']) if m else None
+            if want == 'look':
+                measured = look.measure_look(body) if body else None
+                if measured:
+                    got[want] = measured
+            elif save(as_png(body), root / want / f'{key}.png'):
+                got[want] = True
+        except Exception:
+            pass
+    return got
+
+
+def record(entry, got, root, key, out):
+    for w, value in got.items():
+        entry[w] = value if w == 'look' else str((root / w / f'{key}.png').relative_to(out))
+
+
+SLUG = re.compile(r'^(?=.*[a-z])[a-z0-9]+(?:-[a-z0-9]+)*$')
+
+
+def load_extras(path):
+    data = json.loads(Path(path).read_text())
+    seen = set()
+    for platform, extras in data.items():
+        if platform not in PLATFORMS:
+            sys.exit(f'{path}: {platform} is not one of {", ".join(PLATFORMS)}')
+        for e in extras:
+            slug = e.get('slug', '')
+            if not SLUG.match(slug):
+                sys.exit(f'{path}: "{slug}" is not a slug: lower case words joined by hyphens, with a letter in it')
+            if slug in seen:
+                sys.exit(f'{path}: {slug} is listed twice')
+            if not e.get('name'):
+                sys.exit(f'{path}: {slug} has no name')
+            seen.add(slug)
+    return data
+
+
+def save_extras(path, data):
+    Path(path).write_text(json.dumps(data, indent=2, ensure_ascii=False) + '\n')
+
+
+def plain(text):
+    return re.sub(r'[^a-z0-9]', '', unicodedata.normalize('NFD', text).lower())
+
+
+def best_hit(data, names):
+    hits = [j for j in (data or {}).get('response', {}).get('jeux') or [] if j and str(j.get('id') or '').isdigit()]
+    wanted = {plain(n) for n in names}
+    exact = [j for j in hits if any(plain(n.get('text') or '') in wanted for n in j.get('noms') or [])]
+    return (exact or hits or [None])[0]
+
+
+def game_name(jeu):
+    return ((jeu.get('noms') or [{}])[0] or {}).get('text', '?')
+
+
+def new_crcs(roms, known):
+    out = set()
+    for r in roms or []:
+        crc = str(r.get('romcrc') or '').strip().upper()
+        if re.fullmatch(r'[0-9A-F]{8}', crc) and crc not in known:
+            out.add(crc)
+    return sorted(out)
+
+
+def extra_entry(platform, extra, crcs, old=None):
+    entry = {k: v for k, v in (old or {}).items() if k not in ('name', 'platform', 'crcs', 'aka')}
+    entry.update(name=extra['name'], platform=platform, crcs=crcs)
+    if extra.get('aka'):
+        entry['aka'] = list(extra['aka'])
+    return entry
+
+
 def probe(path, c, ids):
     platform = Path(path).parent.name.upper()
     system = ids.get(platform)
@@ -305,6 +404,8 @@ def main():
     ap.add_argument('--card', help='a slot SD card, harvested for the roms actually on it')
     ap.add_argument('--dat', choices=sorted(PLATFORMS) + ['all'],
                     help='every dump a platform has, not just a card; "all" for every platform')
+    ap.add_argument('--extras', nargs='?', const=str(EXTRAS),
+                    help=f'the games no dat names, kept under slugs of our own (default {EXTRAS.name})')
     ap.add_argument('--out', help='where the set is written')
     ap.add_argument('--media', default='wheel,look,support-texture',
                     help='comma separated ScreenScraper media types, or look for the label measured from the cart scan')
@@ -320,8 +421,9 @@ def main():
     if args.probe:
         probe(args.probe, c, ids)
         return
-    if not args.out or not (args.card or args.dat):
-        sys.exit('--out plus one of --card or --dat is needed (or --probe)')
+    if not args.out or not (args.card or args.dat or args.extras):
+        sys.exit('--out plus one of --card, --dat or --extras is needed (or --probe)')
+    extras = load_extras(args.extras) if args.extras else {}
 
     q = quota(c)
     left = None if q['per_day'] is None else max(0, q['per_day'] - q['today'])
@@ -385,25 +487,11 @@ def main():
             print(f'  {name}: {type(e).__name__}')
             return
         medias = ((data or {}).get('response', {}).get('jeu') or {}).get('medias', [])
-        got, measured = [], None
-        for want in todo:
-            m = pick(medias, SOURCE.get(want, want), regions)
-            try:
-                body = fetch(m['url']) if m else None
-                if want == 'look':
-                    measured = look.measure_look(body) if body else None
-                    if measured:
-                        got.append(want)
-                elif save(as_png(body), root / want / f'{crc}.png'):
-                    got.append(want)
-            except Exception:
-                pass
+        got = collect(medias, todo, regions, root, crc)
         with lock:
             if got:
                 n['saved'] += len(got)
-                entry = index.setdefault(crc, {})
-                for w in got:
-                    entry[w] = measured if w == 'look' else str((root / w / f'{crc}.png').relative_to(args.out))
+                record(index.setdefault(crc, {}), got, root, crc, args.out)
             else:
                 n['missed'] += 1
             n['done'] += 1
@@ -411,12 +499,72 @@ def main():
                 print(f"  ... {n['done']} done, {n['saved']} files, {n['missed']} without art", flush=True)
         time.sleep(pause)
 
+    def extra(platform, system, known, e):
+        slug = e['slug']
+        root = Path(args.out) / platform
+        todo = todo_for(slug, wanted, index, root, args.relook)
+        if not todo and 'crcs' in index.get(slug, {}):
+            n['skipped'] += 1
+            return
+        if left is not None and n['asked'] >= left or args.limit and n['asked'] >= args.limit:
+            stop.set()
+            return
+        if not e.get('gameid'):
+            n['asked'] += 1
+            names = [e['name'], *e.get('aka', []), *([e['search']] if e.get('search') else [])]
+            jeu = best_hit(call('jeuRecherche.php', dict(c, systemeid=system, recherche=e.get('search') or e['name'])), names)
+            time.sleep(pause)
+            if not jeu:
+                n['missed'] += 1
+                print(f'  {slug}: ScreenScraper finds nothing called "{e.get("search") or e["name"]}"')
+                return
+            e['gameid'] = int(jeu['id'])
+            save_extras(args.extras, extras)
+            print(f'  {slug}: pinned to ScreenScraper game {jeu["id"]}, "{game_name(jeu)}"')
+        n['asked'] += 1
+        data = call('jeuInfos.php', dict(c, systemeid=system, gameid=e['gameid']))
+        time.sleep(pause)
+        jeu = (data or {}).get('response', {}).get('jeu')
+        if not jeu:
+            n['missed'] += 1
+            print(f'  {slug}: ScreenScraper has no game {e["gameid"]}')
+            return
+        got = collect(jeu.get('medias', []), todo, REGIONS, root, slug)
+        entry = extra_entry(platform, e, new_crcs(jeu.get('roms'), known), index.get(slug))
+        record(entry, got, root, slug, args.out)
+        n['done'] += 1
+        if not set(entry) - {'name', 'platform', 'crcs', 'aka'}:
+            n['missed'] += 1
+            print(f'  {slug}: ScreenScraper game {e["gameid"]} has no art')
+            return
+        index[slug] = entry
+        n['saved'] += len(got)
+        print(f'  {slug}: {", ".join(got) or "no media"}, {len(entry["crcs"])} dump(s)')
+
     try:
-        chosen = list(PLATFORMS) if args.dat == 'all' else ([args.dat] if args.dat else list(PLATFORMS))
+        for platform, listed in extras.items():
+            if stop.is_set():
+                break
+            print(f'{platform}: {len(listed)} extras', flush=True)
+            known = dat_entries(platform)
+            for e in listed:
+                if stop.is_set():
+                    break
+                try:
+                    extra(platform, ids[platform], known, e)
+                except QuotaSpent:
+                    raise
+                except Exception as err:
+                    n['missed'] += 1
+                    print(f'  {e["slug"]}: {type(err).__name__}')
+        if args.dat and args.dat != 'all':
+            chosen = [args.dat]
+        else:
+            chosen = list(PLATFORMS) if args.dat or args.card else []
         for platform in chosen:
             if stop.is_set():
                 break
-            entries = dat_entries(platform)
+            entries = {**other_dumps(platform), **dat_entries(platform)}
             if args.card:
                 # Every rom on the card, whether No-Intro knows it or not: a file is named for its
                 # checksum, so a dump nobody has catalogued still has somewhere to go. Only a

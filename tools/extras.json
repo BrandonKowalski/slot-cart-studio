@@ -1,0 +1,345 @@
+{
+  "GB": [
+    {
+      "slug": "pokemon-brown",
+      "name": "Pokemon Brown",
+      "gameid": 490733
+    },
+    {
+      "slug": "pokemon-yellow-legacy",
+      "name": "Pokemon Yellow Legacy",
+      "gameid": 493556
+    },
+    {
+      "slug": "pokemon-orange",
+      "name": "Pokemon Orange",
+      "gameid": 455591
+    },
+    {
+      "slug": "pokemon-grape",
+      "name": "Pokemon Grape",
+      "gameid": 539999
+    },
+    {
+      "slug": "pokemon-little-cup-red",
+      "name": "Pokemon Little Cup Red",
+      "gameid": 562797
+    },
+    {
+      "slug": "pokemon-pink",
+      "name": "Pokemon Pink",
+      "aka": [
+        "Pokemon Pink Version"
+      ],
+      "gameid": 455573
+    },
+    {
+      "slug": "pokemon-blue-kaizo",
+      "name": "Pokemon Blue Kaizo",
+      "gameid": 570537
+    },
+    {
+      "slug": "twitch-plays-pokemon-anniversary-red",
+      "name": "Twitch Plays Pokemon Anniversary Red",
+      "aka": [
+        "TPP Anniversary Red"
+      ],
+      "gameid": 560324
+    }
+  ],
+  "GBC": [
+    {
+      "slug": "super-mario-land-dx",
+      "name": "Super Mario Land DX",
+      "gameid": 142935
+    },
+    {
+      "slug": "kirbys-dream-land-dx",
+      "name": "Kirby's Dream Land DX",
+      "gameid": 455771
+    },
+    {
+      "slug": "metroid-ii-return-of-samus-dx",
+      "name": "Metroid II - Return of Samus DX",
+      "aka": [
+        "Metroid II DX",
+        "Metroid 2 DX",
+        "Metroid II EJRTQ Colorized"
+      ],
+      "gameid": 490256
+    },
+    {
+      "slug": "pokemon-crystal-clear",
+      "name": "Pokemon Crystal Clear",
+      "aka": [
+        "Crystal Clear"
+      ],
+      "gameid": 490544
+    },
+    {
+      "slug": "pokemon-polished-crystal",
+      "name": "Pokemon Polished Crystal",
+      "aka": [
+        "Polished Crystal"
+      ],
+      "gameid": 490532
+    },
+    {
+      "slug": "pokemon-prism",
+      "name": "Pokemon Prism",
+      "gameid": 490637
+    },
+    {
+      "slug": "zelda-links-awakening-redux",
+      "name": "The Legend of Zelda - Link's Awakening Redux",
+      "aka": [
+        "Link's Awakening Redux",
+        "LADX Redux"
+      ],
+      "gameid": 539672
+    },
+    {
+      "slug": "pokemon-crystal-legacy",
+      "name": "Pokemon Crystal Legacy",
+      "gameid": 493157
+    },
+    {
+      "slug": "pokemon-gold-97-reforged",
+      "name": "Pokemon Gold 97 Reforged",
+      "aka": [
+        "Gold 97 Reforged"
+      ],
+      "gameid": 490541
+    },
+    {
+      "slug": "pokemon-coral",
+      "name": "Pokemon Coral",
+      "gameid": 490547
+    },
+    {
+      "slug": "pokemon-kalos-crystal",
+      "name": "Pokemon Kalos Crystal",
+      "gameid": 490538
+    }
+  ],
+  "GBA": [
+    {
+      "slug": "pokemon-radical-red",
+      "name": "Pokemon Radical Red",
+      "aka": [
+        "Radical Red"
+      ],
+      "gameid": 490796
+    },
+    {
+      "slug": "pokemon-unbound",
+      "name": "Pokemon Unbound",
+      "gameid": 480518
+    },
+    {
+      "slug": "pokemon-emerald-kaizo",
+      "name": "Pokemon Emerald Kaizo",
+      "gameid": 575787
+    },
+    {
+      "slug": "pokemon-gaia",
+      "name": "Pokemon Gaia",
+      "gameid": 490106
+    },
+    {
+      "slug": "pokemon-glazed",
+      "name": "Pokemon Glazed",
+      "gameid": 490109
+    },
+    {
+      "slug": "pokemon-light-platinum",
+      "name": "Pokemon Light Platinum",
+      "gameid": 502442
+    },
+    {
+      "slug": "pokemon-ash-gray",
+      "name": "Pokemon Ash Gray",
+      "aka": [
+        "Pokemon Ash Grey"
+      ],
+      "gameid": 491549
+    },
+    {
+      "slug": "pokemon-liquid-crystal",
+      "name": "Pokemon Liquid Crystal",
+      "gameid": 507340
+    },
+    {
+      "slug": "pokemon-dark-rising",
+      "name": "Pokemon Dark Rising",
+      "gameid": 490073
+    },
+    {
+      "slug": "pokemon-clover",
+      "name": "Pokemon Clover",
+      "gameid": 493511
+    },
+    {
+      "slug": "pokemon-inclement-emerald",
+      "name": "Pokemon Inclement Emerald",
+      "gameid": 499163
+    },
+    {
+      "slug": "pokemon-emerald-rogue",
+      "name": "Pokemon Emerald Rogue",
+      "gameid": 419457
+    },
+    {
+      "slug": "mother-3-english",
+      "name": "Mother 3 (English)",
+      "search": "Mother 3",
+      "aka": [
+        "Mother 3"
+      ],
+      "gameid": 3774
+    },
+    {
+      "slug": "pokemon-snakewood",
+      "name": "Pokemon Snakewood",
+      "gameid": 490124
+    },
+    {
+      "slug": "pokemon-vega",
+      "name": "Pokemon Vega",
+      "gameid": 490133
+    },
+    {
+      "slug": "pokemon-theta-emerald-renev",
+      "name": "Pokemon Theta Emerald Renev",
+      "gameid": 535838
+    },
+    {
+      "slug": "pokemon-emerald-seaglass",
+      "name": "Pokemon Emerald Seaglass",
+      "aka": [
+        "Pokemon Seaglass"
+      ],
+      "gameid": 507619
+    },
+    {
+      "slug": "pokemon-firered-rocket-edition",
+      "name": "Pokemon FireRed Rocket Edition",
+      "aka": [
+        "Pokemon Rocket Edition",
+        "Pokemon Fire Red Rocket Edition"
+      ],
+      "gameid": 507337
+    },
+    {
+      "slug": "pokemon-lazarus",
+      "name": "Pokemon Lazarus",
+      "gameid": 503920
+    },
+    {
+      "slug": "pokemon-sienna",
+      "name": "Pokemon Sienna",
+      "gameid": 490121
+    },
+    {
+      "slug": "pokemon-rowe",
+      "name": "Pokemon Rowe",
+      "gameid": 490115
+    },
+    {
+      "slug": "pokemon-orange-islands",
+      "name": "Pokemon Orange Islands",
+      "gameid": 493196
+    },
+    {
+      "slug": "pokemon-odyssey",
+      "name": "Pokemon Odyssey",
+      "gameid": 499208
+    },
+    {
+      "slug": "pokemon-emerald-imperium",
+      "name": "Pokemon Emerald Imperium",
+      "gameid": 493763
+    },
+    {
+      "slug": "pokemon-blazing-emerald",
+      "name": "Pokemon Blazing Emerald",
+      "gameid": 490067
+    },
+    {
+      "slug": "pokemon-blue-sea",
+      "name": "Pokemon Blue Sea Edition",
+      "aka": [
+        "Pokemon Blue Sea"
+      ],
+      "gameid": 492959
+    },
+    {
+      "slug": "pokemon-dark-rising-2",
+      "name": "Pokemon Dark Rising 2",
+      "gameid": 493766
+    },
+    {
+      "slug": "pokemon-dark-rising-order-destroyed",
+      "name": "Pokemon Dark Rising Order Destroyed",
+      "gameid": 493202
+    },
+    {
+      "slug": "pokemon-darkfire",
+      "name": "Pokemon DarkFire",
+      "aka": [
+        "Pokemon Dark Fire"
+      ],
+      "gameid": 490076
+    },
+    {
+      "slug": "pokemon-emerald-legacy",
+      "name": "Pokemon Emerald Legacy",
+      "gameid": 493163
+    },
+    {
+      "slug": "pokemon-shiny-gold",
+      "name": "Pokemon Shiny Gold",
+      "aka": [
+        "Pokemon Shiny Gold Version"
+      ],
+      "gameid": 492944
+    },
+    {
+      "slug": "pokemon-adventures-red-chapter",
+      "name": "Pokemon Adventures Red Chapter",
+      "aka": [
+        "Pokemon Adventure Red Chapter"
+      ],
+      "gameid": 490061
+    },
+    {
+      "slug": "pokemon-chaos-black",
+      "name": "Pokemon Chaos Black",
+      "gameid": 141788
+    },
+    {
+      "slug": "pokemon-ultraviolet",
+      "name": "Pokemon UltraViolet",
+      "aka": [
+        "Pokemon Ultra Violet"
+      ],
+      "gameid": 204413
+    },
+    {
+      "slug": "pokemon-recharged-yellow",
+      "name": "Pokemon Recharged Yellow",
+      "aka": [
+        "Recharged Yellow"
+      ],
+      "gameid": 493781
+    },
+    {
+      "slug": "pokemon-recharged-emerald",
+      "name": "Pokemon Recharged Emerald",
+      "aka": [
+        "Recharged Emerald"
+      ],
+      "gameid": 552857
+    }
+  ]
+}
