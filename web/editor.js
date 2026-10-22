@@ -143,6 +143,13 @@ export function createEditor(api) {
     if (!c) return;
     if (!visited(c)) visit(c);
     $('ed-name').textContent = api.name(c);
+    $('ed-name').title = api.name(c);
+    $('ed-info').replaceChildren(
+      ...api.info(c).flatMap(([k, v]) => [
+        Object.assign(document.createElement('dt'), { textContent: k }),
+        Object.assign(document.createElement('dd'), { textContent: v, title: v }),
+      ]),
+    );
     const face = api.face(c);
     $('ed-face').hidden = !face;
     if (face) api.draw($('ed-face'), face, c.platform);

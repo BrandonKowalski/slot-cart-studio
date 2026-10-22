@@ -18,21 +18,31 @@
     <span class="menu-bars" aria-hidden="true"></span>
   </button>
   <nav class="mast-links" id="mast-links" aria-label="slot">
-    <a href="https://slot-cfw.fyi/#install">Installing</a>
-    <a href="https://slot-cfw.fyi/#guide">Guide</a>
-    <a href="https://slot-cfw.fyi/#buttons">Buttons</a>
-    <a href="https://slot-cfw.fyi/#questions">Questions</a>
-    <a href="https://slot-cfw.fyi/#credits">Credits</a>
-    <a href="https://slot-cfw.fyi/#disclosure">AI</a>
+    <a href="https://slot-cfw.fyi/installing/">Installing</a>
+    <a href="https://slot-cfw.fyi/updating/">Updating</a>
+    <a href="https://slot-cfw.fyi/tour/">Tour</a>
+    <a href="https://slot-cfw.fyi/guide/">Guide</a>
+    <a href="https://slot-cfw.fyi/questions/">Questions</a>
+    <a href="https://slot-cfw.fyi/credits/">Credits</a>
+    <a href="https://slot-cfw.fyi/ai/">AI</a>
     <a href="./" aria-current="page">Studio</a>
   </nav>
 </header>
 <main class="wrap">
-  <header class="intro">
-    <h1 class="title">Cart Studio</h1>
-    <div class="actions">
-      <button class="btn" id="pick" type="button" hidden>Choose SD Card</button>
-      <label class="btn" id="pick-files-label" hidden>Choose SD Card<input id="pick-files" class="visually-hidden" type="file" webkitdirectory></label>
+  <header class="hero" id="hero">
+    <div class="hero-copy">
+      <h1 class="title">Cart Studio</h1>
+      <div class="actions">
+        <button class="btn" id="pick" type="button">Choose SD Card</button>
+        <label class="btn" id="pick-files-label" hidden>Choose SD Card<input id="pick-files" class="visually-hidden" type="file" webkitdirectory></label>
+      </div>
+      <div class="loader" id="loader" role="status" hidden>
+        <span class="meter" aria-hidden="true"><span class="meter-fill" id="meter-fill"></span></span>
+        <span class="loader-text" id="loader-text"></span>
+      </div>
+    </div>
+    <div class="trio" aria-hidden="true">
+      <canvas data-platform="GBA"></canvas><canvas data-platform="GBC"></canvas><canvas data-platform="GB"></canvas>
     </div>
   </header>
 
@@ -43,10 +53,6 @@
     <span id="progress-text"></span>
   </div>
 
-  <div class="loader" id="loader" role="status" hidden>
-    <span class="spinner" aria-hidden="true"></span>
-    <span id="loader-text"></span>
-  </div>
 
   <div class="shelf-bar">
     <nav class="shelf-tabs" id="tabs" aria-label="Platforms" hidden></nav>
@@ -79,7 +85,7 @@
 <aside id="editor" class="editor" aria-label="Cart editor" tabindex="-1" hidden>
   <div class="ed-head">
     <h2 id="ed-name"></h2>
-    <button class="key dark ed-icon" id="ed-close" type="button" aria-label="Close">✕</button>
+    <button class="ed-close" id="ed-close" type="button" aria-label="Close"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
   </div>
   <canvas id="ed-face" class="ed-face" aria-label="The cart"></canvas>
   <div class="props">
@@ -153,6 +159,7 @@
       </div>
     </div>
   </div>
+  <dl class="ed-info" id="ed-info" aria-label="About this cart"></dl>
   <div class="ed-foot">
     <div class="ed-history">
       <button class="key dark" id="ed-undo" type="button" title="Undo (⌘Z)">Undo</button>
@@ -169,7 +176,6 @@
       <canvas hidden></canvas>
     </div>
     <h2 class="stem"></h2>
-    <p class="print"></p>
     <p class="game"></p>
   </article>
 </template>

@@ -329,7 +329,7 @@ def main():
         if abs(widths[0] - widths[1]) > 1:
             sys.exit(f'the footer is {widths[0]:.0f} px wide inside a {widths[1]:.0f} px page')
         print(f'asserted: the footer is as wide as the page ({widths[0]:.0f} px)')
-        centred = page.eval("['.intro', '.credits'].map(q => getComputedStyle(document.querySelector(q)).textAlign)"
+        centred = page.eval("['.hero-copy', '.credits'].map(q => getComputedStyle(document.querySelector(q)).textAlign)"
                             ".concat(getComputedStyle(document.querySelector('.actions')).justifyContent)")
         if centred != ['center', 'center', 'center']:
             sys.exit(f'the hero and footer are not centred: {centred}')
@@ -368,13 +368,13 @@ def main():
             sys.exit(f'the write button has company: {beside}')
         print('asserted: the write button stands alone, with no count or directions')
 
-        # slot's own masthead, exactly: its mark, its six sections, and the studio as the current page.
+        # slot's own masthead, exactly: its mark and the studio as the current page.
         mast = page.eval("[...document.querySelectorAll('.mast a')]"
                          ".map(a => [a.textContent.trim(), a.getAttribute('href'), a.getAttribute('aria-current')])")
         site = 'https://slot-cfw.fyi/'
-        want_mast = [['slot.', site, None]] + [[name, f'{site}#{anchor}', None] for name, anchor in (
-            ('Installing', 'install'), ('Guide', 'guide'), ('Buttons', 'buttons'), ('Questions', 'questions'),
-            ('Credits', 'credits'), ('AI', 'disclosure'))] + [['Studio', './', 'page']]
+        want_mast = [['slot.', site, None]] + [[name, f'{site}{path}/', None] for name, path in (
+            ('Installing', 'installing'), ('Updating', 'updating'), ('Tour', 'tour'), ('Guide', 'guide'),
+            ('Questions', 'questions'), ('Credits', 'credits'), ('AI', 'ai'))] + [['Studio', './', 'page']]
         if mast != want_mast:
             sys.exit(f'the masthead is {mast}, not slot\'s {want_mast}')
         print('asserted: the masthead is slot\'s, link for link')
@@ -396,14 +396,15 @@ def main():
             sys.exit(f'the write button is not slot\'s hero button: {btn}')
         print('asserted: the write button is slot\'s hero button')
 
-        # The fine print a real GBA label carries, instead of region pills; Game Boy carts carry none.
-        prints = {nfc(s['stem']): (s['platform'], p) for s, p in zip(
-            page.eval('window.__studio.states()'),
-            page.eval("[...document.querySelectorAll('#grid > .cart')].map(c => c.querySelector('.print').textContent)"))}
-        wrong = {stem: p for stem, (platform, p) in prints.items() if (platform == 'GBA') != p.startswith('AGB')}
-        if wrong or prints.get('Advance Wars', (None, None))[1] != 'AGB-AWRE-USA':
-            sys.exit(f'the small print is wrong: {wrong or prints.get("Advance Wars")}')
-        print(f'asserted: every card carries its small print, e.g. Advance Wars {prints["Advance Wars"][1]}')
+        page.eval(EDIT % json.dumps('Advance Wars'))
+        info = dict(page.eval("(d => { const t = [...d.children].map(e => e.textContent); "
+                              "return t.filter((_, i) => i % 2 === 0).map((k, i) => [k, t[i * 2 + 1]]); })"
+                              "(document.getElementById('ed-info'))"))
+        if info.get('Product Code') != 'AGB-AWRE-USA' or info.get('Matched') != 'By CRC':
+            sys.exit(f'the info box is wrong: {info}')
+        if page.eval("document.querySelector('#grid .print')"):
+            sys.exit('a cart still carries its code under its name')
+        print(f'asserted: the info box reads {info["Product Code"]}, matched {info["Matched"].lower()}')
 
         # No pills and no spaced-out capitals anywhere on the page, the editor included.
         page.eval(EDIT % json.dumps(first[0]['stem']))

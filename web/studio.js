@@ -31,6 +31,8 @@ import { amend, commit } from './history.js';
 import { smallPrint } from './smallprint.js';
 import { hasLog, logError, logText } from './log.js';
 import { applyFill, autoFill, available, fillCounts, fillText, wears } from './label-choice.js';
+import { extrasFrom } from './extras.js';
+import { heroPicks, heroShell } from './hero.js';
 
 const $ = (id) => document.getElementById(id);
 const limit = limiter(4);
@@ -75,6 +77,7 @@ function newCart({ platform, stem, file }) {
     existingPng: null,
     crc: null,
     game: null,
+    guessed: false,
     // Logos stay PNG bytes, which are small. The label made from one is not kept: see withLabel.
     logoBytes: null,
     // The real label's ground and band, measured from its scan: sure looks only.
@@ -148,6 +151,8 @@ const crcHex = (crc) => crc.toString(16).toUpperCase().padStart(8, '0');
 // being harvested, and an empty `?art=` leaves every cart to libretro.
 const ART_BASE = new URLSearchParams(location.search).get('art') ?? 'https://art.slot-cfw.fyi/';
 let artIndex = null;
+let ready = null;
+let extras = extrasFrom(null);
 const fromHex = (value) => [1, 3, 5].map((at) => parseInt(value.slice(at, at + 2), 16));
 // A sure look from the art set, or null: anything missing, unsure or malformed counts as no look.
 const rgbOf = (h) => (typeof h === 'string' && /^[0-9a-f]{6}$/i.test(h) ? fromHex(`#${h}`) : null);
@@ -246,7 +251,7 @@ function trapped(e) {
   if (!(e instanceof WebAssembly.RuntimeError)) return false;
   if (!fatal) {
     fatal = true;
-    loading(null);
+    loading(false);
     logError('trap', e);
     $('progress').hidden = true;
     banner(FATAL);
@@ -266,13 +271,14 @@ function describe(c, state) {
   if (state === 'looking' && !c.looking) return 'Loading the real label…';
   if (state === 'looking') return c.crc === null ? 'Reading the ROM…' : 'Looking it up…';
   if (state === 'unfilled') return '';
+  if (c.guessed && c.game && !c.rejected) return `Matched by name to ${c.game}`;
   return '';
 }
 
 function buildCard(c) {
   const root = $('card-tpl').content.firstElementChild.cloneNode(true);
   const q = (selector) => root.querySelector(selector);
-  c.el = { root, canvas: q('canvas'), face: q('.face'), stem: q('.stem'), print: q('.print'), game: q('.game') };
+  c.el = { root, canvas: q('canvas'), face: q('.face'), stem: q('.stem'), game: q('.game') };
   const [boxW, boxH] = boxOf(c.platform);
   c.el.canvas.width = boxW;
   c.el.canvas.height = boxH;
@@ -327,6 +333,38 @@ function faceOf(c, state) {
   return null;
 }
 
+function withFullLabel(bytes, platform, use) {
+  const label = Label.full(bytes, platform);
+  try {
+    return use(label);
+  } finally {
+    label.free();
+  }
+}
+
+async function showHero() {
+  const presets = new Map(Array.from(shell_presets(), (line) => line.split('\t')));
+  for (const pick of heroPicks(artIndex)) {
+    const bytes = await fetchArt(ART_BASE, pick.label).catch(() => null);
+    if (fatal || session) return;
+    if (!bytes) continue;
+    const canvas = document.querySelector(`.trio [data-platform=${pick.platform}]`);
+    const [w, h] = boxOf(pick.platform);
+    try {
+      withFullLabel(bytes, pick.platform, (label) => {
+        const face = label.face(pick.platform, '', new Uint8Array(0), heroShell(pick.platform, pick.preset, presets), '');
+        canvas.width = w;
+        canvas.height = h;
+        drawFace(canvas, face, pick.platform);
+      });
+    } catch (e) {
+      if (trapped(e)) return;
+      continue;
+    }
+    requestAnimationFrame(() => canvas.classList.add('in'));
+  }
+}
+
 function drawFace(canvas, face, platform) {
   const pixels = new Uint8ClampedArray(face.buffer, face.byteOffset, face.byteLength);
   const [boxW, boxH] = boxOf(platform);
@@ -349,8 +387,6 @@ function paint(c) {
   canvas.hidden = !face;
   if (face) drawFace(canvas, face, c.platform);
   game.textContent = describe(c, state);
-  // The game code is read with the ROM, after the card is built.
-  c.el.print.textContent = smallPrint(c.platform, c.code, c.tags);
   updateWriteBar();
   updateFillButton();
   if (editor.current() === c) editor.refresh();
@@ -361,6 +397,8 @@ function paint(c) {
 function chooseGame(c, name) {
   if (c.game === name && !c.rejected) return;
   c.game = name;
+  c.guessed = false;
+  c.match = 'hand';
   c.rejected = false;
   c.logoBytes = null;
   c.looking = true;
@@ -466,14 +504,40 @@ async function takeLogo(c, file) {
   if (bytes && commit(c, () => useCustomLogo(c, bytes))) changed(c);
 }
 
-function loading(text) {
-  document.body.classList.toggle('loading', !!text);
-  $('loader').hidden = !text;
-  if (text) $('loader-text').textContent = text;
+const FILL_MS = 2600;
+const HOLD_MS = 450;
+const meter = { start: 0, target: 0, frame: 0 };
+const shown = () => Math.min(meter.target, (performance.now() - meter.start) / FILL_MS);
+
+function drawMeter() {
+  const f = shown();
+  $('meter-fill').style.width = `${(f * 100).toFixed(1)}%`;
+  $('loader-text').textContent = f < 0.6 ? 'Reading your SD card…' : 'Finding your games…';
+  meter.frame = document.body.classList.contains('loading') ? requestAnimationFrame(drawMeter) : 0;
+}
+
+function loading(on, fraction) {
+  document.body.classList.toggle('loading', on);
+  $('loader').hidden = !on;
+  if (!on) return;
+  if (fraction === 0) Object.assign(meter, { start: performance.now(), target: 0 });
+  if (fraction != null) meter.target = Math.max(meter.target, fraction);
+  if (!meter.frame) meter.frame = requestAnimationFrame(drawMeter);
+}
+
+const READ_SHARE = 0.8;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function loaded(s) {
+  loading(true, 1);
+  await sleep(Math.max(0, meter.start + FILL_MS - performance.now()) + HOLD_MS);
+  if (s !== session) return;
+  loading(false);
+  $('hero').classList.add('opened');
 }
 
 function progress(done, total, stem, verb = 'Reading') {
-  if (document.body.classList.contains('loading') && stem) loading(`${verb} ${done + 1} of ${total}: ${stem}`);
+  if (document.body.classList.contains('loading') && stem) loading(true, (done / total) * READ_SHARE);
   $('progress').hidden = done >= total;
   $('bar').max = total;
   $('bar').value = done;
@@ -513,7 +577,7 @@ async function open(source) {
     return;
   }
   editor.close();
-  loading(null);
+  loading(false);
   session = { source, carts: source.carts.map(newCart) };
   $('banner').hidden = true;
   $('eject').hidden = true;
@@ -524,17 +588,13 @@ async function open(source) {
   $('grid').replaceChildren(...session.carts.map(buildCard));
   session.carts.forEach(paint);
   showPlatform(platformsOf(session)[0] ?? PLATFORMS[0]);
-  // The card is chosen, so the chooser goes: the write bar sits in its place, once there is
-  // something to write. updateWriteBar, reached through paint, is what shows it.
-  $('pick').hidden = true;
-  $('pick-files-label').hidden = true;
   $('write-bar').hidden = true;
   $('fill-open').hidden = true;
   if (session.carts.length === 0) {
     banner('There are no .gba files in that card’s Games folder.');
     return;
   }
-  loading('Reading the card…');
+  loading(true, 0);
   track(identify(session));
 }
 
@@ -604,9 +664,11 @@ async function identify(s) {
   // A card opened during the last read has its own bar up by now.
   if (s !== session) return;
   progress(total, total, '');
-  loading('Looking up the games…');
+  loading(true, 0.95);
   await match(s);
-  if (s === session) loading(null);
+  if (s !== session) return;
+  await loaded(s);
+  await fill(s);
 }
 
 async function match(s) {
@@ -621,7 +683,7 @@ async function match(s) {
       s.datFailed = true;
       banner(
         `The ${platform} database didn’t load (${e.message}), so carts can’t be matched yet. Logos can still be dropped in by hand.`,
-        () => track(match(s)),
+        () => track(match(s).then(() => fill(s))),
       );
       for (const c of s.carts) {
         if (c.looking) {
@@ -639,6 +701,9 @@ async function match(s) {
   }
   const pending = s.carts.filter((c) => c.crc !== null && !c.game && !c.existing && !c.error);
   await Promise.all(pending.map((c) => art(s, c)));
+}
+
+async function fill(s) {
   if (s === session && !fatal && s.fill == null) await fillOrAsk(s);
 }
 
@@ -646,7 +711,7 @@ async function art(s, c) {
   c.looking = true;
   paint(c);
   try {
-    c.game = dats.get(c.platform)?.game_for(c.crc) ?? null;
+    nameGame(c);
     await dress(s, c);
   } catch (e) {
     if (trapped(e)) return;
@@ -659,10 +724,45 @@ async function art(s, c) {
 // Where the set files this cart's art: under its own checksum while its game is the one that
 // checksum names, else under the first dump of the game chosen for it that the set has.
 function artKey(c) {
+  const extra = c.game && extras.named(c.platform, c.game);
+  if (extra) return extra.slug;
   const own = c.crc === null ? null : crcHex(c.crc);
   const db = dats.get(c.platform);
   if (!c.game || !db || (c.crc !== null && db.game_for(c.crc) === c.game)) return own;
   return Array.from(db.crcs_for(c.game), crcHex).find((k) => artIndex?.[k]) ?? null;
+}
+
+function nameGame(c) {
+  const own = crcHex(c.crc);
+  const named = dats.get(c.platform)?.game_for(c.crc);
+  const dumped = named || artIndex?.[own] ? null : extras.dumped(c.platform, own);
+  const guessed = named || artIndex?.[own] || dumped ? null : extras.guess(c.platform, clean_label(c.stem));
+  c.game = named ?? (dumped ?? guessed)?.name ?? null;
+  c.guessed = !!guessed;
+  c.match = guessed ? 'name' : 'crc';
+}
+
+const MATCHES = { crc: 'By CRC', name: 'By Filename', hand: 'Chosen by hand' };
+const WEARS = {
+  card: 'Already on the card',
+  real: 'Real label',
+  logo: 'Logo on a colour',
+  customLogo: 'Your logo',
+  customLabel: 'Your label',
+  none: 'slot’s own label',
+};
+
+function infoOf(c) {
+  const code = smallPrint(c.platform, c.code, c.tags) || c.code;
+  const key = artKey(c);
+  return [
+    ['Product Code', code],
+    ['CRC', c.crc === null ? '' : crcHex(c.crc)],
+    ['Game', c.game && !c.rejected ? c.game : 'No match'],
+    ['Matched', c.game && !c.rejected ? MATCHES[c.match] ?? '' : ''],
+    ['Status', WEARS[wearing(c).kind] ?? ''],
+    ['Art key', key && artIndex?.[key] ? key : ''],
+  ].filter(([, value]) => value);
 }
 
 // Fetch what `c.game` names and let it decide the cart's hue. The Game row re-runs this for a game
@@ -670,7 +770,7 @@ function artKey(c) {
 async function dress(s, c) {
   // A set of our own is found by checksum, so a cart no database has a name for can still be
   // dressed from it. libretro is found by name, so those requests only happen when there is one.
-  const name = c.game ? thumbnail_name(c.game) : null;
+  const name = c.game && !extras.named(c.platform, c.game) ? thumbnail_name(c.game) : null;
   const key = artKey(c);
   c.look = parseLook(key && artIndex?.[key]?.look);
   // The queue is shared, so a card replaced while its jobs wait gives up their turns without
@@ -681,7 +781,7 @@ async function dress(s, c) {
       : limit(async () =>
           s === session && !fatal ? fetchThumb(c.platform, folder, name, stub_target) : null,
         ).catch(noImage);
-  // Logos come from our own set alone, by checksum; libretro is asked only for box art.
+  // Logos come from our own set alone; libretro is asked only for box art.
   const ours = (media) => {
     const path = key && artIndex?.[key]?.[media];
     if (!path) return Promise.resolve(null);
@@ -994,7 +1094,7 @@ async function lookUp(s, c) {
     if (c.crc === null) c.crc = await crcOf(await c.file());
     if (!dats.has(c.platform)) dats.set(c.platform, Dat.parse(await fetchDat(c.platform)));
     if (s !== session || fatal) return;
-    c.game = dats.get(c.platform).game_for(c.crc) ?? null;
+    nameGame(c);
     await dress(s, c);
   } catch (e) {
     if (trapped(e)) return;
@@ -1036,6 +1136,7 @@ function changed(c, soon = false) {
 
 const editor = createEditor({
   name: (c) => clean_label(c.stem),
+  info: infoOf,
   box: boxOf,
   draw: drawFace,
   face: (c) => {
@@ -1069,7 +1170,7 @@ const editor = createEditor({
   useCustomLabel,
   ensureTiles,
   canShell: (c) => !c.looking && ['ready', 'has-label', 'needs-logo', 'unfilled'].includes(stateOf(c)) && shell_key_ok(c.stem),
-  search: (c, query) => dats.get(c.platform)?.search(query, 30) ?? null,
+  search: (c, query) => [...extras.search(c.platform, query, 30), ...(dats.get(c.platform)?.search(query, 30) ?? [])],
   chooseGame,
   noMatch,
   readLogo,
@@ -1081,7 +1182,7 @@ const editor = createEditor({
   changed,
 });
 
-async function start() {
+async function load() {
   await init();
   for (const platform of PLATFORMS) faceBox.set(platform, Array.from(cart_size(platform)));
   // A set of our own, if the address named one. Not having it is not a failure: every cart falls
@@ -1089,11 +1190,16 @@ async function start() {
   if (ART_BASE) {
     try {
       artIndex = await fetchIndex(ART_BASE);
+      extras = extrasFrom(artIndex);
       console.info(`art set: ${Object.keys(artIndex).length} checksums from ${ART_BASE}`);
     } catch (e) {
       banner(`The art set at ${ART_BASE} didn’t load (${e.message}), so carts get slot’s own labels.`);
     }
   }
+}
+
+async function start() {
+  ready = load();
   const direct = 'showDirectoryPicker' in window;
   $('pick').hidden = !direct;
   $('pick-files-label').hidden = direct;
@@ -1107,7 +1213,9 @@ async function start() {
       return;
     }
     try {
-      await open(await fromDirectory(root));
+      const source = await fromDirectory(root);
+      await ready;
+      await open(source);
     } catch (e) {
       banner(e.message);
     }
@@ -1118,11 +1226,14 @@ async function start() {
     const files = [...e.target.files];
     e.target.value = '';
     try {
+      await ready;
       await open(fromFiles(files));
     } catch (err) {
       banner(err.message);
     }
   });
+  await ready;
+  track(showHero());
   $('write').addEventListener('click', () => track(writeLabels()));
   $('fill-open').addEventListener('click', () => track(askFill(session)));
   for (const kind of ['real', 'logo']) $(`fill-${kind}`).addEventListener('click', () => answerFill(kind));
