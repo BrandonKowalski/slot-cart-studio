@@ -13,6 +13,7 @@ import init, {
   cart_size,
   clean_label,
   existing_face,
+  label_boxes,
   fallback_hue,
   header_code,
   label_tags,
@@ -534,6 +535,8 @@ async function loaded(s) {
   if (s !== session) return;
   loading(false);
   $('hero').classList.add('opened');
+  document.body.classList.add('card-open');
+  $('how-shelf').hidden = false;
 }
 
 function progress(done, total, stem, verb = 'Reading') {
@@ -847,7 +850,7 @@ function updateWriteBar() {
   // Nothing to write means no button at all.
   $('write').hidden = n === 0 && !writing;
   $('write').disabled = n === 0 || writing || fatal;
-  $('write').textContent = session.source.direct ? 'Write to card' : 'Download ZIP';
+  $('write').textContent = session.source.direct ? 'Write to card' : 'Download labels';
 }
 
 function writeProgress(done, total) {
@@ -920,6 +923,70 @@ function answerFill(fill) {
     if (needsReal(c)) track(fetchReal(s, c));
   }
   updateFillButton();
+}
+
+const STEPS = {
+  mac: [
+    ['Open labels.zip', 'Double-click it in Downloads. Safari may have done this already, leaving a Labels folder there.'],
+    ['Drag the Labels folder onto your SD card', 'Choose Replace when your Mac asks. The ZIP includes your existing label and shell selections alongside your new ones.'],
+    ['Eject the card', 'Click the eject button beside it in Finder, then put it back in your handheld.'],
+  ],
+  windows: [
+    ['Open labels.zip', 'Right-click it in Downloads and choose Extract All.'],
+    ['Drag the Labels folder onto your SD card', 'It is inside the labels folder Windows made. Choose Replace the files in the destination.'],
+    ['Eject the card', 'Right-click it in File Explorer and choose Eject, then put it back in your handheld.'],
+  ],
+  linux: [
+    ['Extract labels.zip', 'Your file manager can do it from Downloads.'],
+    ['Copy the Labels folder onto your SD card', 'Merge it with the folder already there and replace the files.'],
+    ['Eject the card', 'Unmount it before you take it out, then put it back in your handheld.'],
+  ],
+};
+
+const osOf = (agent) => (/windows/i.test(agent) ? 'windows' : /mac os|macintosh|iphone|ipad/i.test(agent) ? 'mac' : 'linux');
+
+let lastZip = null;
+
+function guideFor(os) {
+  for (const b of $('guide-os').querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.os === os));
+  $('guide-steps').replaceChildren(
+    ...STEPS[os].map(([title, detail]) => {
+      const text = document.createElement('div');
+      text.append(
+        Object.assign(document.createElement('b'), { textContent: title }),
+        Object.assign(document.createElement('span'), { textContent: detail }),
+      );
+      const li = document.createElement('li');
+      li.append(text);
+      return li;
+    }),
+  );
+}
+
+function showGuide() {
+  lastZip = null;
+  $('guide-again').disabled = true;
+  guideFor(osOf(navigator.userAgent));
+  if (!$('guide').open) $('guide').showModal();
+}
+
+function showHelp() {
+  if (!$('sizes').children.length) {
+    const [gbaW, gbaH, gbW, gbH, gbcW, gbcH] = label_boxes();
+    const row = (name, w, h, width) => {
+      const tr = document.createElement('tr');
+      for (const text of [name, `${(w / h).toFixed(2)}:1`, `${width}×${Math.round((width * h) / w)}`]) {
+        tr.append(Object.assign(document.createElement('td'), { textContent: text }));
+      }
+      return tr;
+    };
+    $('sizes').replaceChildren(
+      row('GBA', gbaW, gbaH, 1280),
+      row('Game Boy', gbW, gbH, 1024),
+      row('Game Boy Color', gbcW, gbcH, 1024),
+    );
+  }
+  $('help').showModal();
 }
 
 function download(blob, name) {
@@ -999,6 +1066,7 @@ async function writeLabels() {
         if (problems.length) banner(problems.join(' '));
       }
     } else {
+      showGuide();
       const zip = new Zip();
       // Each entry is taken out of WASM memory as soon as it is added, so the card's labels pile
       // up here, where memory is given back, and not in the module.
@@ -1050,7 +1118,9 @@ async function writeLabels() {
         if (fatal || s !== session) return;
       }
       parts.push(zip.finish());
-      download(new Blob(parts, { type: 'application/zip' }), 'labels.zip');
+      lastZip = new Blob(parts, { type: 'application/zip' });
+      $('guide-again').disabled = false;
+      download(lastZip, 'labels.zip');
       const unreadNote =
         unread > 0 &&
         `${unread === 1 ? '1 file' : `${unread} files`} in the card’s Labels folder couldn’t be read and aren’t in the zip. Merge it into the card’s Labels folder rather than replacing it.`;
@@ -1203,6 +1273,12 @@ async function start() {
   const direct = 'showDirectoryPicker' in window;
   $('pick').hidden = !direct;
   $('pick-files-label').hidden = direct;
+  $('choose-ask-title').textContent = direct ? 'Let it edit files' : 'Let it read the files';
+  $('choose-ask').textContent = direct
+    ? 'Your browser asks to let the site edit files. Choose Edit files, so Cart Studio can save your labels to the card.'
+    : 'Your browser may ask for permission upload the files. This is a misnomer as nothing is actually uploaded. Cart Studio just retrieves the ROM fingerprints and filenames along with existing art.';
+  $('start').addEventListener('click', () => $('choose').showModal());
+  $('choose-cancel').addEventListener('click', () => $('choose').close());
 
   $('pick').addEventListener('click', async () => {
     let root;
@@ -1212,6 +1288,7 @@ async function start() {
       if (e.name !== 'AbortError') banner(e.message);
       return;
     }
+    $('choose').close();
     try {
       const source = await fromDirectory(root);
       await ready;
@@ -1225,12 +1302,26 @@ async function start() {
     // the input, so the files are copied out of it first.
     const files = [...e.target.files];
     e.target.value = '';
+    $('choose').close();
     try {
       await ready;
       await open(fromFiles(files));
     } catch (err) {
       banner(err.message);
     }
+  });
+  for (const id of ['how', 'how-shelf']) {
+    $(id).addEventListener('click', async () => {
+      await ready;
+      showHelp();
+    });
+  }
+  $('help-close').addEventListener('click', () => $('help').close());
+  $('guide-done').addEventListener('click', () => $('guide').close());
+  $('guide-again').addEventListener('click', () => lastZip && download(lastZip, 'labels.zip'));
+  $('guide-os').addEventListener('click', (e) => {
+    const os = e.target.closest('button')?.dataset.os;
+    if (os) guideFor(os);
   });
   await ready;
   track(showHero());

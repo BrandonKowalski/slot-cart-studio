@@ -266,10 +266,10 @@ def stage_labelled(card, games):
         (card / 'Labels' / name).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(source, card / 'Labels' / name)
     (card / 'Config').mkdir(parents=True, exist_ok=True)
-    (card / 'Config' / 'cart_shell.ini').write_text(SHELLS_ON_CARD)
-    (card / 'Labels' / 'cart_shell.ini').write_text(LABEL_SHELLS_ON_CARD)
+    (card / 'Config' / 'cart_shell.txt').write_text(SHELLS_ON_CARD)
+    (card / 'Labels' / 'cart_shell.txt').write_text(LABEL_SHELLS_ON_CARD)
     return ([f'Games/{g}' for g in games] + [f'Games/{probe}'] + [f'Labels/{name}' for name in labels]
-            + ['Config/cart_shell.ini', 'Labels/cart_shell.ini'])
+            + ['Config/cart_shell.txt', 'Labels/cart_shell.txt'])
 
 
 def main():
@@ -334,6 +334,21 @@ def main():
         if centred != ['center', 'center', 'center']:
             sys.exit(f'the hero and footer are not centred: {centred}')
         print('asserted: the hero and footer are centred')
+        page.eval("document.getElementById('start').click()")
+        chooser = page.eval("""(() => {
+          const d = document.getElementById('choose');
+          const shown = [...d.querySelectorAll('#pick, #pick-files-label')].filter(e => !e.hidden).map(e => e.id);
+          return [d.open, shown, d.querySelectorAll('.guide-steps li').length, document.getElementById('choose-ask').textContent];
+        })()""")
+        if chooser[:3] != [True, ['pick'], 3] or 'Edit files' not in chooser[3]:
+            sys.exit(f'Get Started did not open the card guide with Chrome\'s steps and one Choose SD Card: {chooser}')
+        page.eval("document.getElementById('choose-cancel').click()")
+        page.eval("document.getElementById('how').click()")
+        wait(lambda: page.eval("document.getElementById('help').open"), 10, 'the hero\'s How it works to open the help')
+        page.eval("document.getElementById('help-close').click()")
+        if page.eval("document.getElementById('choose').open || document.getElementById('help').open"):
+            sys.exit('Cancel or Got it left a dialog open')
+        print('asserted: Get Started explains the picker before it opens, and the hero\'s How it works opens the help')
         page_url = bare + '?art=' + urllib.parse.quote(art, safe='')
         print('art set:', art or '(none)')
         page.send('Page.navigate', url=page_url)
@@ -363,7 +378,7 @@ def main():
         if sizes[0] != sizes[1]:
             sys.exit(f'the write button (height, bottom) {sizes[0]} does not match the tabs {sizes[1]}')
         print(f'asserted: the write button is the tabs\' height and stands on the same edge ({sizes[0][0]} px)')
-        beside = page.eval("[...document.getElementById('write-bar').children].map(e => e.id)")
+        beside = page.eval("[...document.getElementById('write-bar').children].filter(e => !e.hidden).map(e => e.id)")
         if beside != ['write']:
             sys.exit(f'the write button has company: {beside}')
         print('asserted: the write button stands alone, with no count or directions')
@@ -372,12 +387,17 @@ def main():
         mast = page.eval("[...document.querySelectorAll('.mast a')]"
                          ".map(a => [a.textContent.trim(), a.getAttribute('href'), a.getAttribute('aria-current')])")
         site = 'https://slot-cfw.fyi/'
-        want_mast = [['slot.', site, None]] + [[name, f'{site}{path}/', None] for name, path in (
+        want_mast = [['slot.', site, None], ['Cart Studio', './', None]] + [[name, f'{site}{path}/', None] for name, path in (
             ('Installing', 'installing'), ('Updating', 'updating'), ('Tour', 'tour'), ('Guide', 'guide'),
             ('Questions', 'questions'), ('Credits', 'credits'), ('AI', 'ai'))] + [['Studio', './', 'page']]
         if mast != want_mast:
             sys.exit(f'the masthead is {mast}, not slot\'s {want_mast}')
         print('asserted: the masthead is slot\'s, link for link')
+        swapped = page.eval("[document.getElementById('hero').getClientRects().length,"
+                            " document.querySelector('.mast-sub').getClientRects().length]")
+        if swapped != [0, 1]:
+            sys.exit(f'with a card open the hero still shows or the masthead lacks Cart Studio: {swapped}')
+        print('asserted: with a card open, Cart Studio moves from the hero to the masthead')
 
         # Every platform tab is the same key, whichever platform it names.
         shapes = page.eval("[...document.querySelectorAll('#tabs button')].map(b => (s => [s.borderRadius, s.clipPath, s.paddingLeft])(getComputedStyle(b)))")
@@ -436,6 +456,16 @@ def main():
             sys.exit('the credits carry no Nintendo non-affiliation line')
         print('asserted: the credits name every source and its terms')
 
+        page.eval("document.getElementById('how-shelf').click()")
+        wait(lambda: page.eval("document.getElementById('help').open"), 10, 'the help to open')
+        sizes = page.eval("[...document.querySelectorAll('#sizes tr')].map(r => r.cells[0].textContent)")
+        if sizes != ['GBA', 'Game Boy', 'Game Boy Color']:
+            sys.exit(f'the help\'s size table reads {sizes}')
+        page.eval("document.getElementById('help-close').click()")
+        if page.eval("document.getElementById('help').open"):
+            sys.exit('Got it did not close the help')
+        print('asserted: the shelf\'s How it works opens the help with a size row per cart, and Got it closes it')
+
         # Settled again before the shots: open_card's wait ends when every cart has resolved once,
         # and a shot taken while anything is still being dressed photographs a spinner.
         wait(lambda: page.eval('window.__studio.idle()'), 120, 'the carts to settle before the shot')
@@ -462,53 +492,55 @@ def main():
                 if not lk['sure'] and deep == lk['ground']:
                     sys.exit(f'{stem} has an unsure look but wears its ground {deep}')
             print(f'asserted: {len(ready)} carts with looks use their ground only when sure')
-            banded = next((s for s, lk in ready.items() if lk['sure'] and lk['band']), None)
-            if banded is None:
-                sys.exit('no cart on the card has a sure look with a band; the Classic NES Series carts should')
-            on = page.eval(CART_CANVAS % json.dumps(banded))
-            if not state_of(page, banded)['band']:
-                sys.exit(f'{banded} has a sure band but does not wear it')
-            print(f'asserted: {banded} wears its band')
+            sure = next((s for s, lk in sorted(ready.items(), key=lambda i: not i[1]['band']) if lk['sure']), None)
+            if sure is None:
+                sys.exit('no cart on the card has a sure look')
+            banded = bool(looks[sure]['band'])
+            on = page.eval(CART_CANVAS % json.dumps(sure))
+            if banded:
+                if not state_of(page, sure)['band']:
+                    sys.exit(f'{sure} has a sure band but does not wear it')
+                print(f'asserted: {sure} wears its band')
 
             # A logo picked by hand is the person's own label: no measured colour or band on it,
             # and Undo gives the look back.
-            other = next(url for stem, url in wheels.items() if stem != banded)
-            page.eval(EDIT % json.dumps(banded))
+            other = next(url for stem, url in wheels.items() if stem != sure)
+            page.eval(EDIT % json.dumps(sure))
             page.eval(PICK_LOGO % json.dumps(other))
-            wait(lambda: page.eval(CART_CANVAS % json.dumps(banded)) != on, 20, 'the picked logo to show')
-            picked = state_of(page, banded)
-            if picked['band'] or picked['deep'].lstrip('#') == looks[banded]['ground']:
-                sys.exit(f'{banded} still wears its look after a logo was picked for it: {picked}')
+            wait(lambda: page.eval(CART_CANVAS % json.dumps(sure)) != on, 20, 'the picked logo to show')
+            picked = state_of(page, sure)
+            if picked['band'] or picked['deep'].lstrip('#') == looks[sure]['ground']:
+                sys.exit(f'{sure} still wears its look after a logo was picked for it: {picked}')
             custom = page.eval("document.querySelector('#ed-tiles [data-kind=\"customLogo\"]').getAttribute('aria-pressed')")
             if custom != 'true':
                 sys.exit('the Custom logo tile is not chosen after a logo was picked')
             page.eval("document.getElementById('ed-undo').click()")
-            wait(lambda: page.eval(CART_CANVAS % json.dumps(banded)) == on, 20, 'Undo to give the look back')
-            if not state_of(page, banded)['band']:
-                sys.exit(f'Undo gave {banded} its logo back but not its band')
+            wait(lambda: page.eval(CART_CANVAS % json.dumps(sure)) == on, 20, 'Undo to give the look back')
+            if banded and not state_of(page, sure)['band']:
+                sys.exit(f'Undo gave {sure} its logo back but not its band')
             page.eval("document.getElementById('ed-close').click()")
-            print(f'asserted: a logo picked for {banded} takes no colour or band from its look, and Undo gives them back')
+            print(f'asserted: a logo picked for {sure} takes no colour or band from its look, and Undo gives them back')
 
             # A game chosen by hand wears that game's art, not the art filed under the cart's own checksum.
             by_stem = {nfc(s['stem']): s for s in page.eval('window.__studio.states()')}
-            donor = next((s for stem, s in by_stem.items() if stem in wheels and stem != banded and s['game']
-                          and s['platform'] == by_stem[banded]['platform'] and s['logo']
-                          and s['logo'] != by_stem[banded]['logo']), None)
+            donor = next((s for stem, s in by_stem.items() if stem in wheels and stem != sure and s['game']
+                          and s['platform'] == by_stem[sure]['platform'] and s['logo']
+                          and s['logo'] != by_stem[sure]['logo']), None)
             if donor is None:
-                sys.exit(f'no other cart with art on {banded}\'s platform to choose as its game')
-            page.eval(EDIT % json.dumps(banded))
+                sys.exit(f'no other cart with art on {sure}\'s platform to choose as its game')
+            page.eval(EDIT % json.dumps(sure))
             page.eval("document.getElementById('ed-game').click()")
             page.eval(PICK_HIT % json.dumps(donor['game']))
             wait(lambda: page.eval('window.__studio.idle()'), 60, 'the chosen game to be dressed')
-            now = state_of(page, banded)
+            now = state_of(page, sure)
             if (now['game'], now['logo']) != (donor['game'], donor['logo']):
-                sys.exit(f'choosing {donor["game"]} for {banded} gave it {now["game"]!r} with a '
+                sys.exit(f'choosing {donor["game"]} for {sure} gave it {now["game"]!r} with a '
                          f'{now["logo"]}-byte logo, not the {donor["logo"]}-byte one')
             page.eval("document.getElementById('ed-undo').click()")
-            if state_of(page, banded)['logo'] != by_stem[banded]['logo']:
+            if state_of(page, sure)['logo'] != by_stem[sure]['logo']:
                 sys.exit('Undo did not give back the logo the chosen game replaced')
             page.eval("document.getElementById('ed-close').click()")
-            print(f'asserted: choosing {donor["game"]} for {banded} brings that game\'s logo, and Undo takes it back')
+            print(f'asserted: choosing {donor["game"]} for {sure} brings that game\'s logo, and Undo takes it back')
         # The editor: a click on another card moves it there.
         shelf = page.eval(SHELF)
         if len(shelf) < 3:
@@ -528,7 +560,7 @@ def main():
 
         # Every row is a step in the cart's history. Choosing the game it already has, or a file
         # that isn't a PNG, is none.
-        presets = [p.split('\t')[1] for p in page.eval('window.__studio.shellPresets()')]
+        presets = page.eval("[...document.querySelectorAll('#ed-shell-presets button')].map(b => b.dataset.value)")
         chosen = next((s['stem'] for s in first if s['state'] == 'ready' and s['platform'] == 'GBA'
                        and s['game'] and s['stem'] in shelf), None)
         if chosen is None:
@@ -704,26 +736,34 @@ def main():
         # only the page-level form of the command takes effect.
         page.send('Page.setDownloadBehavior', behavior='allow', downloadPath=str(downloads))
         page.eval("document.getElementById('write').click()")
-        # click() returns at the loop's first yield, and this round trip lands a few carts later
-        # still: on ten carts it reads "8 of 10". What keeps that honest is the packing left to
-        # do, about 44 ms a cart against a round trip of a few, so the bar is up and counting
-        # well before this looks. A fixture small enough to finish packing first would flake.
         packing = page.eval(
-            "!document.getElementById('progress').hidden && "
-            "document.getElementById('progress-text').textContent"
+            "(b => b.classList.contains('busy') && Number(b.style.getPropertyValue('--done')))"
+            "(document.getElementById('write'))"
         )
-        if not packing or 'Packing' not in packing:
-            sys.exit(f'the progress bar was not showing a packing count: {packing!r}')
-        print(f'asserted: progress bar reads {packing!r} mid-write')
+        if not packing or not 0 < packing <= 1:
+            sys.exit(f'the write button was not filling as it packed: {packing!r}')
+        print(f'asserted: the write button is {packing:.0%} full mid-write')
         wait(lambda: (downloads / 'labels.zip').exists(), 60, 'labels.zip to download')
         time.sleep(1)
+        guide = page.eval("[document.getElementById('guide').open, document.getElementById('write').textContent,"
+                          " document.querySelectorAll('#guide-steps li').length,"
+                          " document.getElementById('guide-again').disabled]")
+        if guide != [True, 'Download labels', 3, False]:
+            sys.exit(f'Download labels did not open the guide with three steps and Download again: {guide}')
+        page.eval("document.querySelector('#guide-os [data-os=\"windows\"]').click()")
+        if 'Extract All' not in page.eval("document.getElementById('guide-steps').textContent"):
+            sys.exit('the Windows tab does not give the Windows steps')
+        page.eval("document.getElementById('guide-done').click()")
+        if page.eval("document.getElementById('guide').open"):
+            sys.exit('Done did not close the guide')
+        print('asserted: Download labels opens the guide, its tabs switch the steps, and Done closes it')
         shutil.copy(downloads / 'labels.zip', OUT / 'labels.zip')
         subprocess.run(['unzip', '-t', str(OUT / 'labels.zip')], check=True)
         with zipfile.ZipFile(OUT / 'labels.zip') as z:
-            in_zip = z.read('Labels/cart_shell.ini').decode() if 'Labels/cart_shell.ini' in z.namelist() else None
+            in_zip = z.read('Labels/cart_shell.txt').decode() if 'Labels/cart_shell.txt' in z.namelist() else None
         if in_zip != f'Drill Dozer = {presets[5]}\n':
-            sys.exit(f'the zip for a card with no cart_shell.ini carries {in_zip!r}, not Drill Dozer\'s shell')
-        print('asserted: a shell chosen on a card with no cart_shell.ini is in the zip')
+            sys.exit(f'the zip for a card with no cart_shell.txt carries {in_zip!r}, not Drill Dozer\'s shell')
+        print('asserted: a shell chosen on a card with no cart_shell.txt is in the zip')
 
         card = OUT / 'card'
         shutil.rmtree(card, ignore_errors=True)
@@ -753,8 +793,8 @@ def main():
         shells = {nfc(s['stem']): s['shell'] for s in page.eval('window.__studio.shells()')}
         if (shells.get('Catrap (USA)'), shells.get('Tetris Rosy Retrospection')) != (
                 'rounded 112233 solid', 'auto 445566 clear'):
-            sys.exit(f'the card\'s two cart_shell.ini files were not read: {shells}')
-        print('asserted: the card\'s shells were read, Labels/cart_shell.ini over Config\'s')
+            sys.exit(f'the card\'s two cart_shell.txt files were not read: {shells}')
+        print('asserted: the card\'s shells were read, Labels/cart_shell.txt over Config\'s')
 
         not_buttons = page.eval(
             "[...document.querySelectorAll('#grid > .cart')].filter(c => !c.hidden"
@@ -766,7 +806,7 @@ def main():
         print('asserted: every cart on the shelf is itself the button that opens the editor, with no ✎')
 
         chosen = 'Advance Wars'
-        presets = [p.split('\t')[1] for p in page.eval('window.__studio.shellPresets()')]
+        presets = page.eval("[...document.querySelectorAll('#ed-shell-presets button')].map(b => b.dataset.value)")
         preset = presets[5]
         page.eval(EDIT % json.dumps(chosen))
         wait(lambda: page.eval('window.__studio.idle()'), 60, f'{chosen} to be looked up for its tiles')
@@ -849,28 +889,33 @@ def main():
         page.send('Page.setDownloadBehavior', behavior='allow', downloadPath=str(kept_downloads))
         page.eval("document.getElementById('write').click()")
         wait(lambda: (kept_downloads / 'labels.zip').exists(), 60, 'the labelled card\'s labels.zip to download')
+        page.eval("document.getElementById('guide-done').click()")
         time.sleep(1)
+        on_card = {nfc(f'Labels/{p.relative_to(stage / "labelled" / "Labels")}'): p.read_bytes()
+                   for p in (stage / 'labelled' / 'Labels').rglob('*.png')}
+        carried = {f'Labels/{where[stem]}/{stem}.png' for stem in kept if stem != replaced}
         with zipfile.ZipFile(kept_downloads / 'labels.zip') as z:
             entries = {nfc(name) for name in z.namelist()}
-        overwritten = sorted(entries & {f'Labels/{where[stem]}/{stem}.png' for stem in kept if stem != replaced})
-        if overwritten:
-            sys.exit(f'labels.zip would overwrite labels the card already has: {overwritten}')
+            changed = sorted(n for n in carried if nfc(n) in entries and on_card[n]
+                             != z.read(next(e for e in z.namelist() if nfc(e) == n)))
+        if changed:
+            sys.exit(f'labels.zip changes labels the card already has: {changed}')
         ready = {
             f'Labels/{where[stem]}/{stem}.png'
             for stem, state in expected.items()
             if state == 'ready'
         } | {f'Labels/{where[replaced]}/{replaced}.png'}
-        if entries != ready | {'Labels/cart_shell.ini'}:
-            sys.exit(f'labels.zip holds {sorted(entries)}, not the ready carts and Labels/cart_shell.ini')
+        if entries != ready | carried | {'Labels/cart_shell.txt'}:
+            sys.exit(f'labels.zip holds {sorted(entries)}, not the ready carts, the card\'s labels and Labels/cart_shell.txt')
         with zipfile.ZipFile(kept_downloads / 'labels.zip') as z:
-            written = z.read('Labels/cart_shell.ini').decode()
+            written = z.read('Labels/cart_shell.txt').decode()
         want = LABEL_SHELLS_ON_CARD + f'{chosen} = auto {preset.split(" ", 1)[1]}\n' + 'Catrap (USA) = auto\n'
         if written != want:
-            sys.exit(f'Labels/cart_shell.ini came out as {written!r}, not {want!r}')
-        print(f'asserted: Labels/cart_shell.ini keeps its lines, adds {chosen}\'s shell, and masks Catrap\'s Config choice with auto')
+            sys.exit(f'Labels/cart_shell.txt came out as {written!r}, not {want!r}')
+        print(f'asserted: Labels/cart_shell.txt keeps its lines, adds {chosen}\'s shell, and masks Catrap\'s Config choice with auto')
         print(f'asserted: {len(kept)} carts are has-label: {", ".join(sorted(kept))}')
         print(f'asserted: the other {len(ready)} carts are ready')
-        print(f'asserted: labels.zip holds exactly those {len(ready)}, and none of the {len(kept)} with labels')
+        print(f'asserted: labels.zip holds those {len(ready)} and the card\'s own {len(carried)} labels, unchanged')
 
         # Third pass: the way Chrome writes, straight to the card through a directory handle, on a
         # card built in the page's private file system. Nothing else here ever writes in place.
@@ -913,7 +958,7 @@ def main():
           const shells = await (async () => {
             try {
               const dir = await card.getDirectoryHandle('Labels');
-              return await (await (await dir.getFileHandle('cart_shell.ini')).getFile()).text();
+              return await (await (await dir.getFileHandle('cart_shell.txt')).getFile()).text();
             } catch (e) { return 'missing: ' + e.name; }
           })();
           let label = 0;
@@ -922,9 +967,11 @@ def main():
         })()""")
         want = f'Advance Wars = {presets[5]}\n'
         if on_card['shells'] != want or on_card['label'] <= 0:
-            sys.exit(f'writing to the card gave cart_shell.ini {on_card["shells"]!r} and a label of '
+            sys.exit(f'writing to the card gave cart_shell.txt {on_card["shells"]!r} and a label of '
                      f'{on_card["label"]} bytes, not {want!r} and a label')
-        print('asserted: Write to card puts the label and the chosen shell on the card itself')
+        if page.eval("document.getElementById('guide').open"):
+            sys.exit('writing straight to the card opened the ZIP guide')
+        print('asserted: Write to card puts the label and the chosen shell on the card itself, with no ZIP guide')
 
         # Replace on that card: the label the write just made is written over, not skipped.
         digest = """(async () => {

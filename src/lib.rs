@@ -46,6 +46,18 @@ pub fn cart_size(platform: &str) -> Vec<u32> {
     vec![w, h]
 }
 
+#[wasm_bindgen]
+pub fn label_boxes() -> Vec<u32> {
+    vec![
+        cart::LABEL_W,
+        cart::LABEL_H,
+        cart::GB_LABEL_W,
+        cart::GB_LABEL_H,
+        cart::GBC_LABEL_W,
+        cart::GBC_LABEL_H,
+    ]
+}
+
 /// A label the card already has, on its cart. `platform` is the card folder the rom sits in,
 /// `GBA`, `GB` or `GBC`, which is how the page names a platform either side of the wasm boundary.
 /// `head` is a Game Boy rom's first 0x150 bytes, which pick its pak; a GBA cart passes none.
