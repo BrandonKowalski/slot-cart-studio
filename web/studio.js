@@ -1377,12 +1377,5 @@ async function start() {
   document.body.dataset.ready = 'true';
 }
 
-$('build').append(
-  BUILD === 'dev'
-    ? 'dev'
-    : Object.assign(document.createElement('a'), {
-        href: `https://github.com/BrandonKowalski/slot-cart-studio/commit/${BUILD}`,
-        textContent: BUILD.slice(0, 7),
-      }),
-);
+document.querySelector('.hero .title').title = BUILD === 'dev' ? 'dev' : BUILD.slice(0, 7);
 start();

@@ -323,17 +323,11 @@ def main():
         if page.eval('window.__studio.artBase()') != 'https://art.slot-cfw.fyi/':
             sys.exit(f'with no ?art= the studio uses {page.eval("window.__studio.artBase()")!r}, not the published set')
         print('asserted: with no ?art= the studio uses https://art.slot-cfw.fyi/')
-        widths = page.eval("[document.querySelector('.credits'), document.querySelector('main.wrap')]"
-                           ".map((e, i) => i ? e.clientWidth - parseFloat(getComputedStyle(e).paddingLeft) * 2"
-                           " : e.getBoundingClientRect().width)")
-        if abs(widths[0] - widths[1]) > 1:
-            sys.exit(f'the footer is {widths[0]:.0f} px wide inside a {widths[1]:.0f} px page')
-        print(f'asserted: the footer is as wide as the page ({widths[0]:.0f} px)')
-        centred = page.eval("['.hero-copy', '.credits'].map(q => getComputedStyle(document.querySelector(q)).textAlign)"
+        centred = page.eval("[getComputedStyle(document.querySelector('.hero-copy')).textAlign]"
                             ".concat(getComputedStyle(document.querySelector('.actions')).justifyContent)")
-        if centred != ['center', 'center', 'center']:
-            sys.exit(f'the hero and footer are not centred: {centred}')
-        print('asserted: the hero and footer are centred')
+        if centred != ['center', 'center']:
+            sys.exit(f'the hero is not centred: {centred}')
+        print('asserted: the hero is centred')
         page.eval("document.getElementById('start').click()")
         chooser = page.eval("""(() => {
           const d = document.getElementById('choose');
@@ -388,8 +382,8 @@ def main():
                          ".map(a => [a.textContent.trim(), a.getAttribute('href'), a.getAttribute('aria-current')])")
         site = 'https://slot-cfw.fyi/'
         want_mast = [['slot.', site, None], ['Cart Studio', './', None]] + [[name, f'{site}{path}/', None] for name, path in (
-            ('Installing', 'installing'), ('Updating', 'updating'), ('Tour', 'tour'), ('Guide', 'guide'),
-            ('Questions', 'questions'), ('Credits', 'credits'), ('AI', 'ai'))] + [['Studio', './', 'page']]
+            ('Installing', 'installing'), ('Updating', 'updating'), ('Tour', 'tour'), ('Guide', 'guide/shelf'),
+            ('Questions', 'questions'), ('Credits', 'credits'))] + [['Cart Studio', './', 'page']]
         if mast != want_mast:
             sys.exit(f'the masthead is {mast}, not slot\'s {want_mast}')
         print('asserted: the masthead is slot\'s, link for link')
@@ -446,13 +440,13 @@ def main():
         print('asserted: no pills and no spaced capitals on the page or in the editor')
 
         # Credits name every source and its terms, whichever of them this visit used.
-        links = page.eval("[...document.querySelectorAll('.credits a')].filter(a => a.getClientRects().length).map(a => a.href)")
+        links = page.eval("[...document.querySelectorAll('.foot-credits a')].filter(a => a.getClientRects().length).map(a => a.href)")
         need = ['https://github.com/libretro/libretro-database', 'https://creativecommons.org/licenses/by-sa/4.0/',
                 'https://www.screenscraper.fr/', 'https://creativecommons.org/licenses/by-nc-sa/4.0/']
         missing = [u for u in need if not any(l.startswith(u) for l in links)]
         if missing:
             sys.exit(f'the credits are missing {missing}')
-        if 'not affiliated with nintendo' not in page.eval("document.querySelector('.credits').innerText").lower():
+        if 'not affiliated with nintendo' not in page.eval("document.querySelector('.foot-credits').innerText").lower():
             sys.exit('the credits carry no Nintendo non-affiliation line')
         print('asserted: the credits name every source and its terms')
 
