@@ -746,14 +746,6 @@ function nameGame(c) {
 }
 
 const MATCHES = { crc: 'By CRC', name: 'By Filename', hand: 'Chosen by hand' };
-const WEARS = {
-  card: 'Already on the card',
-  real: 'Real label',
-  logo: 'Logo on a colour',
-  customLogo: 'Your logo',
-  customLabel: 'Your label',
-  none: 'slot’s own label',
-};
 
 function infoOf(c) {
   const code = smallPrint(hardware(c.platform), c.code, c.tags) || c.code;
@@ -763,7 +755,6 @@ function infoOf(c) {
     ['CRC', c.crc === null ? '' : crcHex(c.crc)],
     ['Game', c.game && !c.rejected ? c.game : 'No match'],
     ['Matched', c.game && !c.rejected ? MATCHES[c.match] ?? '' : ''],
-    ['Status', WEARS[wearing(c).kind] ?? ''],
     ['Art key', key && artIndex?.[key] ? key : ''],
   ].filter(([, value]) => value);
 }
