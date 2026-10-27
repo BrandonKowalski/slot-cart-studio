@@ -15,7 +15,7 @@ const PLAIN: &str = "AMTE";
 const STEM: &str = "Probe Cart (USA)";
 
 /// A card in the shape slot reads now: every file under the folder its platform names. `dir` is
-/// that folder, `GBA` or `GB`, which is also how the studio names a platform across the wasm
+/// that folder, which is also how the studio names a platform across the wasm
 /// boundary.
 /// A Game Boy header: title, the code at 0x13F, CGB flag, and whether it was sold in Japan.
 type Gb = (&'static [u8], &'static [u8], u8, bool);
@@ -35,7 +35,11 @@ fn card(dir: &str, code: &str, (title, gb_code, cgb, japan): Gb, label: &[u8]) -
     rom[0x13f..0x13f + gb_code.len()].copy_from_slice(gb_code);
     rom[0x143] = cgb;
     rom[0x14a] = u8::from(!japan);
-    let ext = dir.to_lowercase();
+    let ext = if dir == "GBAV" {
+        "gba".to_string()
+    } else {
+        dir.to_lowercase()
+    };
     std::fs::write(d.path().join(format!("Games/{dir}/{STEM}.{ext}")), rom).expect("rom");
     std::fs::write(d.path().join(format!("Labels/{dir}/{STEM}.png")), label).expect("label");
     d
@@ -116,6 +120,8 @@ fn assert_same_as_slot(label: &[u8]) {
     for (dir, code, gb) in [
         ("GBA", EMERALD, NO_GB),
         ("GBA", PLAIN, NO_GB),
+        ("GBAV", EMERALD, NO_GB),
+        ("GBAV", PLAIN, NO_GB),
         ("GB", "", (b"", b"", 0x00, false)),
         ("GB", "", (b"", b"", 0x80, false)),
         ("GB", "", (b"", b"", 0xc0, false)),

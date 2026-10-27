@@ -36,6 +36,12 @@ test('a Game Boy extra is found from either Game Boy folder, and never from the 
   assert.deepEqual(extras.search('GB', 'prism', 30), ['Pokemon Prism']);
 });
 
+test('a GBA extra is found from the Game Boy Advance Video folder too', () => {
+  assert.equal(extras.named('GBAV', 'Pokemon Radical Red').slug, 'pokemon-radical-red');
+  assert.equal(extras.guess('GBAV', 'Mother 3').slug, 'mother-3-english');
+  assert.equal(extras.named('GBAV', 'Pokemon Crystal Clear'), null);
+});
+
 test('checksum keys and entries without a name are not extras', () => {
   assert.equal(extras.named('GBA', 'Not a slug'), null);
   assert.equal(extrasFrom(null).guess('GBA', 'anything'), null);

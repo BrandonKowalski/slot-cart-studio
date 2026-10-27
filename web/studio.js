@@ -25,7 +25,7 @@ import init, {
   stub_target,
   thumbnail_name,
 } from './pkg/slot_cart_studio.js';
-import { fromDirectory, fromFiles, labelKey, PLATFORMS } from './card.js';
+import { fromDirectory, fromFiles, hardware, labelKey, PLATFORMS } from './card.js';
 import { fetchArt, fetchDat, fetchIndex, fetchThumb, limiter } from './libretro.js';
 import { createEditor } from './editor.js';
 import { amend, commit } from './history.js';
@@ -646,8 +646,8 @@ async function identify(s) {
       const head = new Uint8Array(await file.slice(0, HEAD).arrayBuffer());
       // Only a GBA rom carries a game code. On a Game Boy cart 0xAC is inside the RST vectors,
       // so a code read from there is opcode bytes dressed up as one.
-      c.code = c.platform === 'GBA' ? header_code(head) : '';
-      if (c.platform !== 'GBA') c.head = head;
+      c.code = hardware(c.platform) === 'GBA' ? header_code(head) : '';
+      if (hardware(c.platform) !== 'GBA') c.head = head;
       const label = s.source.labels.get(labelKey(c.platform, c.stem));
       if (label) {
         const bytes = new Uint8Array(await (await label()).arrayBuffer());
@@ -677,7 +677,7 @@ async function identify(s) {
 async function match(s) {
   // One database per platform, fetched only for the platforms this card actually holds: a card
   // of nothing but GBA carts never pays for the two Game Boy databases.
-  for (const platform of new Set(s.carts.map((c) => c.platform))) {
+  for (const platform of new Set(s.carts.map((c) => hardware(c.platform)))) {
     if (dats.has(platform)) continue;
     try {
       dats.set(platform, Dat.parse(await fetchDat(platform)));
@@ -730,14 +730,14 @@ function artKey(c) {
   const extra = c.game && extras.named(c.platform, c.game);
   if (extra) return extra.slug;
   const own = c.crc === null ? null : crcHex(c.crc);
-  const db = dats.get(c.platform);
+  const db = dats.get(hardware(c.platform));
   if (!c.game || !db || (c.crc !== null && db.game_for(c.crc) === c.game)) return own;
   return Array.from(db.crcs_for(c.game), crcHex).find((k) => artIndex?.[k]) ?? null;
 }
 
 function nameGame(c) {
   const own = crcHex(c.crc);
-  const named = dats.get(c.platform)?.game_for(c.crc);
+  const named = dats.get(hardware(c.platform))?.game_for(c.crc);
   const dumped = named || artIndex?.[own] ? null : extras.dumped(c.platform, own);
   const guessed = named || artIndex?.[own] || dumped ? null : extras.guess(c.platform, clean_label(c.stem));
   c.game = named ?? (dumped ?? guessed)?.name ?? null;
@@ -756,7 +756,7 @@ const WEARS = {
 };
 
 function infoOf(c) {
-  const code = smallPrint(c.platform, c.code, c.tags) || c.code;
+  const code = smallPrint(hardware(c.platform), c.code, c.tags) || c.code;
   const key = artKey(c);
   return [
     ['Product Code', code],
@@ -782,7 +782,7 @@ async function dress(s, c) {
     !name
       ? Promise.resolve(null)
       : limit(async () =>
-          s === session && !fatal ? fetchThumb(c.platform, folder, name, stub_target) : null,
+          s === session && !fatal ? fetchThumb(hardware(c.platform), folder, name, stub_target) : null,
         ).catch(noImage);
   // Logos come from our own set alone; libretro is asked only for box art.
   const ours = (media) => {
@@ -816,17 +816,20 @@ const platformsOf = (s) => PLATFORMS.filter((p) => s.carts.some((c) => c.platfor
 
 // A tab per platform on the card, with what it holds. One platform is no choice at all, so a
 // card of nothing but GBA carts shows no switcher and reads exactly as it did before.
-const PLATFORM_NAMES = { GBA: 'Game Boy Advance', GB: 'Game Boy', GBC: 'Game Boy Color' };
+const PLATFORM_NAMES = { GBA: 'Game Boy Advance', GBAV: 'Game Boy Advance Video', GB: 'Game Boy', GBC: 'Game Boy Color' };
+const SHORT_NAMES = { GBA: 'Advance', GBAV: 'Advance Video', GB: 'Game Boy', GBC: 'Color' };
 
 function renderTabs() {
   const s = session;
   const present = platformsOf(s);
   $('tabs').hidden = present.length < 2;
+  const names = present.length < PLATFORMS.length ? PLATFORM_NAMES : SHORT_NAMES;
   $('tabs').replaceChildren(
     ...present.map((p) => {
       const n = s.carts.filter((c) => c.platform === p).length;
       const tab = Object.assign(document.createElement('button'), { type: 'button', className: 'shelf-tab' });
-      tab.append(PLATFORM_NAMES[p] ?? p, Object.assign(document.createElement('span'), { className: 'n', textContent: n }));
+      tab.title = PLATFORM_NAMES[p] ?? p;
+      tab.append(names[p] ?? p, Object.assign(document.createElement('span'), { className: 'n', textContent: n }));
       tab.setAttribute('aria-pressed', String(p === s.platform));
       tab.addEventListener('click', () => showPlatform(p));
       return tab;
@@ -1162,7 +1165,8 @@ async function lookUp(s, c) {
   paint(c);
   try {
     if (c.crc === null) c.crc = await crcOf(await c.file());
-    if (!dats.has(c.platform)) dats.set(c.platform, Dat.parse(await fetchDat(c.platform)));
+    const platform = hardware(c.platform);
+    if (!dats.has(platform)) dats.set(platform, Dat.parse(await fetchDat(platform)));
     if (s !== session || fatal) return;
     nameGame(c);
     await dress(s, c);
@@ -1240,7 +1244,7 @@ const editor = createEditor({
   useCustomLabel,
   ensureTiles,
   canShell: (c) => !c.looking && ['ready', 'has-label', 'needs-logo', 'unfilled'].includes(stateOf(c)) && shell_key_ok(c.stem),
-  search: (c, query) => [...extras.search(c.platform, query, 30), ...(dats.get(c.platform)?.search(query, 30) ?? [])],
+  search: (c, query) => [...extras.search(c.platform, query, 30), ...(dats.get(hardware(c.platform))?.search(query, 30) ?? [])],
   chooseGame,
   noMatch,
   readLogo,

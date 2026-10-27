@@ -13,6 +13,7 @@ pub fn platform_of(dir: &str) -> Platform {
     match dir {
         "GB" => Platform::Gb,
         "GBC" => Platform::Gbc,
+        "GBAV" => Platform::Gbav,
         _ => Platform::Gba,
     }
 }

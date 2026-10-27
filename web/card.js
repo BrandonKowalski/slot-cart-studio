@@ -5,11 +5,14 @@
 // slot files a cart under the folder its platform names, in Games/, Labels/, Saves/ and States/
 // alike, and the folder is what decides the platform: the rom is never opened to ask.
 // Listed newest first, which is the order the studio's shelves and tabs run in.
-export const PLATFORMS = ['GBA', 'GBC', 'GB'];
+export const PLATFORMS = ['GBA', 'GBAV', 'GBC', 'GB'];
+
+const HARDWARE = { GBAV: 'GBA' };
+export const hardware = (platform) => HARDWARE[platform] ?? platform;
 
 // slot's own rule, from slot-store's platform.rs. A .gba under GB/ is not a Game Boy cart and is
 // passed over in silence, the way slot passes over it.
-const EXTENSIONS = { GBA: ['gba'], GB: ['gb', 'gbc'], GBC: ['gb', 'gbc'] };
+const EXTENSIONS = { GBA: ['gba'], GBAV: ['gba'], GB: ['gb', 'gbc'], GBC: ['gb', 'gbc'] };
 const ANY_ROM = ['gba', 'gb', 'gbc'];
 
 const named = (dir) => PLATFORMS.find((p) => p === dir.toUpperCase());

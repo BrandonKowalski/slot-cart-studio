@@ -8,7 +8,7 @@ const words = (text) =>
     .split(/[^a-z0-9]+/)
     .filter(Boolean);
 
-const SHARED = { GB: ['GB', 'GBC'], GBC: ['GBC', 'GB'] };
+const SHARED = { GB: ['GB', 'GBC'], GBC: ['GBC', 'GB'], GBA: ['GBA', 'GBAV'], GBAV: ['GBAV', 'GBA'] };
 
 const strings = (value) => (Array.isArray(value) ? value.filter((s) => typeof s === 'string') : []);
 

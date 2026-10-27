@@ -18,7 +18,7 @@ pub const GB_H: u32 = 901;
 /// The label a platform's well wants.
 pub fn size(platform: Platform) -> (u32, u32) {
     match platform {
-        Platform::Gba => (W, H),
+        Platform::Gba | Platform::Gbav => (W, H),
         Platform::Gb | Platform::Gbc => (GB_W, GB_H),
     }
 }

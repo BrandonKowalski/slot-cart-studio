@@ -2,6 +2,7 @@
 // studio's api, one history step at a time.
 import { canRedo, canRevert, canUndo, commit, redo, revert, undo, visit, visited } from './history.js';
 import { arrange } from './palette.js';
+import { hardware } from './card.js';
 
 const $ = (id) => document.getElementById(id);
 const OPENERS = { 'ed-games': 'ed-game', 'ed-bg-pal': 'ed-bg', 'ed-shell-pal': 'ed-shell' };
@@ -182,7 +183,7 @@ export function createEditor(api) {
     $('ed-shell-custom').value = `#${shell.colour}`;
     press('ed-finish', shell.finish);
     enable('ed-finish', shells && !shell.auto);
-    $('ed-outline-row').hidden = c.platform === 'GBA';
+    $('ed-outline-row').hidden = hardware(c.platform) === 'GBA';
     press('ed-outline', shell.outline);
     enable('ed-outline', shells);
 

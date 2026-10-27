@@ -197,3 +197,21 @@ test('a card without shell files reads as empty where the browser refuses .ini n
   const source = await fromDirectory(windows(dirHandle({ ...GAMES, Config: {}, Labels: {} })));
   assert.deepEqual(await layers(source), { system: '', labels: '' });
 });
+
+test('Game Boy Advance Video carts are the .gba files in Games/GBAV, shelved after GBA', async () => {
+  const tree = {
+    Games: {
+      GBC: { 'C.gbc': '' },
+      GBAV: { 'Shrek.gba': '', 'Tetris.gb': '' },
+      GBA: { 'A.gba': '' },
+    },
+    Labels: { GBAV: { 'Shrek.png': 's' } },
+  };
+  for (const source of [await fromDirectory(dirHandle(tree)), fromFiles(listed(tree))]) {
+    assert.deepEqual(
+      source.carts.map((c) => `${c.platform}/${c.stem}`),
+      ['GBA/A', 'GBAV/Shrek', 'GBC/C'],
+    );
+    assert.ok(source.labels.has('GBAV/Shrek'));
+  }
+});
