@@ -340,6 +340,61 @@
         "Recharged Emerald"
       ],
       "gameid": 552857
+    },
+    {
+      "slug": "gba-video-cartoon-network-collection-platinum-edition",
+      "name": "Game Boy Advance Video - Cartoon Network Collection - Platinum Edition",
+      "gameid": 83705
+    },
+    {
+      "slug": "gba-video-cartoon-network-collection-premium-edition",
+      "name": "Game Boy Advance Video - Cartoon Network Collection - Premium Edition",
+      "gameid": 83706
+    },
+    {
+      "slug": "gba-video-cartoon-network-collection-special-edition",
+      "name": "Game Boy Advance Video - Cartoon Network Collection - Special Edition",
+      "gameid": 83707
+    },
+    {
+      "slug": "gba-video-cartoon-network-collection-volume-1",
+      "name": "Game Boy Advance Video - Cartoon Network Collection - Volume 1",
+      "gameid": 83708
+    },
+    {
+      "slug": "gba-video-cartoon-network-collection-volume-2",
+      "name": "Game Boy Advance Video - Cartoon Network Collection - Volume 2",
+      "gameid": 83709
+    },
+    {
+      "slug": "gba-video-pokemon-volume-1",
+      "name": "Game Boy Advance Video - Pokemon - Volume 1",
+      "gameid": 83717
+    },
+    {
+      "slug": "gba-video-pokemon-volume-2",
+      "name": "Game Boy Advance Video - Pokemon - Volume 2",
+      "gameid": 83718
+    },
+    {
+      "slug": "gba-video-pokemon-volume-3",
+      "name": "Game Boy Advance Video - Pokemon - Volume 3",
+      "gameid": 83719
+    },
+    {
+      "slug": "gba-video-pokemon-volume-4",
+      "name": "Game Boy Advance Video - Pokemon - Volume 4",
+      "gameid": 83720
+    },
+    {
+      "slug": "gba-video-teenage-mutant-ninja-turtles-things-change",
+      "name": "Game Boy Advance Video - Teenage Mutant Ninja Turtles - Things Change",
+      "gameid": 83727
+    },
+    {
+      "slug": "gba-video-yu-gi-oh-yugi-vs-joey",
+      "name": "Game Boy Advance Video - Yu-Gi-Oh! - Yugi vs. Joey",
+      "gameid": 83733
     }
   ]
 }
