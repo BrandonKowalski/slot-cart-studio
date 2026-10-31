@@ -6,8 +6,6 @@
 use std::cell::RefCell;
 use std::path::Path;
 
-pub(crate) use self::decode as decode_png_bytes;
-
 const KEY: &str = "stash:label";
 
 enum Stashed {
@@ -104,6 +102,33 @@ fn box_average(src: &[u8], sw: u32, sh: u32, x0: f32, y0: f32, x1: f32, y1: f32)
     out
 }
 
+pub(crate) fn decode_png_bytes(bytes: &[u8]) -> Option<(Vec<u8>, u32, u32)> {
+    if bytes.starts_with(b"RIFF") {
+        decode_webp(bytes)
+    } else {
+        decode(bytes)
+    }
+}
+
+fn decode_webp(bytes: &[u8]) -> Option<(Vec<u8>, u32, u32)> {
+    let mut dec = image_webp::WebPDecoder::new(std::io::Cursor::new(bytes)).ok()?;
+    let (w, h) = dec.dimensions();
+    let size = dec.output_buffer_size()?;
+    if size > 64 << 20 {
+        return None;
+    }
+    let mut buf = vec![0u8; size];
+    dec.read_image(&mut buf).ok()?;
+    if dec.has_alpha() {
+        return Some((buf, w, h));
+    }
+    let mut rgba = vec![255u8; (w * h) as usize * 4];
+    for (to, from) in rgba.chunks_exact_mut(4).zip(buf.chunks_exact(3)) {
+        to[..3].copy_from_slice(from);
+    }
+    Some((rgba, w, h))
+}
+
 /// Straight RGBA, with slot's decoder settings. `label` and `hue` decode through here too, so a
 /// logo the studio accepts is one slot would.
 pub(crate) fn decode(png: &[u8]) -> Option<(Vec<u8>, u32, u32)> {
@@ -150,6 +175,49 @@ pub(crate) fn decode(png: &[u8]) -> Option<(Vec<u8>, u32, u32)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_lossy_webp_keeps_its_size_and_its_alpha() {
+        let (rgba, w, h) = decode_png_bytes(include_bytes!("../tests/fixtures/lossy.webp"))
+            .expect("the kind of webp the art set serves");
+        assert_eq!((w, h), (32, 16));
+        assert_eq!(rgba.len(), 32 * 16 * 4);
+        assert_eq!(rgba[(8 * 32 + 4) * 4 + 3], 255);
+        assert_eq!(rgba[(8 * 32 + 28) * 4 + 3], 0);
+    }
+
+    #[test]
+    fn an_opaque_webp_comes_back_with_alpha_filled_in() {
+        let mut webp = Vec::new();
+        image_webp::WebPEncoder::new(&mut webp)
+            .encode(&[10, 20, 30].repeat(6), 3, 2, image_webp::ColorType::Rgb8)
+            .expect("encodes");
+        let (rgba, w, h) = decode_png_bytes(&webp).expect("decodes");
+        assert_eq!((w, h), (3, 2));
+        assert_eq!(rgba, [10, 20, 30, 255].repeat(6));
+    }
+
+    #[test]
+    fn a_webp_header_that_asks_for_a_huge_frame_is_refused() {
+        let mut webp = b"RIFF\0\0\0\0WEBPVP8L".to_vec();
+        webp.extend_from_slice(&5u32.to_le_bytes());
+        webp.push(0x2f);
+        webp.extend_from_slice(&(0x3fffu32 | 0x3fff << 14).to_le_bytes());
+        webp.resize(32, 0);
+        let len = webp.len() as u32 - 8;
+        webp[4..8].copy_from_slice(&len.to_le_bytes());
+        assert!(decode_png_bytes(&webp).is_none());
+    }
+
+    #[test]
+    fn a_riff_that_is_not_a_webp_is_refused() {
+        assert!(decode_png_bytes(b"RIFF\x04\0\0\0WAVE").is_none());
+    }
+
+    #[test]
+    fn the_cover_takes_only_what_slot_can_read_from_a_card() {
+        assert!(decode(include_bytes!("../tests/fixtures/lossy.webp")).is_none());
+    }
 
     fn chunk(png: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
         png.extend_from_slice(&(data.len() as u32).to_be_bytes());

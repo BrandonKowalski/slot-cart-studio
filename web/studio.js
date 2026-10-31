@@ -247,7 +247,7 @@ function readable(bytes) {
 }
 
 // A WebAssembly.RuntimeError is a trap: memory ran out, or Rust panicked. The plain Error a Label
-// throws for bytes that aren't a PNG is not one. Returns whether `e` was a trap.
+// throws is not one. Returns whether `e` was a trap.
 function trapped(e) {
   if (!(e instanceof WebAssembly.RuntimeError)) return false;
   if (!fatal) {

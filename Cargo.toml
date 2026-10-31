@@ -12,6 +12,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 crc32fast = "1"
 fontdue = "0.9"
+image-webp = "0.2"
 png = "0.17"
 resvg = { version = "0.48", default-features = false }
 unicode-normalization = "0.1"
