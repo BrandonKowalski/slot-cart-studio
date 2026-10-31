@@ -95,3 +95,15 @@ pub fn from_rgba(
         draw(platform, code, head, shell, stem, key)
     })
 }
+
+pub fn of_label(
+    label: &crate::label::Label,
+    platform: Platform,
+    code: &str,
+    head: &[u8],
+    shell: &str,
+    stem: &str,
+) -> Vec<u8> {
+    let (w, h) = label.size();
+    from_rgba(label.rgba(), w, h, platform, code, head, shell, stem)
+}

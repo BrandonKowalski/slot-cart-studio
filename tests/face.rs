@@ -209,7 +209,7 @@ fn a_composed_label_matches_slot_reading_its_png() {
         let d = card("GBA", code, NO_GB, &png);
         let (want, _, stem) = slot_face(d.path());
         assert!(
-            want == label.face(face::platform_of("GBA"), code, &[], "", &stem),
+            want == face::of_label(&label, face::platform_of("GBA"), code, &[], "", &stem),
             "composed face differs with code {code}"
         );
     }

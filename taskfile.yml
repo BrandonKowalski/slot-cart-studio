@@ -16,6 +16,7 @@ vars:
     crates/slot-ui/assets/label.ttf crates/slot-store/src/scan.rs crates/slot-store/src/gba.rs
     crates/slot-store/src/gb.rs crates/slot-store/src/ini.rs crates/slot-store/src/cart_shell.rs
     crates/slot-ui/src/bitmaps.rs crates/slot-ui/src/board.rs crates/slot-gfx/src/surface.rs
+    crates/slot-ui/src/house_label.rs crates/slot-ui/src/hue.rs
     crates/slot-ui/assets/*.png
 
 tasks:

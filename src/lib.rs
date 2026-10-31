@@ -23,14 +23,20 @@ mod silhouette;
 #[rustfmt::skip]
 #[path = "../../slot/crates/slot-ui/src/text.rs"]
 mod text;
+#[allow(dead_code)]
+#[rustfmt::skip]
+#[path = "../../slot/crates/slot-ui/src/hue.rs"]
+pub mod hue;
+#[allow(dead_code)]
+#[rustfmt::skip]
+#[path = "../../slot/crates/slot-ui/src/house_label.rs"]
+pub mod label;
 
 mod art;
 mod board;
 pub mod choice;
 pub mod dat;
 pub mod face;
-pub mod hue;
-pub mod label;
 pub mod libretro;
 pub mod rom;
 pub mod zip;
@@ -240,8 +246,7 @@ impl JsLabel {
         shell: &str,
         stem: &str,
     ) -> Vec<u8> {
-        self.0
-            .face(face::platform_of(platform), code, head, shell, stem)
+        face::of_label(&self.0, face::platform_of(platform), code, head, shell, stem)
     }
 
     pub fn png(&self) -> Vec<u8> {
