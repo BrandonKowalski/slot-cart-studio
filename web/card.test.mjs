@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fromDirectory, fromFiles } from './card.js';
+import { fromDirectory, fromFiles, twins } from './card.js';
 
 const notFound = () => Object.assign(new Error('not found'), { name: 'NotFoundError' });
 
@@ -214,4 +214,20 @@ test('Game Boy Advance Video carts are the .gba files in Games/GBAV, shelved aft
     );
     assert.ok(source.labels.has('GBAV/Shrek'));
   }
+});
+
+test('twins are the carts a shelf would title alike', () => {
+  const title = (c) => c.stem.replace(/ \(.*\)$/, '');
+  const cart = (platform, stem) => ({ platform, stem });
+  const hack = cart('GBC', 'Zelda (Hack)');
+  const plain = cart('GBC', 'Zelda');
+  const lone = cart('GBC', 'Tetris');
+  const elsewhere = cart('GB', 'Zelda');
+  assert.deepEqual(twins([hack, plain, lone, elsewhere], title), new Set([hack, plain]));
+});
+
+test('twins are found across Unicode forms', () => {
+  const composed = { platform: 'GBA', stem: 'Pok\u00e9mon' };
+  const decomposed = { platform: 'GBA', stem: 'Poke\u0301mon' };
+  assert.deepEqual(twins([composed, decomposed], (c) => c.stem), new Set([composed, decomposed]));
 });

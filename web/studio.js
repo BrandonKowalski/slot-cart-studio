@@ -25,7 +25,7 @@ import init, {
   stub_target,
   thumbnail_name,
 } from './pkg/slot_cart_studio.js';
-import { fromDirectory, fromFiles, hardware, labelKey, PLATFORMS } from './card.js';
+import { fromDirectory, fromFiles, hardware, labelKey, PLATFORMS, twins } from './card.js';
 import { fetchArt, fetchDat, fetchIndex, fetchThumb, limiter } from './libretro.js';
 import { createEditor } from './editor.js';
 import { amend, commit } from './history.js';
@@ -276,7 +276,7 @@ function describe(c, state) {
   return '';
 }
 
-function buildCard(c) {
+function buildCard(c, twinned) {
   const root = $('card-tpl').content.firstElementChild.cloneNode(true);
   const q = (selector) => root.querySelector(selector);
   c.el = { root, canvas: q('canvas'), face: q('.face'), stem: q('.stem'), game: q('.game') };
@@ -292,7 +292,8 @@ function buildCard(c) {
     .flatMap((group) => group.split(','))
     .map((tag) => tag.trim())
     .filter(Boolean);
-  root.setAttribute('aria-label', `Edit ${clean_label(c.stem)}`);
+  if (twinned) q('.file').textContent = c.stem;
+  root.setAttribute('aria-label', `Edit ${twinned ? c.stem : clean_label(c.stem)}`);
   root.addEventListener('click', () => editor.open(c));
   root.addEventListener('keydown', (e) => {
     if (e.target !== root || (e.key !== 'Enter' && e.key !== ' ')) return;
@@ -588,7 +589,8 @@ async function open(source) {
   // so the old bar has to be cleared here rather than left for a call that may never come.
   $('progress').hidden = true;
   $('progress-text').textContent = '';
-  $('grid').replaceChildren(...session.carts.map(buildCard));
+  const alike = twins(session.carts, (c) => clean_label(c.stem));
+  $('grid').replaceChildren(...session.carts.map((c) => buildCard(c, alike.has(c))));
   session.carts.forEach(paint);
   showPlatform(platformsOf(session)[0] ?? PLATFORMS[0]);
   $('write-bar').hidden = true;
@@ -751,6 +753,7 @@ function infoOf(c) {
   const code = smallPrint(hardware(c.platform), c.code, c.tags) || c.code;
   const key = artKey(c);
   return [
+    ['File', c.stem],
     ['Product Code', code],
     ['CRC', c.crc === null ? '' : crcHex(c.crc)],
     ['Game', c.game && !c.rejected ? c.game : 'No match'],

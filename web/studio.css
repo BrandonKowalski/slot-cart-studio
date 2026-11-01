@@ -274,6 +274,8 @@ body.loading #grid,body.loading .shelf-bar,body.loading #progress{display:none}
 /* Only while a cart has no face to show: being read, being looked up, or an error. */
 .game{margin:0;color:var(--muted);font-size:13px;text-align:center;overflow-wrap:anywhere}
 .game:empty{display:none}
+.file{margin:2px 0 0;color:var(--muted);font-size:12px;text-align:center;overflow-wrap:anywhere}
+.file:empty{display:none}
 
 body{display:flex;flex-direction:column;min-height:100dvh}
 .wrap{flex:1 0 auto;width:100%}

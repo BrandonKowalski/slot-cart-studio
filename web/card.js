@@ -29,6 +29,14 @@ const stemOf = (name) => name.slice(0, name.lastIndexOf('.'));
 // What gets written is still the listing's own spelling. The platform is part of the key because
 // a .gb and a .gba can share a stem — two different games, two different carts.
 const labelKey = (platform, stem) => `${platform}/${stem.normalize('NFC')}`;
+export const twins = (carts, title) => {
+  const seen = new Map();
+  for (const c of carts) {
+    const key = labelKey(c.platform, title(c));
+    seen.set(key, [...(seen.get(key) ?? []), c]);
+  }
+  return new Set([...seen.values()].filter((group) => group.length > 1).flat());
+};
 const byCart = (a, b) =>
   a.platform !== b.platform
     ? PLATFORMS.indexOf(a.platform) - PLATFORMS.indexOf(b.platform)
