@@ -34,6 +34,7 @@ import { hasLog, logError, logText } from './log.js';
 import { applyFill, autoFill, available, fillCounts, fillText, wears } from './label-choice.js';
 import { extrasFrom } from './extras.js';
 import { heroPicks, heroShell } from './hero.js';
+import { dismissNotice, noticeShown } from './notice.js';
 
 const $ = (id) => document.getElementById(id);
 const limit = limiter(4);
@@ -1275,6 +1276,18 @@ async function start() {
   $('choose-ask').textContent = direct
     ? 'Your browser asks to let the site edit files. Choose Edit files, so Cart Studio can save your labels to the card.'
     : 'Your browser may ask for permission upload the files. This is a misnomer as nothing is actually uploaded. Cart Studio just retrieves the ROM fingerprints and filenames along with existing art.';
+  const storage = (() => {
+    try {
+      return window.localStorage;
+    } catch {
+      return undefined;
+    }
+  })();
+  $('notice').hidden = !noticeShown(storage);
+  $('notice-close').addEventListener('click', () => {
+    dismissNotice(storage);
+    $('notice').hidden = true;
+  });
   $('start').addEventListener('click', () => $('choose').showModal());
   $('choose-cancel').addEventListener('click', () => $('choose').close());
 
